@@ -20,14 +20,15 @@ The Comprehensive Analysis and high-Dimensional DEsign Environment
 ## Installation instructions for users
 For direct installation with all dependencies, run on the terminal or command line
 ```sh
-pip install git+https://github.com/LSDOlab/lsdo_project_template.git
+git clone https://github.com/LSDOlab/CADDEE_alpha.git
 ```
-If you want users to install a specific branch, run
+
 ```sh
-pip install git+https://github.com/LSDOlab/lsdo_project_template.git@branch
+cd caddee_alpha
 ```
 
-<!-- **Enabled by**: `packages=find_packages()` in the `setup.py` file. -->
-
+```sh
+pip install -e .
+```
 # License
 This project is licensed under the terms of the **GNU Lesser General Public License v3.0**.
