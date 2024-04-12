@@ -1,23 +1,30 @@
-# Welcome to lsdo_project_template
+# Welcome to CADDEE
 
-![alt text](/src/images/lsdolab.png "Title displayed")
+![](/src/images/movie_all_geometry_frame.gif )
 
-This page describes conceptually the purpose of your package at a high-level.
-Start with a one sentence description of your package.
-For example, "This repository serves as a template for all LSDOlab projects with regard to documentation, testing and hosting of open-source code."
-Include figures from the relevant paper and citation.
+
+The Comprehensive Analysis high-Dimensional Design Environment for Engineering systems (CADDEE) framework is python-based framework for the conceptual design of aircraft and other 
+complex engineering systems. It leverages recent advances in automated adjoint-based sensitivity analysis to systematically explore the high-dimensional design space of complex engineering system by considering the entire mission or design cycle, and by using pyhsics-based models of varying fidelity. 
+
+![](/src/images/movie_sub_system_frame.gif )
+
 
 # Cite us
 ```none
-@article{lsdo2023,
-        Author = { Author 1, Author 2, and Author 3},
-        Journal = {Name of the Journal},
-        Title = {Title of your paper},
-        pages = {203},
-        year = {2023},
-        issn = {0123-4567},
-        doi = {https://doi.org/}
-        }
+@inproceedings{sarojini2023large,
+  title={Large-Scale Multidisciplinary Design Optimization of an eVTOL Aircraft using Comprehensive Analysis},
+  author={Sarojini, Darshan and Ruh, Marius L and Joshy, Anugrah Jo and Yan, Jiayao and Ivanov, Alexander K and Scotzniovsky, Luca and Fletcher, Andrew H and Orndorff, Nicholas C and Sperry, Mark and Gandarillas, Victor E and others},
+  booktitle={AIAA SCITECH 2023 Forum},
+  pages={0146},
+  year={2023}
+}
+
+@article{ruh2023large,
+  title={Large-scale multidisciplinary design optimization of the NASA lift-plus-cruise concept using a novel aircraft design framework},
+  author={Ruh, Marius L and Sarojini, Darshan and Fletcher, Andrew and Asher, Isaac and Hwang, John T},
+  journal={arXiv preprint arXiv:2304.14889},
+  year={2023}
+}
 ```
 
 <!-- Remove/add custom pages from/to toc as per your package's requirement -->

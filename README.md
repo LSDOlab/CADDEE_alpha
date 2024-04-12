@@ -1,16 +1,16 @@
 # CADDEE
 
 <!---
-[![Python](https://img.shields.io/pypi/pyversions/lsdo_project_template)](https://img.shields.io/pypi/pyversions/lsdo_project_template)
-[![Pypi](https://img.shields.io/pypi/v/lsdo_project_template)](https://pypi.org/project/lsdo_project_template/)
+[![Python](https://img.shields.io/pypi/pyversions/CADDEE_alpha)](https://img.shields.io/pypi/pyversions/CADDEE_alpha)
+[![Pypi](https://img.shields.io/pypi/v/CADDEE_alpha)](https://pypi.org/project/CADDEE_alpha/)
 [![Coveralls Badge][13]][14]
 [![PyPI version][10]][11]
 [![PyPI Monthly Downloads][12]][11]
 -->
 
-[![GitHub Actions Test Badge](https://github.com/LSDOlab/lsdo_project_template/actions/workflows/actions.yml/badge.svg)](https://github.com/lsdo_project_template/lsdo_project_template/actions)
-[![Forks](https://img.shields.io/github/forks/LSDOlab/lsdo_project_template.svg)](https://github.com/LSDOlab/lsdo_project_template/network)
-[![Issues](https://img.shields.io/github/issues/LSDOlab/lsdo_project_template.svg)](https://github.com/LSDOlab/lsdo_project_template/issues)
+[![GitHub Actions Test Badge](https://github.com/LSDOlab/CADDEE_alpha/actions/workflows/actions.yml/badge.svg)](https://github.com/CADDEE_alpha/CADDEE_alpha/actions)
+[![Forks](https://img.shields.io/github/forks/LSDOlab/CADDEE_alpha.svg)](https://github.com/LSDOlab/CADDEE_alpha/network)
+[![Issues](https://img.shields.io/github/issues/LSDOlab/CADDEE_alpha.svg)](https://github.com/LSDOlab/CADDEE_alpha/issues)
 
 
 The Comprehensive Analysis and high-Dimensional DEsign Environment 

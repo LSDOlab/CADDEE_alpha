@@ -2,18 +2,23 @@
 title: Background
 ---
 
-This page is intended to provide the reader with any theoretical
-knowledge or other concepts that form the basis of your package.
-This page can include equations, figures, flowcharts, etc. for a better understanding of the theory behind
-the package along with any code snippets necessary to explain the software design.
+## UML class diagram
 
-## Referencing using bib files
+```{figure} /src/images/CADDEE_classes.png
+:figwidth: 200 %
+:align: center
+:alt: caddee_classes
+:target: ../_images/CADDEE_classes.png
 
-You can add references in the `references.bib` file and cite them 
-in the page like this {cite:p}`perez2011python`. 
-You can also include a list of references cited at the end as shown below.
+_**CADDEE classes**_
+```
 
-## Bibliography
+## Reference frames
 
-```{bibliography} references.bib
+```{figure} /src/images/isometric_view.pdf
+:figwidth: 200 %
+:align: center
+:alt: isometric_view
+
+_**Isometric view**_
 ```

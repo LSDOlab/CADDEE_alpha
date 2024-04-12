@@ -11,7 +11,7 @@ def test_VALUES_TEMPLATE():
     '''
 
     # Import class/function to test
-    from lsdo_project_template.directory.file import Class
+    from CADDEE_alpha.directory.file import Class
     object = Class()
 
     # Run test scenario
@@ -38,7 +38,7 @@ def test_EQUAL_TEMPLATE():
     '''
 
     # Import class/function to test
-    from lsdo_project_template.directory.file import Class
+    from CADDEE_alpha.directory.file import Class
     object = Class()
 
     # Run test scenario
@@ -62,7 +62,7 @@ def test_EXCEPTIONS_TEMPLATE():
     '''
 
     # Import class/function to test
-    from lsdo_project_template.directory.file import Class
+    from CADDEE_alpha.directory.file import Class
     object = Class()
 
     # Check to make sure exceptions are raised

@@ -12,13 +12,13 @@
 
 # import os
 # import sys
-# sys.path.insert(0, os.path.abspath('../lsdo_project_template/core'))     # for autodoc
+# sys.path.insert(0, os.path.abspath('../CADDEE_alpha/core'))     # for autodoc
 
 # -- Project information -----------------------------------------------------
 
-project = 'lsdo_project_template'
-copyright = '2023, Anugrah'
-author = 'Anugrah'
+project = 'CADDEE_alpha'
+copyright = '2023, Marius'
+author = 'Marius'
 version = '0.1'
 # release = 0.1.0rtc
 
@@ -39,6 +39,11 @@ extensions = [
     "sphinxcontrib.bibtex",         # for references and citations
 ]
 
+myst_enable_extensions = [
+   "html_image",
+  "colon_fence",
+]
+
 # import sphinx as aa
 # print(aa.__version__)
 
@@ -54,7 +59,7 @@ myst_enable_extensions = ["dollarmath", "amsmath", "tasklist"]
 nb_execution_mode = 'off'
 
 # autoapi options
-autoapi_dirs = ["../lsdo_project_template/core"]
+autoapi_dirs = ["../CADDEE_alpha/core"]
 autoapi_root = 'src/autoapi'
 autoapi_type = 'python'
 autoapi_file_patterns = ['*.py', '*.pyi']
