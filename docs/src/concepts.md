@@ -36,6 +36,7 @@ where $\mathbf{u} = [u, v, w]$ are the linear velocities, $\boldsymbol{\omega} =
 
 ```
 
+<br/>
 
 ### 2-D views
 
@@ -43,3 +44,15 @@ where $\mathbf{u} = [u, v, w]$ are the linear velocities, $\boldsymbol{\omega} =
 | :---:     |    :---:         |   :---:    |
 ![](/src/images/top_view.jpg)  |  ![](/src/images/front_view.jpg)   |  ![](/src/images/side_view.jpg)|
 
+<br/>
+
+### Condition parameterization and solver inputs 
+
+
+```{figure} /src/images/condition_to_states_process.png
+:figwidth: 80 %
+:align: center
+:alt: caddee_classes
+:target: ../_images/condition_to_states_process.png
+
+```

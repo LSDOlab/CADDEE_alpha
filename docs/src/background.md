@@ -40,9 +40,55 @@ There are four main classes native to the CADDEE framework:
 3. `Configuration`
 4. `Component`. 
 
-At the top level, the `CADDEE` class acts as container of two objects, the base configuration (instance of `Configuration`) and  a conditions dictionary. The conditions dictionary stores instances of the second major class, `Condition`. Conditions serve as a way to compartmentalize the analysis (done through discipline solvers) of the engineering system. Subclasses of `Condition`, like `AircraftCondition` narrow the scope of the analysis to a specific application domain (i.e., aircraft design) and have sepcific condition parameters, like mach number, altitude, or flight path angle. The base `Condition` class has two attributes: *quantities*, which is a dictionary used to store certain (user-specified) quantities of interest and *configuration*, which is an instance of the `Configuration` class. Typically, a condition contains axactly one configuration, which is a different instance than the base configuration of the `CADDEE` class.
+At the top level, the `CADDEE` class acts as container of two objects, the `base_configuration` (instance of `Configuration`) and a `conditions` dictionary. The conditions dictionary stores instances of the second major class, `Condition`. Conditions serve as a way to compartmentalize the analysis (done through discipline solvers) of the engineering system. Subclasses of `Condition`, like `AircraftCondition` narrow the scope of the analysis to a specific application domain (i.e., aircraft design) and have sepcific condition parameters, like `mach_number`, `altitude`, or `flight_path_angle`. These parameters are passed into the constructor upon instantiation of the condition class and are stored in a designated `parameters` attribute. An example of how conditions are instantiated is shown in the code snippet below for an `CruiseCondition` subclass (`AircraftCondition`), for which there are additional attributes (`ac_states` and `atmos_states`) that are computed automatically upon instantiation.
 
-The `Configuration` class is the third major class in CADDEE and serves several key functionalities. 
+```{code-block} python
+---
+lineno-start: 1
+caption: |
+    Instantiation of a `CruiseCondition` subclass
+---
+cruise = CruiseCondition(
+    mach_number=0.2,
+    altitude=3e3,
+    pitch_angle=np.deg2rad(0.5),
+    range=5e5,
+)
+
+print("Cruise parameters:         ", cruise.parameters)
+print("Cruise aircraft states:    ", cruise.ac_states)
+print("Cruise atmospheric states: ", cruise.atmos_states)
+```
+This yields the following output:
+```console
+Cruise parameters:          CruiseParameters(altitude=3000.0, speed=65.71075650150438, mach_number=0.2, pitch_angle=0.008726646259971648, range=500000.0, time=7609.104302254579)
+Cruise aircraft states:     AircaftStates(u=65.70825443724581, v=0, w=0.5734272492353838, p=0, q=0, r=0, phi=0, theta=0.008726646259971648, psi=0, x=0, y=0, z=3000.0)
+Cruise atmospheric states:  AtmosphericStates(density=0.9090914475604668, speed_of_sound=328.5537825075219, temperature=268.66, pressure=70095.87788255778, dynamic_viscosity=1.6422497463297507e-05)
+```
+
+
+Lastly, the base `Condition` class has two additional attributes: `quantities`, which is a dictionary used to store certain (user-specified) quantities of interest (i.e., quantities that are not parameters) and `configuration`, which is an instance of the `Configuration` class. Typically, a condition contains axactly one configuration, which is a different instance than the base configuration of the `CADDEE` class. Examples and tutorials will go into more details about how to use the Condition class.
+
+The `Configuration` class is the third major class in CADDEE. It has two attributes: `system` and `mesh_container`, where the former is an instance of the `Component` class and the latter is an instance of a `MeshContainer` dictionary, used for storing solver meshes. The `system` is the top-level parent component that can contain one or more children components, which in turn may contain their own children components, creating a component hierarchy. The key functionalities of the `Configuration` class can be summarized by its class methods:
+- `copy()`: uses the component hierarchy to create copies of the `system` component and its children components. This is necessary to make changes to the system that are confined to a certain design condition, for example to actuate an aileron, elevator, or a tilt-rotor. Such changes are specific to one design condition and should not affect the system in other design conditions. The `copy()` method addresses this need. 
+- `add_component()` + `remove_component()`: adds or removes components from the configuration. Again, this will not affect other configuration. There are several scenarios where these methods will be useful. For example, a user may want to compare variations of the same aircraft concept like an air taxi concept with varying number of rotors or an airliner with and without wing tips. Another example is jettisoning a pyload or multi-stage rockets, where the baseline configuration changes significantly. 
+- `assemble_mass_properties()`: traverses the component hierarchy and sums up the component-level mass properties (if specified), consisting of *mass*, *center of gravity* vector, and the *moment of inertia tensor* (computed using parallel axis theorem). 
+- `setup_geometry()`: sets up the free-form deformation geometry solver, which will manipulate the central geometry (if provided) to achieve the user specified design changes. 
+
+More details of these methods can be found in the examples.
+
+
+The `Component` class is the last major class in CADDEE, wich forms the building block for creating a system and has several key attributes a user may interact with:
+- `parameters`: Similar to the `Condition` class, a user passes the component parameters into the constructor when instantiating a `Component`, which can be accessed through the `parameters` dataclass attribute. CADDEE comes with several stock components with pre-defined parameters but it is possible to define a custom component with key word arguments, using the `**kwargs` syntax. 
+- `quantities`: Again, like in the `Condition` class, components have a `quantities` attribute, which is a dataclass for storing quantities of interest that are not parameters. Examples could be the thrust a rotor produces, or the lift generated by a wing. The `quantities` dataclass comes with one pre-defined entry: `mass_properties`, which in turn is a dataclass for storing the mass, center of gravity, and the moment of inertia tensor of a component. 
+- `geometry` (default is `None`): A component's geometry is typically an instance of a `BSplineSubSet`, which describes a b-spline surface stored in a .stp file. While CADDEE is most powerful when used in combination with its embedded geometry engine, it is possible to define components without specifiying a geometry. This can be particularly useful when dealing with low-level components for which it may be unncessary to define a geometry, e.g., an inverter or DC bus. 
+- `comps`: a generic dictionary storing a component's children components. The `comps` dictionary is used to establish the component hierarchy of a system.
+- `function_spaces`: a generic dictionary for storing one or more light-weight non-native `FunctionSpace` classes. Function spaces are used in CADDEE to create functions for representing field data. An example of this is the representation of a pressure field over a wing or the induced velocity over a rotor disk. Representing such field quantities using functions can be convenient when interpolating and visualizing solver outputs.
+
+Lastly, the `Component` class has several methods a user might interact with.
+- `create_subgeometry()`: returns an instance of `BSplineSubSet` that describes the geometry of a (child) component. The intended usage of this method is to use a parent component to define/create the geometry of its children components. 
+- `plot()`: plots a component's geometry (if it has been provided)
+- `actuate()`: actuates a component's geometry, which is typically a rotation. An example of this is the rotation of an elevator or a tilting rotor. Note that the base `Component` class will raise a `NotImplementedError` when calling this method as it meant for specific sub-components. A user may easily define their own component subclass and implement the `actuate` method.
 
 ### UML class diagram
 
@@ -63,7 +109,7 @@ These UML symbols have the following meaning
 
 In addition, the symbols `+` and `-` are used to denote public and private class attributes and methods, respectively. The CADDEE class diagram is shown below, where the navy-blue color indicates classes that are natively in CADDEE while the gold color indicates classes that imported into CADDEE.
 
-```{figure} /src/images/CADDEE_classes.png
+```{figure} /src/images/CADDEE_classes_3.png
 :figwidth: 90 %
 :align: center
 :alt: caddee_classes

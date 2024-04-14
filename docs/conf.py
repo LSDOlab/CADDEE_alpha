@@ -58,6 +58,20 @@ myst_title_to_header = True
 myst_enable_extensions = ["dollarmath", "amsmath", "tasklist"]
 nb_execution_mode = 'off'
 
+nb_render_priority = {
+  "html": (
+            "application/vnd.jupyter.widget-view+json",
+            "application/javascript",
+            "text/html",
+            "image/svg+xml",
+            "image/png",
+            "image/jpeg",
+            "text/markdown",
+            "text/latex",
+            "text/plain",
+        )
+}
+
 # autoapi options
 autoapi_dirs = ["../CADDEE_alpha/core"]
 autoapi_root = 'src/autoapi'
