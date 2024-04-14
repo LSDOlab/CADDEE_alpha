@@ -113,7 +113,7 @@ In addition, the symbols `+` and `-` are used to denote public and private class
 :figwidth: 90 %
 :align: center
 :alt: caddee_classes
-:target: ../_images/CADDEE_classes.png
+:target: ../_images/CADDEE_classes_3.png
 
 ```
 
