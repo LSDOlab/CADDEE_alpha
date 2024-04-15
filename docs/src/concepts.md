@@ -48,6 +48,22 @@ where $\mathbf{u} = [u, v, w]$ are the linear velocities, $\boldsymbol{\omega} =
 
 ### Condition parameterization and solver inputs 
 
+Having gone over the reference frames that CADDEE uses, we can now discuss how CADDEE processes information regarding the geometry and conditions. CADDEE will always provide the 12 rigid-body states to a solver in addition to points on the geometry (i.e., meshes). In addition, **CADDEE will compute the point velocities** (i.e., nodal mesh velocities) in terms of the body-fixed linear and angular velocities as indicated in the diagram. This means that in most cases, a solver does not need to know about or work with the 12-rigid body states, although they are provided in general. For example, after creating a VLM mesh, CADDEE will computate the nodal mesh-velocities, taking into account any rotation rates. 
+
+
+```{note}
+   Any solver should return the **residual of any non-linear operation** in order to be compatible with SIFR along with their explicit outputs/quantities of interest. In addition, certain solvers must output a minimum number of varialbes (with the correct spelling):
+
+   **Aero-propulsive solver**
+   - output_var_group.forces (num_nodes, 3)
+   - output_var_group.moments (num_nodes, 3)
+
+   **Structural solver**
+   - output_var_group.displacements
+   - output_var_group.rotations (if applicable)
+   
+   Keep in minds that for work conservation (a feature of SIFR), solvers need to also implement an invariant matrix (not currently a requirement). Input and output maps (to the OML) can be defined by the sovler but are not necessary if SIFR's standard maps are sufficient. Lastly, CADDEE will have **default meshing capabilities** for standard meshes like VLM mesh or 1-D beam meshes. 
+```
 
 ```{figure} /src/images/condition_to_states_process.png
 :figwidth: 80 %
