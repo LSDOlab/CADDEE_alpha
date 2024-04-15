@@ -90,6 +90,109 @@ Lastly, the `Component` class has several methods a user might interact with.
 - `plot()`: plots a component's geometry (if it has been provided)
 - `actuate()`: actuates a component's geometry, which is typically a rotation. An example of this is the rotation of an elevator or a tilting rotor. Note that the base `Component` class will raise a `NotImplementedError` when calling this method as it meant for specific sub-components. A user may easily define their own component subclass and implement the `actuate` method.
 
+Below is a quick example of how to build a component hierarchy for a Cessna C172, which will be explained in more detail in the exmples section.
+
+
+```{code-block} python
+---
+lineno-start: 1
+caption: |
+    Building a `Component` hierarchy
+---
+# Make aircraft component and assign airframe
+c172 = Aircraft()
+c172.comps["airframe"] = airframe = Component()
+
+# Geometric parameters
+# Wing
+S_ref_wing = 174  # sq ft
+S_wet_wing = 2.05 * S_ref_wing # sq ft
+wing_AR = 7.34
+wing_taper_ratio = 0.75
+wing_thickness_to_chord = 0.12
+
+main_wing = Wing(
+    AR=wing_AR,
+    S_ref=S_ref_wing,
+    S_wet=S_wet_wing,
+    sweep=0.,
+    taper_ratio=wing_taper_ratio,
+    thickness_to_chord_ratio=wing_thickness_to_chord,
+)
+airframe.comps["wing"] = main_wing
+
+# horizontal tail
+S_ref_h_tail = 21.56 # sq ft
+span_h_tail = 11.12 # ft
+tail_thickness_to_chord = 0.12
+
+h_tail = Wing(
+    AR=None, 
+    S_ref=S_ref_h_tail,
+    span=span_h_tail,
+    taper_ratio=0.75,
+    sweep=0.,
+    thickness_to_chord_ratio=tail_thickness_to_chord,
+)
+airframe.comps["h_tail"] = h_tail
+
+
+# vertical tail
+S_ref_v_tail = 11.2 # sq ft
+v_tail_AR = 2.
+v_tail_sweep = np.deg2rad(15)
+
+v_tail = Wing(
+    AR=v_tail_AR, 
+    S_ref=S_ref_v_tail,
+    sweep=v_tail_sweep,
+)
+airframe.comps["v_tail"] = v_tail
+
+# fuselage
+fuselage_length = 28 # ft
+cabin_depth = 10 # ft
+max_width = 3.2 # ft
+S_wet_fuselage = 310 # sq ft
+
+fuselage = Fuselage(
+    length=fuselage_length,
+    max_width=max_width,
+    max_height=4.5,
+    cabin_depth=10.,
+    S_wet=S_wet_fuselage,
+)
+airframe.comps["fuselage"] = fuselage
+
+# Components without pre-specified parameters
+# Main landing gear
+main_landing_gear = Component()
+airframe.comps["main_landing_gear"] = main_landing_gear
+
+# Avionics
+avionics = Component()
+fuselage.comps["avionics"] = avionics
+
+# Instruments
+instruments = Component()
+fuselage.comps["instruments"] = instruments
+
+# Engine
+engine = Component()
+c172.comps["engine"] = engine
+
+# Fuel
+fuel = Component()
+main_wing.comps["fuel"] = fuel
+
+payload = Component()
+fuselage.comps["payload"] = payload
+
+# set the base configuration
+c172_base_config = Configuration(c172)
+caddee.configurations["base"] = c172_base_config
+```
+
 ### UML class diagram
 
 The unified modeling language is the standard visual modeling language for system and software engineering, intended for constructing, visualizing, and documenting the design of (software) systems. It provids a standard set of diagrams and symbols for communicating the design and architecutre of a software framework. The following fiugre provides a brief overiew of some of the basic UML symbols that we use in the class diagram below. Inheritance relationship are shown primarily as examples of domain-specific sub-classes (aircraft-design in this cases) and are not exhausitve.
