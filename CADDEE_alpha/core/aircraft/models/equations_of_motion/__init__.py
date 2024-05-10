@@ -1,0 +1,1 @@
+from CADDEE_alpha.core.aircraft.models.equations_of_motion.six_dof_euler_flat_earth import SixDofEulerFlatEarthModel

@@ -1,0 +1,1 @@
+from CADDEE_alpha.core.aircraft.models.aerodynamics.simple_lift_model import SimpleLiftModel, SimpleLiftModelInputs
