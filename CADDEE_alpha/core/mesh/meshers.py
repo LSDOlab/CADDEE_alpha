@@ -196,21 +196,46 @@ class CamberSurface(Discretization):
     _geom = None
     _num_chord_wise = None
     _num_spanwise = None
-    
+    _LE_points_para = None
+    _TE_points_para = None
+    _chordwise_spacing = None
+
     def _update(self):
-        # Re-evaluate the geometry after coefficients have changed
-        upper_surace_wireframe = self._geom.evaluate(self._upper_wireframe_para).reshape((self._num_chord_wise + 1, self._num_spanwise + 1, 3))
-        lower_surace_wireframe = self._geom.evaluate(self._lower_wireframe_para).reshape((self._num_chord_wise + 1, self._num_spanwise + 1, 3))
+        if self._upper_wireframe_para is not None and self._lower_wireframe_para is not None:
+            # Re-evaluate the geometry after coefficients have changed
+            upper_surace_wireframe = self._geom.evaluate(self._upper_wireframe_para).reshape((self._num_chord_wise + 1, self._num_spanwise + 1, 3))
+            lower_surace_wireframe = self._geom.evaluate(self._lower_wireframe_para).reshape((self._num_chord_wise + 1, self._num_spanwise + 1, 3))
 
-        # compute the camber surface as the mean of the upper and lower wireframe
-        camber_surface_raw = (upper_surace_wireframe + lower_surace_wireframe) / 2
+            # compute the camber surface as the mean of the upper and lower wireframe
+            camber_surface_raw = (upper_surace_wireframe + lower_surace_wireframe) / 2
 
-        # Ensure that the mesh is symmetric across the xz-plane
-        camber_surface = make_mesh_symmetric(camber_surface_raw, self._num_spanwise, spanwise_index=1)
+            # Ensure that the mesh is symmetric across the xz-plane
+            camber_surface = make_mesh_symmetric(camber_surface_raw, self._num_spanwise, spanwise_index=1)
 
-        self.nodal_coordinates = camber_surface
+            self.nodal_coordinates = camber_surface
 
-        return self
+            return self
+        
+        else:
+            LE_points_csdl = self._geom.evaluate(self._LE_points_para)
+            TE_points_csdl = self._geom.evaluate(self._TE_points_para)
+            if self._chordwise_spacing == "linear":
+                chord_surface = csdl.linear_combination(TE_points_csdl, LE_points_csdl, self._num_chord_wise+1).reshape((self._num_chord_wise+1, self._num_spanwise+1, 3))
+            
+            elif self._chordwise_spacing == "cosine":
+                chord_surface = cosine_spacing(
+                    self._num_spanwise, 
+                    None,
+                    csdl.linear_combination(TE_points_csdl, LE_points_csdl, self._num_chord_wise+1),
+                    self._num_chord_wise
+                )
+
+            chord_surface = chord_surface.reshape((self._num_chord_wise+1, self._num_spanwise+1, 3))
+            chord_surface_sym = make_mesh_symmetric(chord_surface, self._num_spanwise, spanwise_index=1)
+
+            self.nodal_coordinates = chord_surface_sym
+
+            return self
 
 class CamberSurfaceDict(DiscretizationsDict):
     def __getitem__(self, key) -> CamberSurface:
@@ -219,12 +244,13 @@ class CamberSurfaceDict(DiscretizationsDict):
 class VLMMesh(SolverMesh):
     discretizations : dict[CamberSurface] = CamberSurfaceDict()
 
-def make_vlm_camber_surface(
+def make_vlm_surface(
     wing_comp,
     num_spanwise: int,
     num_chordwise: int, 
     spacing_spanwise: str = 'linear',
     spacing_chordwise: str = 'linear',
+    ignore_camber: bool = False, 
     plot: bool = False,
     grid_search_density: int = 10,
 ) -> CamberSurface:
@@ -273,6 +299,7 @@ def make_vlm_camber_surface(
     csdl.check_parameter(spacing_chordwise, "spacing_chordwise", values=("linear", "cosine"))
     csdl.check_parameter(plot, "plot", types=bool)
     csdl.check_parameter(grid_search_density, "grid_search_density", types=int)
+    csdl.check_parameter(ignore_camber, "ignore_camber", types=bool)
 
     if wing_comp.geometry is None:
         raise Exception("Cannot generate mesh for component with geoemetry=None")
@@ -332,41 +359,54 @@ def make_vlm_camber_surface(
         )
 
     chord_surface = chord_surface.reshape((num_chordwise+1, num_spanwise+1, 3))
+    if ignore_camber:
+        chord_surface_sym = make_mesh_symmetric(chord_surface, num_spanwise, spanwise_index=1)
+        vlm_mesh = CamberSurface(nodal_coordinates=chord_surface_sym)
+        vlm_mesh._geom = wing_geometry
+        vlm_mesh._num_chord_wise = num_chordwise
+        vlm_mesh._num_spanwise = num_spanwise
+        vlm_mesh._num_chord_wise = num_chordwise
+        vlm_mesh._chordwise_spacing = spacing_chordwise
+        vlm_mesh._LE_points_para = LE_points_para
+        vlm_mesh._TE_points_para = TE_points_para
 
-    vertical_offset_1 = csdl.expand(
-        csdl.Variable(shape=(3, ), value=np.array([0., 0., 1])),
-        chord_surface.shape, action='k->ijk'
-    )
+        wing_comp._discretizations[f"{wing_comp._name}_vlm_camber_mesh"] = vlm_mesh
 
-    upper_surace_wireframe_para = wing_geometry.project(
-        chord_surface - vertical_offset_1, 
-        direction=np.array([0., 0., 1.]), 
-        plot=plot, 
-        grid_search_density_parameter=grid_search_density
-    )
+    else:
+        vertical_offset_1 = csdl.expand(
+            csdl.Variable(shape=(3, ), value=np.array([0., 0., 0.5])),
+            chord_surface.shape, action='k->ijk'
+        )
 
-    lower_surace_wireframe_para = wing_geometry.project(
-        chord_surface + vertical_offset_1, 
-        direction=np.array([0., 0., -1]), 
-        plot=plot, 
-        grid_search_density_parameter=grid_search_density,
-    )
+        upper_surace_wireframe_para = wing_geometry.project(
+            chord_surface - vertical_offset_1, 
+            direction=np.array([0., 0., 1.]), 
+            plot=plot, 
+            grid_search_density_parameter=grid_search_density
+        )
 
-    upper_surace_wireframe = wing_geometry.evaluate(upper_surace_wireframe_para).reshape((num_chordwise + 1, num_spanwise + 1, 3))
-    lower_surace_wireframe = wing_geometry.evaluate(lower_surace_wireframe_para).reshape((num_chordwise + 1, num_spanwise + 1, 3))
+        lower_surace_wireframe_para = wing_geometry.project(
+            chord_surface + vertical_offset_1, 
+            direction=np.array([0., 0., -1]), 
+            plot=plot, 
+            grid_search_density_parameter=grid_search_density,
+        )
 
-    # compute the camber surface as the mean of the upper and lower wireframe
-    camber_surface_raw = (upper_surace_wireframe + lower_surace_wireframe) / 2
+        upper_surace_wireframe = wing_geometry.evaluate(upper_surace_wireframe_para).reshape((num_chordwise + 1, num_spanwise + 1, 3))
+        lower_surace_wireframe = wing_geometry.evaluate(lower_surace_wireframe_para).reshape((num_chordwise + 1, num_spanwise + 1, 3))
 
-    # Ensure that the mesh is symmetric across the xz-plane
-    camber_surface = make_mesh_symmetric(camber_surface_raw, num_spanwise, spanwise_index=1)
-   
-    vlm_mesh = CamberSurface(nodal_coordinates=camber_surface)
-    vlm_mesh._geom = wing_geometry
-    vlm_mesh._lower_wireframe_para = lower_surace_wireframe_para
-    vlm_mesh._upper_wireframe_para = upper_surace_wireframe_para
-    vlm_mesh._num_chord_wise = num_chordwise
-    vlm_mesh._num_spanwise = num_spanwise
+        # compute the camber surface as the mean of the upper and lower wireframe
+        camber_surface_raw = (upper_surace_wireframe + lower_surace_wireframe) / 2
+
+        # Ensure that the mesh is symmetric across the xz-plane
+        camber_surface = make_mesh_symmetric(camber_surface_raw, num_spanwise, spanwise_index=1)
+    
+        vlm_mesh = CamberSurface(nodal_coordinates=camber_surface)
+        vlm_mesh._geom = wing_geometry
+        vlm_mesh._lower_wireframe_para = lower_surace_wireframe_para
+        vlm_mesh._upper_wireframe_para = upper_surace_wireframe_para
+        vlm_mesh._num_chord_wise = num_chordwise
+        vlm_mesh._num_spanwise = num_spanwise
 
     wing_comp._discretizations[f"{wing_comp._name}_vlm_camber_mesh"] = vlm_mesh
 

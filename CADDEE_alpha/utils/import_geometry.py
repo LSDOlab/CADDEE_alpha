@@ -57,13 +57,14 @@ def import_geometry(
             raise Exception(f"Unknown file path or file. File path: {file_path}/{file_name}")
 
 
-        geometry = lg.import_geometry(TEST_GEOMETRY_FOLDER / file_name)
+        geometry = lg.import_geometry(TEST_GEOMETRY_FOLDER / file_name, parallelize=False)
         
 
         geometry.refit(
             num_coefficients=refit_num_coefficients,
             order=refit_b_spline_order,
             fit_resolution=refit_resolution,
+            parallelize=False,
         )
 
         # if rotate_to_body_fixed_frame:

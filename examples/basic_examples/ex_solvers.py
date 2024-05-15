@@ -4,6 +4,7 @@ import aframe as af
 import numpy as np
 import time
 from VortexAD.core.vlm.vlm_solver import vlm_solver
+import matplotlib.pyplot as plt
 
 
 recorder = csdl.Recorder(inline=True)
@@ -28,7 +29,7 @@ def define_base_config(caddee : cd.CADDEE):
 
     # wing camber surface
     vlm_mesh = cd.mesh.VLMMesh()
-    wing_camber_surface = cd.mesh.make_vlm_camber_surface(
+    wing_camber_surface = cd.mesh.make_vlm_surface(
         wing, 30, 20, plot=False, spacing_spanwise='linear', 
         spacing_chordwise='linear', grid_search_density=20
     )
@@ -56,8 +57,8 @@ def define_base_config(caddee : cd.CADDEE):
     )
 
     # tail camber surface
-    tail_camber_surface = cd.mesh.make_vlm_camber_surface(
-        h_tail, 8, 3
+    tail_camber_surface = cd.mesh.make_vlm_surface(
+        h_tail, 50, 8, plot=False
     )
     vlm_mesh.discretizations["tail_camber_surface"] = tail_camber_surface
     
@@ -124,17 +125,34 @@ def define_analysis(caddee: cd.CADDEE):
     # run vlm solver
     vlm_outputs = vlm_solver(camber_surface_coordinates, camber_surface_nodal_velocities)
     print("total drag", vlm_outputs.total_drag.value)
-    print("total CD", vlm_outputs)
     print("total lift", vlm_outputs.total_lift.value)
     print("total forces", vlm_outputs.total_force.value)
     print("total moments", vlm_outputs.total_moment.value)
+    plt.rcParams['text.usetex'] = False
+    fig, axs = plt.subplots(3, 1)
+    # plt.rc('text', usetex=False)
     for i in range(len(vlm_outputs.surface_CL)):
-        print(f"surface {i} panel forces", vlm_outputs.surface_panel_forces[i].value)
+        panel_forces = csdl.sum(vlm_outputs.surface_panel_forces[i][0, :, :, :], axes=(0, ))
+        shape = panel_forces.shape
+        norm_span = np.linspace(-1, 1, shape[0])
+
+        axs[0].plot(norm_span, panel_forces[:, 0].value)
+        axs[0].set_xlabel("norm span")
+        axs[0].set_ylabel("Fx")
+        axs[1].plot(norm_span, panel_forces[:, 1].value)
+        axs[1].set_xlabel("norm span")
+        axs[1].set_ylabel("Fy")
+        axs[2].plot(norm_span, panel_forces[:, 2].value)
+        axs[2].set_xlabel("norm span")
+        axs[2].set_ylabel("Fz")
+
         print(f"surface {i} CL", vlm_outputs.surface_CL[i].value)
         print(f"surface {i} CDi", vlm_outputs.surface_CDi[i].value)
         print(f"surface {i} L", vlm_outputs.surface_lift[i].value)
         print(f"surface {i} Di", vlm_outputs.surface_drag[i].value)
 
+    plt.show()
+    # exit()
     # Set up beam analysis (with pseudo vlm inputs)
     beam_mesh = mesh_container["beam_mesh"]
     wing_box_beam = beam_mesh.discretizations["wing_box_beam"]
@@ -181,6 +199,7 @@ def define_analysis(caddee: cd.CADDEE):
     print('deformed cg: ', dcg.value)
 
 
+
 ts = time.time()
 define_base_config(caddee)
 
@@ -190,4 +209,4 @@ define_analysis(caddee)
 tf = time.time()
 print("total time", tf-ts)
 
-
+recorder.stop()

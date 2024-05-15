@@ -105,7 +105,7 @@ class CruiseParameters:
     altitude : Union[float, int, csdl.Variable, np.ndarray]
     speed : Union[float, int, csdl.Variable, np.ndarray]
     mach_number : Union[float, int, csdl.Variable, np.ndarray]
-    pitch_angle : Union[float, int, csdl.Variable, np.ndarray]
+    pitch_angle : Union[float, int, csdl.Variable, csdl.ImplicitVariable, np.ndarray]
     range : Union[float, int, csdl.Variable, np.ndarray]
     time : Union[float, int, csdl.Variable, np.ndarray]
 
@@ -145,7 +145,7 @@ class AircraftCondition(Condition):
             skip_flag = False
             if var is None:
                 skip_flag = True
-            elif not isinstance(var, csdl.Variable):
+            elif not isinstance(var, (csdl.Variable, csdl.ImplicitVariable)):
                 if isinstance(var, (int, float)):
                     csdl_var = csdl.Variable(shape=(1, ), value=var)
                 else:
@@ -242,9 +242,6 @@ class AircraftCondition(Condition):
                 warnings.warn("No mass properties defined; ignore any body rotations in mesh velocities")
 
         mesh_container = config.mesh_container
-        # Assemble the mesh container if not done already
-        if not mesh_container:
-            config.assemble_meshes()
         
         # If no meshes are in the container, raise exception
         if not mesh_container:
@@ -360,8 +357,9 @@ class AircraftCondition(Condition):
         total_moments = csdl.Variable(shape=(self._num_nodes, 3), value=0.)
 
         # sum of the aero-propulsive forces and moments
-        for i in csdl.frange(self._num_nodes):
+        for i in range(len(aero_propulsive_forces)):
             force = aero_propulsive_forces[i]
+            print(f"force {i}", force.value)
             # Check that the forces are csdl variables and have the right shape
             if not isinstance(force, csdl.Variable):
                 raise TypeError(f"Received invalid type {force}. Forces must be of type {csdl.Variable}")
@@ -370,7 +368,7 @@ class AircraftCondition(Condition):
             
             total_forces =  total_forces + force
 
-        for i in csdl.frange(self._num_nodes):
+        for i in range(len(aero_propulsive_moments)):
             moment = aero_propulsive_moments[i]
             # Check that the forces are csdl variables and have the right shape
             if not isinstance(moment, csdl.Variable):
@@ -413,6 +411,7 @@ class AircraftCondition(Condition):
 
         # If there are no inertial loads, total forces = aero-propulsive forces
         if ignore_inertial_loads:
+
             total_forces_body_fixed = perform_local_to_body_transformation(
                 phi, theta, psi, total_forces
             )
@@ -437,6 +436,7 @@ class AircraftCondition(Condition):
                 phi, theta, psi, total_moments
             )
 
+
         # Otherwise also compute inertial moments
         else:
             # Compute moment arm
@@ -449,7 +449,7 @@ class AircraftCondition(Condition):
                 csdl.slice[:, 2], mass * g
             )
 
-            inertial_moments = csdl.cross(r_exp, inertial_forces, axis=(1, ))
+            inertial_moments = csdl.cross(r_exp, inertial_forces, axis=1)
 
             total_forces = total_forces + inertial_forces
             total_moments = total_moments + inertial_moments
@@ -526,10 +526,11 @@ class CruiseCondition(AircraftCondition):
                  ):
         csdl.check_parameter(altitude, "altitude", types=(float, int, csdl.Variable, np.ndarray))
         csdl.check_parameter(range, "range", types=(float, int, csdl.Variable, np.ndarray), allow_none=True)
-        csdl.check_parameter(pitch_angle, "pitch_angle", types=(float, int, csdl.Variable, np.ndarray), allow_none=True)
+        csdl.check_parameter(pitch_angle, "pitch_angle", types=(float, int, csdl.Variable, csdl.ImplicitVariable, np.ndarray), allow_none=True)
         csdl.check_parameter(speed, "speed", types=(float, int, csdl.Variable, np.ndarray), allow_none=True)
         csdl.check_parameter(mach_number, "mach_number", types=(float, int, csdl.Variable, np.ndarray), allow_none=True)
         csdl.check_parameter(time, "time", types=(float, int, csdl.Variable, np.ndarray), allow_none=True)
+        
         self.parameters : CruiseParameters = CruiseParameters(
             altitude=altitude,
             speed=speed,
@@ -549,6 +550,8 @@ class CruiseCondition(AircraftCondition):
 
         # Compute ac states
         self._setup_condition()
+
+        
 
     def _setup_condition(self):
         # Different combinations of conflicting attributes
@@ -573,6 +576,7 @@ class CruiseCondition(AircraftCondition):
 
         # set theta to pitch_angle
         theta = self.parameters.pitch_angle
+        
 
         # Compute or set speed, mach, range, and time
         mach_number = self.parameters.mach_number

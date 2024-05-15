@@ -25,7 +25,7 @@ class Configuration:
     def assemble_meshes(self):
         """Assemble all component meshes into the mesh container."""
         def add_mesh_to_container(comp: Component):
-            for mesh_name, mesh in comp._meshes.items():
+            for mesh_name, mesh in comp._discretizations.items():
                 self.mesh_container[mesh_name] = mesh
             if comp.comps:
                 for sub_comp_name, sub_comp in comp.comps.items():

@@ -61,6 +61,7 @@ class Wing(Component):
                  thickness_to_chord_ratio : Union[int, float, csdl.Variable, None] = None, 
                  geometry : Union[BSplineSubSet, BSplineSet, None]=None,
                  optimize_wing_twist : bool=False,
+                 tight_fit_ffd: bool = True,
                  **kwargs) -> None:
         super().__init__(geometry=geometry, kwargs=kwargs)
         
@@ -103,7 +104,8 @@ class Wing(Component):
                 raise TypeError(f"wing gometry must be of type {BSplineSubSet} of {BSplineSet}")
             else:
                 # Automatically make the FFD block upon instantiation 
-                self._ffd_block = self._make_ffd_block(self.geometry)
+                self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=tight_fit_ffd)
+                # self._ffd_block.plot()
 
                 # Compute the corner points of the wing  
                 ffd_block_coefficients = self._ffd_block.coefficients.value
@@ -111,9 +113,9 @@ class Wing(Component):
                 B_matrix_TE_center = self._ffd_block.compute_evaluation_map(np.array([0., 0.5, 0.5]))
                 B_matrix_TE_right = self._ffd_block.compute_evaluation_map(np.array([0., 1.0, 0.5]))
                 
-                B_matrix_LE_left = self._ffd_block.compute_evaluation_map(np.array([1., 0., 0.5]))
-                B_matrix_LE_center = self._ffd_block.compute_evaluation_map(np.array([1., 0.5, 0.5]))
-                B_matrix_LE_right = self._ffd_block.compute_evaluation_map(np.array([1., 1.0, 0.5]))
+                B_matrix_LE_left = self._ffd_block.compute_evaluation_map(np.array([1., 0., 0.62]))
+                B_matrix_LE_center = self._ffd_block.compute_evaluation_map(np.array([1., 0.5, 0.62]))
+                B_matrix_LE_right = self._ffd_block.compute_evaluation_map(np.array([1., 1.0, 0.62]))
                 
                 self._LE_left_point = geometry.project(B_matrix_LE_left @ ffd_block_coefficients)
                 self._LE_mid_point = geometry.project(B_matrix_LE_center @ ffd_block_coefficients)
@@ -176,7 +178,9 @@ class Wing(Component):
                         entities : List[bsp.BSpline], 
                         num_coefficients : tuple=(2, 2, 2), 
                         order: tuple=(2, 2, 2), 
-                        num_physical_dimensions : int=3):
+                        num_physical_dimensions : int=3,
+                        tight_fit: bool = True,
+                    ):
         """
         Call 'construct_ffd_block_around_entities' function. 
 
@@ -185,9 +189,15 @@ class Wing(Component):
         - to provide higher order B-splines or more degrees of freedom
         if needed (via num_coefficients)
         """
-        ffd_block = construct_tight_fit_ffd_block(name=self._name, entities=entities, 
-                                                   num_coefficients=num_coefficients, order=order, 
-                                                   num_physical_dimensions=num_physical_dimensions)
+        if tight_fit:
+            ffd_block = construct_tight_fit_ffd_block(name=self._name, entities=entities, 
+                                                    num_coefficients=num_coefficients, order=order, 
+                                                    num_physical_dimensions=num_physical_dimensions)
+        else:
+            ffd_block = construct_ffd_block_around_entities(name=self._name, entities=entities,
+                                                            num_coefficients=num_coefficients, order=order, 
+                                                            num_physical_dimensions=num_physical_dimensions)
+        
         ffd_block.coefficients.name = f'{self._name}_coefficients'
 
         return ffd_block 

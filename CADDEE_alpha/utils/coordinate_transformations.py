@@ -38,7 +38,7 @@ def perform_local_to_body_transformation(
     csdl.check_parameter(phi, "phi", types=(csdl.Variable, float, int, np.ndarray))
     csdl.check_parameter(theta, "theta", types=(csdl.Variable, float, int, np.ndarray))
     csdl.check_parameter(psi, "psi", types=(csdl.Variable, float, int, np.ndarray))
-    csdl.check_parameter(vectors, "vectors", types=(csdl.Variable, np.ndarray))
+    csdl.check_parameter(vectors, "vectors", types=(csdl.Variable, np.ndarray), allow_none=True)
 
     # check the euler angles all have the same shape
     if isinstance(phi, (int, float)):
@@ -74,22 +74,25 @@ def perform_local_to_body_transformation(
     theta = theta.reshape((num_nodes, ))
     psi = psi.reshape((num_nodes, ))
 
-    # check if the vector shape is compatible
-    vector_shape = vectors.shape
-    if vector_shape[-1] != 3 or len(vector_shape) > 2:
-        raise Exception(f"'vectors' must be a vector of size (3, ) or a 2d array of shape {(num_nodes, 3)}. Received shape {vector_shape}")
-
-    # Reshape or expand vectors to (num_nodes, 3) if possible
-    try:
-        vectors = vectors.reshape((num_nodes, 3))
-    except:
-        try:
-            vectors = csdl.expand(vectors, (num_nodes, 3), action='j->ij')
-        except:
+    if vectors is not None:
+        # check if the vector shape is compatible
+        vector_shape = vectors.shape
+        if vector_shape[-1] != 3 or len(vector_shape) > 2:
             raise Exception(f"'vectors' must be a vector of size (3, ) or a 2d array of shape {(num_nodes, 3)}. Received shape {vector_shape}")
 
+        # Reshape or expand vectors to (num_nodes, 3) if possible
+        try:
+            vectors = vectors.reshape((num_nodes, 3))
+        except:
+            try:
+                vectors = csdl.expand(vectors, (num_nodes, 3), action='j->ij')
+            except:
+                raise Exception(f"'vectors' must be a vector of size (3, ) or a 2d array of shape {(num_nodes, 3)}. Received shape {vector_shape}")
 
-    transformed_vec = csdl.Variable(shape=(num_nodes, 3), value=0.)
+
+        transformed_vec = csdl.Variable(shape=(num_nodes, 3), value=0.)
+
+    L2B_tensor = csdl.Variable(shape=(num_nodes, 3, 3), value=0.)
 
     for i in range(num_nodes):
         L2B_mat = csdl.Variable(shape=(3, 3), value=0.)
@@ -138,11 +141,22 @@ def perform_local_to_body_transformation(
             value=csdl.cos(phi[i]) * csdl.cos(theta[i]),
         )
         
-        transformed_vec = transformed_vec.set(
-            csdl.slice[i, :], csdl.matvec(L2B_mat, vectors[i, :])
+        L2B_tensor = L2B_tensor.set(
+            slices=csdl.slice[i, :, :],
+            value=L2B_mat
         )
 
-    return transformed_vec
+        if vectors is not None:
+            transformed_vec = transformed_vec.set(
+                csdl.slice[i, :], csdl.matvec(L2B_mat, vectors[i, :])
+            )
+        
+        
+    if vectors is not None:
+        return transformed_vec
+    
+    else:
+        return L2B_tensor
 
 
 if __name__ == "__main__":
