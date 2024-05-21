@@ -1,5 +1,5 @@
 from CADDEE_alpha.core.component import Component
-from lsdo_geo import  BSplineSubSet, BSplineSet
+from lsdo_geo import  BSplineSet
 from lsdo_geo.core.parameterization.parameterization_solver import ParameterizationSolver
 from lsdo_geo.core.parameterization.volume_sectional_parameterization import VolumeSectionalParameterization
 from lsdo_geo import FFDBlock
@@ -46,7 +46,7 @@ class Fuselage(Component):
                  max_height : Union[int, float, csdl.Variable], 
                  cabin_depth : Union[int, float, csdl.Variable], 
                  S_wet : Union[int, float, csdl.Variable, None] = None,
-                 geometry : Union[BSplineSet, BSplineSubSet, None] = None,
+                 geometry : Union[BSplineSet, None] = None,
                  **kwargs
                  ) -> None:
         super().__init__(geometry, **kwargs)
@@ -61,8 +61,8 @@ class Fuselage(Component):
 
         if self.geometry is not None:
             # Check for appropriate geometry type
-            if not isinstance(self.geometry, (BSplineSubSet, BSplineSet)):
-                raise TypeError(f"wing gometry must be of type {BSplineSubSet} of {BSplineSet}")
+            if not isinstance(self.geometry, (BSplineSet)):
+                raise TypeError(f"wing gometry must be of type {BSplineSet}")
             else:
                 # Automatically make the FFD block upon instantiation 
                 self._ffd_block = self._make_ffd_block(self.geometry)

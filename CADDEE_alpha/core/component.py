@@ -1,5 +1,6 @@
 from CADDEE_alpha.utils.var_groups import MassProperties
-from lsdo_geo import BSplineSet, BSplineSubSet
+from lsdo_geo import Geometry
+from lsdo_function_spaces import FunctionSet
 from CADDEE_alpha.utils.caddee_dict import CADDEEDict
 from CADDEE_alpha.core.mesh.mesh import DiscretizationsDict
 from typing import Union, List
@@ -29,7 +30,7 @@ class Component:
     comps : dictionary
         Dictionary of the sub/children components
 
-    geometry : Union[BsplineSet, BSplineSubSet]
+    geometry : Union[Geometry]
 
     quantities : dictionary
         General container data; by default contains
@@ -51,9 +52,9 @@ class Component:
     _is_copy = False
 
     parent = None
-    def __init__(self, geometry : Union[BSplineSet, BSplineSubSet, None]=None, 
+    def __init__(self, geometry : Union[FunctionSet, None]=None, 
                  **kwargs) -> None: 
-        csdl.check_parameter(geometry, "geometry", types=(BSplineSet, BSplineSubSet), allow_none=True)
+        csdl.check_parameter(geometry, "geometry", types=(FunctionSet), allow_none=True)
         
         # Increment instance count and set private component name (will be obsolete in the future)
         Component._instance_count += 1
@@ -61,7 +62,7 @@ class Component:
         self._discretizations: DiscretizationsDict =  DiscretizationsDict()
 
         # set class attributes
-        self.geometry : Union[BSplineSet, BSplineSubSet, None] = geometry
+        self.geometry : Union[FunctionSet, Geometry, None] = geometry
         self.comps : ComponentDict = ComponentDict(types=Component)
         self.quantities : ComponentQuantities = ComponentQuantities()
         self.parameters : ComponentParameters = ComponentParameters()
@@ -70,29 +71,29 @@ class Component:
         for key, value in kwargs.items():
             setattr(self.parameters, key, value)
 
-        if geometry is not None and isinstance(geometry, BSplineSubSet):
+        if geometry is not None and isinstance(geometry, FunctionSet):
             self.quantities.surface_area = self._compute_surface_area(geometry=geometry)
 
-        # if isinstance(geometry, BSplineSet):
+        # if isinstance(geometry, FunctionSet):
         #     system_component_geometry = self.create_subgeometry(search_names=[""])
         #     self.geometry = system_component_geometry
 
     
-    def create_subgeometry(self, search_names : List[str]) -> BSplineSubSet:
+    def create_subgeometry(self, search_names : List[str]) -> FunctionSet:
         """Create a sub-geometry by providing the search names of the e.g., OpenVSP component.
         
         This method can be overwritten by subcomponents to be tailored toward specific needs, 
         e.g., to make a new sub-component from the OML, like a spar from the wing OML
         """
-        # Check if component is already the BSplineSet
-        if isinstance(self.geometry, BSplineSet):
-            component_geometry = self.geometry.declare_component(component_name=self._name, b_spline_search_names=search_names)
+        # Check if component is already the FunctionSet
+        if isinstance(self.geometry, FunctionSet):
+            component_geometry = self.geometry.declare_component(name=self._name, function_search_names=search_names)
         
-        # Find the top-level component that is the BSplineSet
+        # Find the top-level component that is the FunctionSet
         else:
             system_component = self._find_system_component(self)
             system_geometry = system_component.geometry
-            component_geometry =  system_geometry.declare_component(component_name=self._name, b_spline_search_names=search_names)
+            component_geometry =  system_geometry.declare_component(name=self._name, function_search_names=search_names)
 
         return component_geometry
 
@@ -110,7 +111,7 @@ class Component:
 
     def _make_ffd_block(self, entities : List[bsp.BSpline], 
                         num_coefficients : tuple=(2, 2, 2), 
-                        order: tuple=(2, 2, 2), 
+                        order: tuple=(1, 1, 1), 
                         num_physical_dimensions : int=3):
         """
         Call 'construct_ffd_block_around_entities' function.
@@ -119,8 +120,7 @@ class Component:
         and 2 degrees of freedom in all dimensions.
         """
         ffd_block = construct_ffd_block_around_entities(name=self._name, entities=entities, 
-                                                   num_coefficients=num_coefficients, order=order, 
-                                                   num_physical_dimensions=num_physical_dimensions)
+                                                   num_coefficients=num_coefficients, degree=order)
         ffd_block.coefficients.name = f'{self._name}_coefficients'
 
         return ffd_block 
@@ -134,7 +134,7 @@ class Component:
     def _setup_ffd_parameterization(self):
         raise NotImplementedError(f"'_setup_ffd_parameterization' has not been implemented for {type(self)}")
         
-    def _update_coefficients_after_inner_optimization(self, parameterization_solver_states, geometry : BSplineSet, update_dict : dict, plot : bool=False):
+    def _update_coefficients_after_inner_optimization(self, parameterization_solver_states, geometry : FunctionSet, update_dict : dict, plot : bool=False):
         """Re-evaluate and re-assign the geomtry coefficients after the inner optimization has run"""
         ffd_block = update_dict[f'{self._name}_ffd_block']
         component = update_dict[f'{self._name}_component']
@@ -159,7 +159,7 @@ class Component:
         component_coefficients = ffd_block.evaluate(ffd_block_coefficients, plot=plot)
  
         # Assign coefficients
-        if isinstance(self.geometry, BSplineSet):
+        if isinstance(self.geometry, FunctionSet):
             geometry.assign_coefficients(coefficients=component_coefficients)
         else:
             geometry.assign_coefficients(coefficients=component_coefficients, b_spline_names=component.b_spline_names)
@@ -192,7 +192,7 @@ class Component:
     def _setup_geometry(self, parameterization_solver, system_geometry, plot : bool=False):
         raise NotImplementedError(f"'_setup_geometry' has not been implemented for component {type(self)}")
 
-    def _find_system_component(self, parent) -> BSplineSet:
+    def _find_system_component(self, parent) -> FunctionSet:
         """Find the top-level system component by traversing the component hiearchy"""
         if parent is None:
             return self
@@ -200,18 +200,18 @@ class Component:
             parent = self.parent
             self._find_system_component(parent)
 
-    def _compute_surface_area(self, geometry : BSplineSubSet):
+    def _compute_surface_area(self, geometry:Geometry):
         """Compute the surface area of a component."""
         parametric_mesh_grid_num = 10
 
-        surfaces = geometry.b_spline_names
+        surfaces = geometry.functions
         surface_area = csdl.Variable(shape=(1, ), value=1)
 
-        for name in surfaces:
+        for i in range(len(surfaces)):
             oml_para_mesh = []
             for u in np.linspace(0, 1, parametric_mesh_grid_num):
                 for v in np.linspace(0, 1, parametric_mesh_grid_num):
-                    oml_para_mesh.append((name, np.array([u,v]).reshape((1,2))))
+                    oml_para_mesh.append((i, np.array([u,v]).reshape((1,2))))
             
             coords_m3l_vec = geometry.evaluate(oml_para_mesh).reshape((parametric_mesh_grid_num, parametric_mesh_grid_num, 3))
             
