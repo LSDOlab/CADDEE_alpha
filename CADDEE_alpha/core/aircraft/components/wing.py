@@ -1,6 +1,7 @@
 from CADDEE_alpha.core.component import Component
 from typing import List
-from lsdo_geo import construct_ffd_block_around_entities, BSplineSubSet, BSplineSet, construct_tight_fit_ffd_block
+from lsdo_geo import construct_ffd_block_around_entities, construct_tight_fit_ffd_block
+from lsdo_function_spaces import FunctionSet
 import lsdo_geo.splines.b_splines as bsp
 from typing import Union
 from lsdo_geo.core.parameterization.parameterization_solver import ParameterizationSolver
@@ -59,7 +60,7 @@ class Wing(Component):
                  incidence : Union[int, float, csdl.Variable, None] = None, 
                  taper_ratio : Union[int, float, csdl.Variable, None] = None, 
                  thickness_to_chord_ratio : Union[int, float, csdl.Variable, None] = None, 
-                 geometry : Union[BSplineSubSet, BSplineSet, None]=None,
+                 geometry : Union[FunctionSet, None]=None,
                  optimize_wing_twist : bool=False,
                  tight_fit_ffd: bool = True,
                  **kwargs) -> None:
@@ -100,30 +101,21 @@ class Wing(Component):
 
         if self.geometry is not None:
             # Check for appropriate geometry type
-            if not isinstance(self.geometry, (BSplineSubSet, BSplineSet)):
-                raise TypeError(f"wing gometry must be of type {BSplineSubSet} of {BSplineSet}")
+            if not isinstance(self.geometry, (FunctionSet)):
+                raise TypeError(f"wing gometry must be of type {FunctionSet}")
             else:
                 # Automatically make the FFD block upon instantiation 
                 self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=tight_fit_ffd)
                 # self._ffd_block.plot()
 
                 # Compute the corner points of the wing  
-                ffd_block_coefficients = self._ffd_block.coefficients.value
-                B_matrix_TE_left = self._ffd_block.compute_evaluation_map(np.array([0., 0., 0.5]))
-                B_matrix_TE_center = self._ffd_block.compute_evaluation_map(np.array([0., 0.5, 0.5]))
-                B_matrix_TE_right = self._ffd_block.compute_evaluation_map(np.array([0., 1.0, 0.5]))
-                
-                B_matrix_LE_left = self._ffd_block.compute_evaluation_map(np.array([1., 0., 0.62]))
-                B_matrix_LE_center = self._ffd_block.compute_evaluation_map(np.array([1., 0.5, 0.62]))
-                B_matrix_LE_right = self._ffd_block.compute_evaluation_map(np.array([1., 1.0, 0.62]))
-                
-                self._LE_left_point = geometry.project(B_matrix_LE_left @ ffd_block_coefficients)
-                self._LE_mid_point = geometry.project(B_matrix_LE_center @ ffd_block_coefficients)
-                self._LE_right_point = geometry.project(B_matrix_LE_right @ ffd_block_coefficients)
+                self._LE_left_point = geometry.project(self._ffd_block.evaluate(np.array([1., 0., 0.62])))
+                self._LE_mid_point = geometry.project(self._ffd_block.evaluate(np.array([1., 0.5, 0.62])))
+                self._LE_right_point = geometry.project(self._ffd_block.evaluate(np.array([1., 1.0, 0.62])))
 
-                self._TE_left_point = geometry.project(B_matrix_TE_left @ ffd_block_coefficients)
-                self._TE_mid_point = geometry.project(B_matrix_TE_center @ ffd_block_coefficients)
-                self._TE_right_point = geometry.project(B_matrix_TE_right @ ffd_block_coefficients)
+                self._TE_left_point = geometry.project(self._ffd_block.evaluate(np.array([0., 0., 0.5])))
+                self._TE_mid_point = geometry.project(self._ffd_block.evaluate(np.array([0., 0.5, 0.5])))
+                self._TE_right_point = geometry.project(self._ffd_block.evaluate(np.array([0., 1.0, 0.5])))
 
 
     def actuate(self, angle : Union[float, int, csdl.Variable], axis_location : float=0.25):
@@ -177,7 +169,7 @@ class Wing(Component):
     def _make_ffd_block(self, 
                         entities : List[bsp.BSpline], 
                         num_coefficients : tuple=(2, 2, 2), 
-                        order: tuple=(2, 2, 2), 
+                        order: tuple=(1, 1, 1), 
                         num_physical_dimensions : int=3,
                         tight_fit: bool = True,
                     ):
@@ -191,12 +183,10 @@ class Wing(Component):
         """
         if tight_fit:
             ffd_block = construct_tight_fit_ffd_block(name=self._name, entities=entities, 
-                                                    num_coefficients=num_coefficients, order=order, 
-                                                    num_physical_dimensions=num_physical_dimensions)
+                                                    num_coefficients=num_coefficients, degree=order)
         else:
             ffd_block = construct_ffd_block_around_entities(name=self._name, entities=entities,
-                                                            num_coefficients=num_coefficients, order=order, 
-                                                            num_physical_dimensions=num_physical_dimensions)
+                                                            num_coefficients=num_coefficients, degree=order)
         
         ffd_block.coefficients.name = f'{self._name}_coefficients'
 
@@ -281,7 +271,7 @@ class Wing(Component):
         wing_coefficients = ffd_block.evaluate(wing_ffd_block_coefficients, plot=True)
 
         # Assign the coefficients to the top-level parent (i.e., system) geometry
-        if isinstance(self.geometry, BSplineSet):
+        if isinstance(self.geometry, FunctionSet):
             system_geometry.assign_coefficients(coefficients=wing_coefficients)
         else:
             system_geometry.assign_coefficients(coefficients=wing_coefficients, b_spline_names=self.geometry.b_spline_names)
