@@ -207,7 +207,7 @@ class Component:
         surfaces = geometry.functions
         surface_area = csdl.Variable(shape=(1, ), value=1)
 
-        for i in range(len(surfaces)):
+        for i in surfaces.keys():
             oml_para_mesh = []
             for u in np.linspace(0, 1, parametric_mesh_grid_num):
                 for v in np.linspace(0, 1, parametric_mesh_grid_num):
