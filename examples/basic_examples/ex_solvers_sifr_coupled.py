@@ -30,29 +30,32 @@ def define_base_config(caddee : cd.CADDEE):
     airframe = aircraft.comps["airframe"] = cd.Component()
 
     # wing comp
-    wing_geometry = aircraft.create_subgeometry(search_names=["Wing"])
+    wing_geometry = aircraft.create_subgeometry(search_names=["Wing, 0, 2", 
+                                                            "Wing, 0, 3",
+                                                            "Wing, 1, 8",
+                                                            "Wing, 1, 9"])
     wing = cd.aircraft.components.Wing(AR=7.43, S_ref=174, taper_ratio=0.75, geometry=wing_geometry, tight_fit_ffd=False)
 
     # wing function spaces
-    force_space = fs.IDWFunctionSpace(num_parametric_dimensions=2, grid_size=20, order=2, conserve=True)
+    force_space = fs.IDWFunctionSpace(num_parametric_dimensions=2, grid_size=8, order=2, conserve=True)
     wing.quantities.force_space = wing_geometry.create_parallel_space(force_space)
     wing.quantities.force_single_space = force_space
 
     pressure_space = fs.BSplineSpace(2, (5,5), (7,7))
     wing.quantities.pressure_space = wing_geometry.create_parallel_space(pressure_space)
 
-    displacement_space = fs.BSplineSpace(2, (3,3), (10,10))
+    displacement_space = fs.BSplineSpace(2, (3,3), (5,5))
     wing.quantities.displacement_space = wing_geometry.create_parallel_space(displacement_space)
     wing.quantities.displacement_single_space = displacement_space
 
     # wing camber surface
     vlm_mesh = cd.mesh.VLMMesh()
     wing_camber_surface = cd.mesh.make_vlm_surface(
-        wing, 50, 20, plot=plot, spacing_spanwise='linear', 
+        wing, 30, 15, plot=plot, spacing_spanwise='linear', 
         spacing_chordwise='linear', grid_search_density=20
     )
     vlm_mesh.discretizations["wing_camber_surface"] = wing_camber_surface
-    # c_172_geometry.plot_meshes(wing_camber_surface.nodal_coordinates)
+    c_172_geometry.plot_meshes(wing_camber_surface.nodal_coordinates)
 
     # wing box beam
     beam_mesh = cd.mesh.BeamMesh()
@@ -134,23 +137,31 @@ def define_analysis(caddee: cd.CADDEE):
     
     cruise.finalize_meshes()
 
-
-
     force_space = wing.quantities.force_space
-    displacement_space = wing.quantities.pressure_space
+    displacement_space = wing.quantities.displacement_space
 
     force_single_space = wing.quantities.force_single_space
     displacement_single_space = wing.quantities.displacement_single_space
+
+    disp_coeff_len = displacement_space.spaces[2].coefficients_shape[0]**2
+    force_coeff_len = force_space.spaces[2].points.shape[0]
+    displacement_size = disp_coeff_len*len(displacement_space.spaces)
+    force_size = force_coeff_len*len(force_space.spaces)
+
+    disp_coeff_implicit = csdl.ImplicitVariable(shape=(displacement_size, 3), value=0.)
+    force_coeff_implicit = csdl.ImplicitVariable(shape=(force_size, 3), value=1.)
 
 
     # make functions for the input side
     implicit_displacement_functions = {}
     implicit_force_functions = {}
+    i_d = 0
+    i_f = 0
     for i in wing.geometry.functions:
-        disp_coeff = csdl.ImplicitVariable(shape=(displacement_single_space.coefficients_shape) + (3,), value=0.)
-        implicit_displacement_functions[i] = fs.Function(space=displacement_single_space, coefficients=disp_coeff)
-        force_coeff = csdl.ImplicitVariable(shape=(force_single_space.points.shape[0], 3), value=0.)
-        implicit_force_functions[i] = fs.Function(space=force_single_space, coefficients=force_coeff)
+        implicit_displacement_functions[i] = fs.Function(space=displacement_single_space, coefficients=disp_coeff_implicit[i_d:i_d+disp_coeff_len, :])
+        i_d += disp_coeff_len
+        implicit_force_functions[i] = fs.Function(space=force_single_space, coefficients=force_coeff_implicit[i_f:i_f+force_coeff_len, :])
+        i_f += force_coeff_len
 
     implicit_disp = fs.FunctionSet(implicit_displacement_functions)
     implicit_force = fs.FunctionSet(implicit_force_functions)
@@ -170,12 +181,48 @@ def define_analysis(caddee: cd.CADDEE):
     weights = map.evaluate(csdl.reshape(wing_camber_mesh, (np.prod(wing_camber_mesh.shape[0:-1]), 3)), transfer_mesh_phys)
     wing_camber_mesh_displacement = (weights @ transfer_mesh_disp).reshape(wing_camber_mesh.shape)
 
-
     camber_surface_coordinates = [wing_camber_mesh + wing_camber_mesh_displacement, tail_camber_surface.nodal_coordinates]
     camber_surface_nodal_velocities = [wing_camber_surface.nodal_velocities, tail_camber_surface.nodal_velocities]
 
     # run vlm solver
     vlm_outputs = vlm_solver(camber_surface_coordinates, camber_surface_nodal_velocities)
+
+
+    print("total drag", vlm_outputs.total_drag.value)
+    print("total lift", vlm_outputs.total_lift.value)
+    print("total forces", vlm_outputs.total_force.value)
+    print("total moments", vlm_outputs.total_moment.value)
+    plt.rcParams['text.usetex'] = False
+    fig, axs = plt.subplots(3, 1)
+    # plt.rc('text', usetex=False)
+    for i in range(len(vlm_outputs.surface_CL)):
+        panel_forces = csdl.sum(vlm_outputs.surface_panel_forces[i][0, :, :, :], axes=(0, ))
+        shape = panel_forces.shape
+        norm_span = np.linspace(-1, 1, shape[0])
+
+        axs[0].plot(norm_span, panel_forces[:, 0].value)
+        axs[0].set_xlabel("norm span")
+        axs[0].set_ylabel("Fx")
+        axs[1].plot(norm_span, panel_forces[:, 1].value)
+        axs[1].set_xlabel("norm span")
+        axs[1].set_ylabel("Fy")
+        axs[2].plot(norm_span, panel_forces[:, 2].value)
+        axs[2].set_xlabel("norm span")
+        axs[2].set_ylabel("Fz")
+
+        print(f"surface {i} CL", vlm_outputs.surface_CL[i].value)
+        print(f"surface {i} CDi", vlm_outputs.surface_CDi[i].value)
+        print(f"surface {i} L", vlm_outputs.surface_lift[i].value)
+        print(f"surface {i} Di", vlm_outputs.surface_drag[i].value)
+
+    plt.show()
+
+
+
+
+
+
+
 
 
     # VLM forces to oml (sifr)
@@ -189,11 +236,11 @@ def define_analysis(caddee: cd.CADDEE):
     split_fp = np.vstack((camber_force_points + np.array([0, 0, -1]), camber_force_points + np.array([0, 0, 1])))
     oml_fp_para = wing.geometry.project(split_fp, plot=plot)
 
-    force_function = wing.quantities.force_space.fit_function_set(csdl.blockmat([[forces/2], [forces/2]]), oml_fp_para)
+    force_function = force_space.fit_function_set(csdl.blockmat([[forces/2], [forces/2]]), oml_fp_para)
     wing.quantities.force_function = force_function
 
     pressure_function = wing.quantities.pressure_space.fit_function_set(csdl.blockmat([[pressures/2], [pressures/2]]), 
-                                                                            oml_fp_para, regularization_parameter=1)
+                                                                        oml_fp_para, regularization_parameter=1)
     
     # Set up beam analysis
     beam_mesh = mesh_container["beam_mesh"]
@@ -240,22 +287,25 @@ def define_analysis(caddee: cd.CADDEE):
 
     # displacement to oml
     nodal_displacement = weights @ beam_1_displacement
-    displacement_function = wing.quantities.displacement_space.fit_function_set(nodal_displacement, transfer_mesh_para)
+    displacement_function = displacement_space.fit_function_set(nodal_displacement, transfer_mesh_para)
     wing.quantities.displacement_function = displacement_function
 
-    # define residuals (difference in coefficients)
-    disp_residuals = [displacement_function.functions[i].coefficients - implicit_disp.functions[i].coefficients for i in wing.geometry.functions]
-    force_residuals = [force_function.functions[i].coefficients - implicit_force.functions[i].coefficients for i in wing.geometry.functions]
-
     # solve implicit system
-    solver = csdl.nonlinear_solvers.GaussSeidel()
-    for i in wing.geometry.function:
-        disp_implicit_var = implicit_disp.functions[i].coefficients
-        disp_residual = displacement_function.functions[i].coefficients - disp_implicit_var
-        solver.add_state(disp_implicit_var, disp_residual)
-        force_implicit_var = implicit_force.functions[i].coefficients
-        force_residual = force_function.functions[i].coefficients - force_implicit_var
-        solver.add_state(force_implicit_var, force_residual)
+    solver = csdl.nonlinear_solvers.Newton(max_iter=10)
+
+    disp_residual = csdl.Variable(shape=(displacement_size, 3), value=0.)
+    force_residual = csdl.Variable(shape=(force_size, 3), value=0.)
+    i_d = 0
+    i_f = 0
+    for i in wing.geometry.functions:
+        disp_residual = disp_residual.set(csdl.slice[i_d:i_d+disp_coeff_len,:], displacement_function.functions[i].coefficients - disp_coeff_implicit[i_d:i_d+disp_coeff_len,:])
+        i_d += disp_coeff_len
+        force_residual = force_residual.set(csdl.slice[i_f:i_f+force_coeff_len,:], force_function.functions[i].coefficients - force_coeff_implicit[i_f:i_f+force_coeff_len,:])
+        i_f += force_coeff_len
+    solver.add_state(disp_coeff_implicit, disp_residual)
+    solver.add_state(force_coeff_implicit, force_residual)
+
+
     solver.run()
 
 

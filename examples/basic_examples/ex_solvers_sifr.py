@@ -27,8 +27,13 @@ def define_base_config(caddee : cd.CADDEE):
     airframe = aircraft.comps["airframe"] = cd.Component()
 
     # wing comp
-    wing_geometry = aircraft.create_subgeometry(search_names=["Wing"])
+    wing_geometry = aircraft.create_subgeometry(search_names=["Wing, 0, 2", 
+                                                              "Wing, 0, 3",
+                                                              "Wing, 1, 8",
+                                                              "Wing, 1, 9"])
+
     wing = cd.aircraft.components.Wing(AR=7.43, S_ref=174, taper_ratio=0.75, geometry=wing_geometry, tight_fit_ffd=False)
+
 
     # wing function spaces
     force_space = fs.IDWFunctionSpace(num_parametric_dimensions=2, grid_size=20, order=2, conserve=True)
