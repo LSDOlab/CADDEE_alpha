@@ -1,6 +1,7 @@
 import csdl_alpha as csdl
 from CADDEE_alpha.core.mesh.mesh import Discretization, SolverMesh, DiscretizationsDict
 import numpy as np
+from lsdo_function_spaces import FunctionSet
 from typing import Union
 from dataclasses import dataclass
 from CADDEE_alpha.utils.caddee_dict import CADDEEDict
@@ -307,7 +308,7 @@ def make_vlm_surface(
     if num_spanwise % 2 != 0:
         raise Exception("Number of spanwise panels must be even.")
 
-    wing_geometry = wing_comp.geometry
+    wing_geometry: FunctionSet = wing_comp.geometry
 
     LE_left_point = wing_geometry.evaluate(wing_comp._LE_left_point).value
     LE_mid_point = wing_geometry.evaluate(wing_comp._LE_mid_point).value

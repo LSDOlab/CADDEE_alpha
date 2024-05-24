@@ -20,6 +20,7 @@ caddee = cd.CADDEE()
 
 # Import and plot the geometry
 c_172_geometry = cd.import_geometry('pseudo_c172_cambered.stp')
+c_172_geometry.plot()
 
 def define_base_config(caddee : cd.CADDEE):
     """Build the base configuration."""
@@ -51,11 +52,11 @@ def define_base_config(caddee : cd.CADDEE):
     # wing camber surface
     vlm_mesh = cd.mesh.VLMMesh()
     wing_camber_surface = cd.mesh.make_vlm_surface(
-        wing, 30, 15, plot=plot, spacing_spanwise='linear', 
-        spacing_chordwise='linear', grid_search_density=20
+        wing, 16, 5, plot=plot, spacing_spanwise='linear', 
+        spacing_chordwise='linear', grid_search_density=2
     )
     vlm_mesh.discretizations["wing_camber_surface"] = wing_camber_surface
-    c_172_geometry.plot_meshes(wing_camber_surface.nodal_coordinates)
+    # c_172_geometry.plot_meshes(wing_camber_surface.nodal_coordinates)
 
     # wing box beam
     beam_mesh = cd.mesh.BeamMesh()

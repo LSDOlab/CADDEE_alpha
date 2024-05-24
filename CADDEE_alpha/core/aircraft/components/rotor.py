@@ -1,4 +1,4 @@
-from lsdo_geo import BSplineSet
+from lsdo_function_spaces import FunctionSet
 from CADDEE_alpha.core.component import Component
 import numpy as np
 from dataclasses import dataclass
@@ -15,7 +15,7 @@ class RotorParameters(csdl.VariableGroup):
 class Rotor(Component):
     def __init__(self, 
                  radius: Union[int, float, csdl.Variable],
-                 geometry: Union[BSplineSet, None] = None,
+                 geometry: Union[FunctionSet, None] = None,
                  **kwargs) -> None:
         csdl.check_parameter(radius, "radius", types=(float, int, csdl.Variable))
         super().__init__(geometry, **kwargs)
@@ -27,13 +27,17 @@ class Rotor(Component):
 
         # Make FFd block if geometry is not None
         if self.geometry is not None:
-            self._ffd_block = self._make_ffd_block(self.geometry)
+            if not isinstance(self.geometry, (FunctionSet)):
+                raise TypeError(f"wing geometry must be of type {FunctionSet}, received {type(self.geometry)}")
 
-            # Do projections for corner points 
-            self._corner_point_1 = geometry.project(self._ffd_block.evaluate(np.array([0.5, 0.5, 0.])))
-            self._corner_point_2 = geometry.project( self._ffd_block.evaluate(np.array([0.5, 0.5, 1.])))
-            self._corner_point_3 = geometry.project(self._ffd_block.evaluate(np.array([0.5, 0., 0.5])))
-            self._corner_point_4 = geometry.project(self._ffd_block.evaluate(np.array([0.5, 1., 0.5])))
+            else:
+                self._ffd_block = self._make_ffd_block(self.geometry)
+
+                # Do projections for corner points 
+                self._corner_point_1 = geometry.project(self._ffd_block.evaluate(np.array([0.5, 0.5, 0.])))
+                self._corner_point_2 = geometry.project( self._ffd_block.evaluate(np.array([0.5, 0.5, 1.])))
+                self._corner_point_3 = geometry.project(self._ffd_block.evaluate(np.array([0.5, 0., 0.5])))
+                self._corner_point_4 = geometry.project(self._ffd_block.evaluate(np.array([0.5, 1., 0.5])))
 
     def actuate(
             self, 

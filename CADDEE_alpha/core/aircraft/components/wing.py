@@ -102,7 +102,7 @@ class Wing(Component):
         if self.geometry is not None:
             # Check for appropriate geometry type
             if not isinstance(self.geometry, (FunctionSet)):
-                raise TypeError(f"wing gometry must be of type {FunctionSet}")
+                raise TypeError(f"wing gometry must be of type {FunctionSet}, received {type(self.geometry)}")
             else:
                 # Automatically make the FFD block upon instantiation 
                 self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=tight_fit_ffd)
