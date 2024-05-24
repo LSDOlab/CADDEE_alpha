@@ -4,9 +4,9 @@ import aframe as af
 import numpy as np
 import time
 from VortexAD.core.vlm.vlm_solver import vlm_solver
-import matplotlib.pyplot as plt
 import lsdo_function_spaces as fs
 import aeroelastic_coupling_utils as acu
+from ex_utils import plot_vlm
 
 plot = False
 
@@ -48,7 +48,7 @@ def define_base_config(caddee : cd.CADDEE):
     # wing camber surface
     vlm_mesh = cd.mesh.VLMMesh()
     wing_camber_surface = cd.mesh.make_vlm_surface(
-        wing, 50, 20, plot=plot, spacing_spanwise='linear', 
+        wing, 20, 12, plot=plot, spacing_spanwise='linear', 
         spacing_chordwise='linear', grid_search_density=20
     )
     vlm_mesh.discretizations["wing_camber_surface"] = wing_camber_surface
@@ -126,6 +126,8 @@ def define_conditions(caddee: cd.CADDEE):
     cruise.configuration = base_config
     conditions["cruise"] = cruise
 
+
+
 def define_analysis(caddee: cd.CADDEE):
     cruise = caddee.conditions["cruise"]
     cruise_config = cruise.configuration
@@ -142,36 +144,9 @@ def define_analysis(caddee: cd.CADDEE):
     camber_surface_coordinates = [wing_camber_surface.nodal_coordinates, tail_camber_surface.nodal_coordinates]
     camber_surface_nodal_velocities = [wing_camber_surface.nodal_velocities, tail_camber_surface.nodal_velocities]
 
-    # run vlm solver
+        # run vlm solver
     vlm_outputs = vlm_solver(camber_surface_coordinates, camber_surface_nodal_velocities)
-    print("total drag", vlm_outputs.total_drag.value)
-    print("total lift", vlm_outputs.total_lift.value)
-    print("total forces", vlm_outputs.total_force.value)
-    print("total moments", vlm_outputs.total_moment.value)
-    plt.rcParams['text.usetex'] = False
-    fig, axs = plt.subplots(3, 1)
-    # plt.rc('text', usetex=False)
-    for i in range(len(vlm_outputs.surface_CL)):
-        panel_forces = csdl.sum(vlm_outputs.surface_panel_forces[i][0, :, :, :], axes=(0, ))
-        shape = panel_forces.shape
-        norm_span = np.linspace(-1, 1, shape[0])
-
-        axs[0].plot(norm_span, panel_forces[:, 0].value)
-        axs[0].set_xlabel("norm span")
-        axs[0].set_ylabel("Fx")
-        axs[1].plot(norm_span, panel_forces[:, 1].value)
-        axs[1].set_xlabel("norm span")
-        axs[1].set_ylabel("Fy")
-        axs[2].plot(norm_span, panel_forces[:, 2].value)
-        axs[2].set_xlabel("norm span")
-        axs[2].set_ylabel("Fz")
-
-        print(f"surface {i} CL", vlm_outputs.surface_CL[i].value)
-        print(f"surface {i} CDi", vlm_outputs.surface_CDi[i].value)
-        print(f"surface {i} L", vlm_outputs.surface_lift[i].value)
-        print(f"surface {i} Di", vlm_outputs.surface_drag[i].value)
-
-    plt.show()
+    plot_vlm(vlm_outputs)
 
     # VLM forces to beam (sifr)
 
