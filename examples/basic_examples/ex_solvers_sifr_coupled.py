@@ -7,6 +7,7 @@ from VortexAD.core.vlm.vlm_solver import vlm_solver
 import matplotlib.pyplot as plt
 import lsdo_function_spaces as fs
 import aeroelastic_coupling_utils as acu
+from ex_utils import plot_vlm
 
 # NOTE: wip
 
@@ -55,7 +56,7 @@ def define_base_config(caddee : cd.CADDEE):
         spacing_chordwise='linear', grid_search_density=20
     )
     vlm_mesh.discretizations["wing_camber_surface"] = wing_camber_surface
-    c_172_geometry.plot_meshes(wing_camber_surface.nodal_coordinates)
+    # c_172_geometry.plot_meshes(wing_camber_surface.nodal_coordinates)
 
     # wing box beam
     beam_mesh = cd.mesh.BeamMesh()
@@ -140,31 +141,8 @@ def define_analysis(caddee: cd.CADDEE):
     force_space = wing.quantities.force_space
     displacement_space = wing.quantities.displacement_space
 
-    force_single_space = wing.quantities.force_single_space
-    displacement_single_space = wing.quantities.displacement_single_space
-
-    disp_coeff_len = displacement_space.spaces[2].coefficients_shape[0]**2
-    force_coeff_len = force_space.spaces[2].points.shape[0]
-    displacement_size = disp_coeff_len*len(displacement_space.spaces)
-    force_size = force_coeff_len*len(force_space.spaces)
-
-    disp_coeff_implicit = csdl.ImplicitVariable(shape=(displacement_size, 3), value=0.)
-    force_coeff_implicit = csdl.ImplicitVariable(shape=(force_size, 3), value=1.)
-
-
-    # make functions for the input side
-    implicit_displacement_functions = {}
-    implicit_force_functions = {}
-    i_d = 0
-    i_f = 0
-    for i in wing.geometry.functions:
-        implicit_displacement_functions[i] = fs.Function(space=displacement_single_space, coefficients=disp_coeff_implicit[i_d:i_d+disp_coeff_len, :])
-        i_d += disp_coeff_len
-        implicit_force_functions[i] = fs.Function(space=force_single_space, coefficients=force_coeff_implicit[i_f:i_f+force_coeff_len, :])
-        i_f += force_coeff_len
-
-    implicit_disp = fs.FunctionSet(implicit_displacement_functions)
-    implicit_force = fs.FunctionSet(implicit_force_functions)
+    disp_coeff_implicit, implicit_disp = displacement_space.generate_implicit_function(num_physical_dimensions=3)
+    force_coeff_implicit, implicit_force = force_space.generate_implicit_function(num_physical_dimensions=3)
 
     # Set up VLM analysis
     vlm_mesh = mesh_container["vlm_mesh"]
@@ -172,11 +150,13 @@ def define_analysis(caddee: cd.CADDEE):
     tail_camber_surface = vlm_mesh.discretizations["tail_camber_surface"]
     wing_camber_mesh = wing_camber_surface.nodal_coordinates
 
-
     # deform vlm mesh via displacement function
+    # TODO: these 3 lines can probably be abstracted
     transfer_mesh_para = implicit_force.generate_parametric_grid((20, 20))
     transfer_mesh_phys = wing.geometry.evaluate(transfer_mesh_para)
     transfer_mesh_disp = implicit_disp.evaluate(transfer_mesh_para)
+    
+    # TODO: these 3 lines can probably be abstracted
     map = acu.NodalMap()
     weights = map.evaluate(csdl.reshape(wing_camber_mesh, (np.prod(wing_camber_mesh.shape[0:-1]), 3)), transfer_mesh_phys)
     wing_camber_mesh_displacement = (weights @ transfer_mesh_disp).reshape(wing_camber_mesh.shape)
@@ -186,44 +166,7 @@ def define_analysis(caddee: cd.CADDEE):
 
     # run vlm solver
     vlm_outputs = vlm_solver(camber_surface_coordinates, camber_surface_nodal_velocities)
-
-
-    print("total drag", vlm_outputs.total_drag.value)
-    print("total lift", vlm_outputs.total_lift.value)
-    print("total forces", vlm_outputs.total_force.value)
-    print("total moments", vlm_outputs.total_moment.value)
-    plt.rcParams['text.usetex'] = False
-    fig, axs = plt.subplots(3, 1)
-    # plt.rc('text', usetex=False)
-    for i in range(len(vlm_outputs.surface_CL)):
-        panel_forces = csdl.sum(vlm_outputs.surface_panel_forces[i][0, :, :, :], axes=(0, ))
-        shape = panel_forces.shape
-        norm_span = np.linspace(-1, 1, shape[0])
-
-        axs[0].plot(norm_span, panel_forces[:, 0].value)
-        axs[0].set_xlabel("norm span")
-        axs[0].set_ylabel("Fx")
-        axs[1].plot(norm_span, panel_forces[:, 1].value)
-        axs[1].set_xlabel("norm span")
-        axs[1].set_ylabel("Fy")
-        axs[2].plot(norm_span, panel_forces[:, 2].value)
-        axs[2].set_xlabel("norm span")
-        axs[2].set_ylabel("Fz")
-
-        print(f"surface {i} CL", vlm_outputs.surface_CL[i].value)
-        print(f"surface {i} CDi", vlm_outputs.surface_CDi[i].value)
-        print(f"surface {i} L", vlm_outputs.surface_lift[i].value)
-        print(f"surface {i} Di", vlm_outputs.surface_drag[i].value)
-
-    plt.show()
-
-
-
-
-
-
-
-
+    plot_vlm(vlm_outputs)
 
     # VLM forces to oml (sifr)
 
@@ -291,59 +234,17 @@ def define_analysis(caddee: cd.CADDEE):
     wing.quantities.displacement_function = displacement_function
 
     # solve implicit system
-    solver = csdl.nonlinear_solvers.Newton(max_iter=10)
-
-    disp_residual = csdl.Variable(shape=(displacement_size, 3), value=0.)
-    force_residual = csdl.Variable(shape=(force_size, 3), value=0.)
-    i_d = 0
-    i_f = 0
-    for i in wing.geometry.functions:
-        disp_residual = disp_residual.set(csdl.slice[i_d:i_d+disp_coeff_len,:], displacement_function.functions[i].coefficients - disp_coeff_implicit[i_d:i_d+disp_coeff_len,:])
-        i_d += disp_coeff_len
-        force_residual = force_residual.set(csdl.slice[i_f:i_f+force_coeff_len,:], force_function.functions[i].coefficients - force_coeff_implicit[i_f:i_f+force_coeff_len,:])
-        i_f += force_coeff_len
+    solver = csdl.nonlinear_solvers.GaussSeidel(max_iter=10)
+    disp_residual = displacement_function.stack_coefficients() - disp_coeff_implicit
+    force_residual = force_function.stack_coefficients() - force_coeff_implicit
     solver.add_state(disp_coeff_implicit, disp_residual)
     solver.add_state(force_coeff_implicit, force_residual)
-
-
     solver.run()
 
-
-    print("total drag", vlm_outputs.total_drag.value)
-    print("total lift", vlm_outputs.total_lift.value)
-    print("total forces", vlm_outputs.total_force.value)
-    print("total moments", vlm_outputs.total_moment.value)
-    plt.rcParams['text.usetex'] = False
-    fig, axs = plt.subplots(3, 1)
-    # plt.rc('text', usetex=False)
-    for i in range(len(vlm_outputs.surface_CL)):
-        panel_forces = csdl.sum(vlm_outputs.surface_panel_forces[i][0, :, :, :], axes=(0, ))
-        shape = panel_forces.shape
-        norm_span = np.linspace(-1, 1, shape[0])
-
-        axs[0].plot(norm_span, panel_forces[:, 0].value)
-        axs[0].set_xlabel("norm span")
-        axs[0].set_ylabel("Fx")
-        axs[1].plot(norm_span, panel_forces[:, 1].value)
-        axs[1].set_xlabel("norm span")
-        axs[1].set_ylabel("Fy")
-        axs[2].plot(norm_span, panel_forces[:, 2].value)
-        axs[2].set_xlabel("norm span")
-        axs[2].set_ylabel("Fz")
-
-        print(f"surface {i} CL", vlm_outputs.surface_CL[i].value)
-        print(f"surface {i} CDi", vlm_outputs.surface_CDi[i].value)
-        print(f"surface {i} L", vlm_outputs.surface_lift[i].value)
-        print(f"surface {i} Di", vlm_outputs.surface_drag[i].value)
-
-    plt.show()
-
-
-
-
+    # look at results
+    plot_vlm(vlm_outputs)
     wing.geometry.plot(color=displacement_function)
     wing.geometry.plot(color=pressure_function)
-
 
     # stress
     beam_1_stress = solution.get_stress(beam_1)
@@ -366,5 +267,8 @@ define_conditions(caddee)
 define_analysis(caddee)
 tf = time.time()
 print("total time", tf-ts)
+
+# This takes some time
+# recorder.visualize_graph('coupled_sifr')
 
 recorder.stop()
