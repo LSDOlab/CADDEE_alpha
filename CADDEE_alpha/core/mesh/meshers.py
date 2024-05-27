@@ -347,14 +347,14 @@ def make_vlm_surface(
     TE_points_csdl = wing_geometry.evaluate(TE_points_para)
 
     if spacing_chordwise == "linear":
-        chord_surface = csdl.linear_combination(TE_points_csdl, LE_points_csdl, num_chordwise+1).reshape((num_chordwise+1, num_spanwise+1, 3))
+        chord_surface = csdl.linear_combination(LE_points_csdl, TE_points_csdl, num_chordwise+1).reshape((num_chordwise+1, num_spanwise+1, 3))
     
     elif spacing_chordwise == "cosine":
         # chord_surface = csdl.linear_combination(TE_points_csdl, LE_points_csdl, num_chordwise+1).reshape((-1, 3))
         chord_surface = cosine_spacing(
             num_spanwise, 
             None,
-            csdl.linear_combination(TE_points_csdl, LE_points_csdl, num_chordwise+1),
+            csdl.linear_combination(LE_points_csdl, TE_points_csdl, num_chordwise+1),
             num_chordwise
         )
 

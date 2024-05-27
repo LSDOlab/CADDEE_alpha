@@ -1,7 +1,7 @@
 from __future__ import annotations
 from CADDEE_alpha.core.component import Component
 from CADDEE_alpha.core.mesh.mesh import MeshContainer
-from lsdo_geo import BSplineSet
+from lsdo_function_spaces import FunctionSet
 import numpy as np 
 import csdl_alpha as csdl
 import warnings
@@ -15,8 +15,8 @@ class Configuration:
         if not isinstance(system, Component):
             raise TypeError(f"system must by of type {Component}")
         # Check that if system geometry is not None, it is of the correct type
-        if not isinstance(system.geometry, BSplineSet ) and system.geometry is not None:
-            raise TypeError(f"If system geometry is not None, it must be of type '{BSplineSet}', received object of type '{type(system.geometry)}'")
+        if not isinstance(system.geometry, FunctionSet ) and system.geometry is not None:
+            raise TypeError(f"If system geometry is not None, it must be of type '{FunctionSet}', received object of type '{type(system.geometry)}'")
         self.system = system
         self.mesh_container : MeshContainer = MeshContainer()
 
@@ -278,8 +278,8 @@ class Configuration:
         if system_geometry is None:
             raise TypeError("'setup_geometry' cannot be called because the geometry asssociated with the system component is None")
 
-        if not isinstance(system_geometry, BSplineSet):
-            raise TypeError(f"The geometry of the system must be of type {BSplineSet}")
+        if not isinstance(system_geometry, FunctionSet):
+            raise TypeError(f"The geometry of the system must be of type {FunctionSet}")
 
         parameterization_inputs = {}
         def setup_geometries(component : Component):

@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import lsdo_geo as lg
 import numpy as np
+import lsdo_function_spaces as lfs
 
 
 _REPO_ROOT_FOLDER = Path(__file__).parents[0]
@@ -10,6 +11,7 @@ TEST_GEOMETRY_FOLDER = _REPO_ROOT_FOLDER / '..'/ '..' / 'examples'/ 'test_geomet
 def import_geometry(
         file_name: str,
         file_path = TEST_GEOMETRY_FOLDER,
+        refit = False,
         refit_num_coefficients: tuple = (40, 40), 
         refit_b_spline_order: tuple = (4, 4),
         refit_resolution: tuple = (200, 200),
@@ -58,14 +60,13 @@ def import_geometry(
 
 
         geometry = lg.import_geometry(TEST_GEOMETRY_FOLDER / file_name, parallelize=False)
-        
 
-        geometry.refit(
-            num_coefficients=refit_num_coefficients,
-            order=refit_b_spline_order,
-            fit_resolution=refit_resolution,
-            parallelize=False,
-        )
+        if refit:
+            refit_space = lfs.BSplineSpace(2, refit_b_spline_order, refit_num_coefficients)
+            geometry.refit(
+                refit_space,
+                grid_resolution=refit_resolution,
+            )
 
         # if rotate_to_body_fixed_frame:
         if rotate_to_body_fixed_frame:
