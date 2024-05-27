@@ -2,69 +2,112 @@ import pickle
 from pathlib import Path
 from CADDEE_alpha.utils.var_groups import MassProperties
 import csdl_alpha as csdl
+from typing import Union
+import numpy as np
 
 
 _REPO_ROOT_FOLDER = Path(__file__).parents[0]
 
-with open(_REPO_ROOT_FOLDER / "regression_parameters.pickle", "rb") as handle:
+with open(_REPO_ROOT_FOLDER / "regression_mass_dict.pickle", "rb") as handle:
     reg_dict = pickle.load(handle)
 
-print(reg_dict.keys())
+print(reg_dict)
+exit()
+
+booms_left_inner = {
+    'BoomInPort_struct_cg_X': [ 1.54766201e-02, -2.51307016e-02, 2.54893639e-01, 5.95809033e-07, 9.06333588e-05, 1.192134517922292],
+    'BoomInPort_struct_cg_Y': [-6.54867899e-02, -1.04372294e-01,  3.33676357e-04,  2.51533678e-06, 5.32777466e-06, -0.004467713325373435],
+    'BoomInPort_struct_cg_Z': [-4.25994565e-03, -3.50829424e-04,  4.38885378e-02, -2.12479091e-07, -4.10232551e-06, 2.094509667974993],
+    'BoomInPort_struct_Ixx_local': [ 2.00307540e-02,  3.28455906e-02, -9.10844806e-04, -7.58407666e-07, 3.36158412e-05, -0.23310214145473873],
+    'BoomInPort_struct_Iyy_local' : [ 4.03821027e+00,  6.70386373e+00, -2.30515994e-01, -1.11048525e-03, 8.54351064e-03, -108.5033896107725],
+    'BoomInPort_struct_Izz_local': [ 4.11060799e+00,  6.72815462e+00, -8.88410917e-02, -1.13160542e-03, 5.11464168e-03, -111.22144622176114],
+}
+
+booms_left_outer = {
+    'BoomOutPort_struct_cg_X': [1.71740520e-02, -2.64682836e-02,  2.55016900e-01, -2.20001873e-06, 3.76109198e-05, 1.2448800989812634],
+    'BoomOutPort_struct_cg_Y': [-1.46141876e-01, -2.36064399e-01,  1.38218292e-03,  2.28332783e-07, -1.91351060e-04, 0.009347243817250828],
+    'BoomOutPort_struct_cg_Z': [-6.73398944e-03, -5.60040037e-03,  4.39705011e-02, -2.08455188e-07, 1.07404833e-06, 2.118779892551238],
+    'BoomOutPort_struct_Ixx_local': [ 1.95996708e-02,  3.19524773e-02, -5.09250983e-04,  2.38451956e-08, 5.44519956e-05, -0.22753600490712644],
+    'BoomOutPort_struct_Iyy_local': [ 4.05773296e+00,  6.58058369e+00, -1.45798024e-01,  2.05256744e-04, 2.42420393e-02, -110.5773080356552],
+    'BoomOutPort_struct_Izz_local': [ 3.98741571e+00,  6.60197432e+00, -1.10279278e-01,  1.48800712e-03, 3.46399450e-02, -111.85288355825745]
+}
+
+booms_right_inner = {
+    'BoomInStar_struct_cg_X' : [ 1.55778075e-02, -2.51876469e-02,  2.55285631e-01, -1.81606610e-06, 4.18790037e-05, 1.1937198128350257],
+    'BoomInStar_struct_cg_Y': [ 6.51911677e-02,  1.05037697e-01,  2.33781220e-04, -2.35564742e-06, 5.52120104e-06, -0.004195430257126986] ,
+    'BoomInStar_struct_cg_Z': [-4.26486454e-03, -3.46887349e-04,  4.39100885e-02, -3.81544510e-09, -5.16555074e-06, 2.094163322618808],
+    'BoomInStar_struct_Ixx_local': [ 2.00568872e-02,  3.47702450e-02, -6.53516757e-04, -5.49041083e-08, 9.41543277e-06, -0.2597957633687349],
+    'BoomInStar_struct_Iyy_local': [ 4.13199296e+00,  6.42457619e+00, -7.96728116e-02,  7.14952065e-04, 2.93436436e-02, -111.636159920105],
+    'BoomInStar_struct_Izz_local': [ 4.13020593e+00,  6.56518882e+00, -1.59321588e-01, -8.72214063e-04, 2.01824536e-02, -110.11891067917249],
+}
+
+booms_right_outer = {
+    'BoomOutStar_struct_cg_X': [ 1.72288347e-02, -2.67051196e-02,  2.54852116e-01,  9.89334401e-08, 6.06107340e-05, 1.2439033549932343],
+    'BoomOutStar_struct_cg_Y': [ 1.45026108e-01,  2.38143740e-01, -3.96379307e-03, -3.78568586e-06, -1.43419836e-04, 0.034243949994238854],
+    'BoomOutStar_struct_cg_Z': [-6.73517998e-03, -5.58305290e-03,  4.39857737e-02, -3.39119130e-08, -3.91117429e-06, 2.118557350528714],
+    'BoomOutStar_struct_Ixx_local': [ 1.93522526e-02,  3.13365694e-02, -7.44741716e-04,  3.48710373e-06, 4.49451312e-05, -0.21811004207456708],
+    'BoomOutStar_struct_Iyy_local': [ 4.14104096e+00,  6.61201524e+00, -2.84299032e-01, -9.62709519e-04, 4.99756052e-03, -108.78895143861884],
+    'BoomOutStar_struct_Izz_local': [ 4.07718041e+00,  6.62642379e+00, -9.00930186e-02, -1.38145329e-04,1.65079702e-02, -111.1214387032658],
+}
+
+boom_mass = {'boom_mass': [ 3.33883108e+00,  5.40016118e+00, -9.17180256e-02,  1.28646937e-04, -6.25697773e-03, -1.17008833e+01]}
+
+booms_reg = [booms_left_inner, booms_left_outer, booms_right_inner, booms_left_outer]
+
+fuselage = {
+    'fuselage_mass': [ 1.01472161e+00, -4.06758251e-01,  4.25974124e+01,  3.10575276e-02, 6.87345416e-02, -1.16727769e+02],
+    'fuselage_struct_cg_X': [ 1.67449602e-02, -1.23207371e-02,  4.90804477e-01, -2.85732761e-04, 1.29581238e-03, -0.6211621578156898],
+    'fuselage_struct_cg_Z': [ 2.04733876e-03,  9.80617344e-06,  5.74947432e-02, -6.70040225e-07, -1.56022401e-05, 1.1209786221663782],
+    'fuselage_struct_Ixx_local': [ 2.25127273e+00, -1.85707470e+00,  5.11677033e+01, -3.62084046e-02, -4.91167934e-02, -201.94348875650056],
+    'fuselage_struct_Iyy_local': [-4.85003613e+00,  2.03987586e+00,  2.89049283e+02,  9.51160015e-03, -4.42001564e+00, -1032.685663411943],
+    'fuselage_struct_Izz_local': [-1.09272490e+01, -7.99435250e+00,  2.62136153e+02, -1.30566173e-01, -3.74401378e+00, -444.6749130358837],
+    'fuselage_struct_Ixz_local': [-1.60504311e+00, -6.56730156e-01,  3.38025631e+01, -3.04377534e-03, 1.66851198e-01, -123.8341477054152],
+}
+
+wing = {
+    'wing_mass': [ 1.11379136e+01,  3.14761829e+01,  7.89132288e-01, -2.14257921e-02, 2.40041303e-01, -3.20236992e+02],
+    'wing_struct_cg_X': [ 9.94396743e-03, -3.05611792e-02,  2.56921181e-01, -7.39025396e-06,-1.03626829e-04, 1.4057829024098356],
+    'wing_struct_cg_Z': [-9.55284281e-04,  3.96588505e-04,  4.31125644e-02, -4.73824146e-06, -1.07005070e-04, 2.156881222891959],
+    'wing_struct_Ixx_local': [2.76071395e+02, 3.59794413e+02, 9.66210889e+01, 1.64281071e-01, 8.94049058e+00, -7780.772684440635],
+    'wing_struct_Iyy_local': [ 4.70146714e+00,  9.12620835e-01,  1.17140499e+00,  6.30138605e-03, -3.29329535e-03, -71.05960014473001],
+    'wing_struct_Izz_local': [2.83046432e+02, 3.61938062e+02, 7.56255523e+01, 1.59788925e-01, 2.65561862e+00, -7353.906535279631],
+    'wing_struct_Ixz_local': [-3.01635151e-01, -1.19201026e-01, -6.01160477e-02, -3.71504542e-05, -3.12613363e-03, 5.2272209068023425]
+}
 
 
-booms_left_inner = [
-    'BoomInPort_struct_cg_X',
-    'BoomInPort_struct_cg_Y',
-    'BoomInPort_struct_cg_Z',
-    'BoomInPort_struct_Ixx_local',
-    'BoomInPort_struct_Iyy_local',
-    'BoomInPort_struct_Izz_local',
-]
+def compute_boom_mps(
+    wing_area: Union[csdl.Variable, float, int],
+    wing_AR: Union[csdl.Variable, float, int],
+    fuselage_length: Union[csdl.Variable, float, int],
+    battery_mass: Union[csdl.Variable, float, int],
+    cruise_speed: Union[csdl.Variable, float, int],
+):
+    cg_list = []
+    i_lit = []
+    for boom_reg in booms_reg:
+        cg_vec = csdl.Variable(shape=(3, ), value=0.)
+        i_mat = csdl.Variable(shape=(3, 3), value=0.)
+        for name, coeffs in boom_reg.items():
+            qty = evaluate_regression(
+                wing_area, wing_AR, fuselage_length,
+                battery_mass, cruise_speed, coeffs
+            )
+            if 'cg_X' in name:
+                cg_vec =  cg_vec.set(csdl.slice[0], qty)
+            elif 'cg_Y' in name:
+                cg_vec =  cg_vec.set(csdl.slice[1], qty)
+            elif 'cg_Z' in name:
+                cg_vec =  cg_vec.set(csdl.slice[2], qty)
+            elif 'Ixx' in name:
+                i_mat = i_mat.set(csdl.slice[0, 0], qty)
+            elif 'Iyy' in name:
+                i_mat = i_mat.set(csdl.slice[1, 1], qty)
+            elif 'Izz' in name:
+                i_mat = i_mat.set(csdl.slice[2, 2], qty)
+        cg_list.append(cg_vec)
+        i_lit.append(i_mat)
 
-booms_left_outer = [
-    'BoomOutPort_struct_cg_X', 
-    'BoomOutPort_struct_cg_Y', 
-    'BoomOutPort_struct_cg_Z', 
-    'BoomOutPort_struct_Ixx_local', 
-    'BoomOutPort_struct_Iyy_local', 
-    'BoomOutPort_struct_Izz_local',
-]
-
-booms_right_inner = [
-    'BoomInStar_struct_cg_X', 
-    'BoomInStar_struct_cg_Y', 
-    'BoomInStar_struct_cg_Z', 
-    'BoomInStar_struct_Ixx_local', 
-    'BoomInStar_struct_Iyy_local', 
-    'BoomInStar_struct_Izz_local',
-]
-
-booms_right_outer = [
-    'BoomOutStar_struct_cg_X', 
-    'BoomOutStar_struct_cg_Y', 
-    'BoomOutStar_struct_cg_Z', 
-    'BoomOutStar_struct_Ixx_local', 
-    'BoomOutStar_struct_Iyy_local', 
-    'BoomOutStar_struct_Izz_local',
-]
-
-fuselage = [
-    'fuselage_struct_cg_X', 
-    'fuselage_struct_cg_Z', 
-    'fuselage_struct_Ixx_local', 
-    'fuselage_struct_Iyy_local', 
-    'fuselage_struct_Izz_local', 
-    'fuselage_struct_Ixz_local', 
-]
-
-wing = [
-    'wing_struct_cg_X', 
-    'wing_struct_cg_Z', 
-    'wing_struct_Ixx_local', 
-    'wing_struct_Iyy_local', 
-    'wing_struct_Izz_local', 
-    'wing_struct_Ixz_local'
-]
+    
 
 
 def evaluate_regression(wing_area, wing_AR, fuselage_length, battery_mass, cruise_speed, coeffs):
@@ -72,6 +115,23 @@ def evaluate_regression(wing_area, wing_AR, fuselage_length, battery_mass, cruis
           + coeffs[3] * battery_mass + coeffs[4] * cruise_speed + coeffs[5]
     
     return qty
+
+def assemble_cg_vec(cg_x, cg_y, cg_z):
+    cg_vec = csdl.Variable(shape=(3, ), value=0.)
+
+    cg_vec = cg_vec.set(
+        csdl.slice[0], cg_x
+    )
+
+    cg_vec = cg_vec.set(
+        csdl.slice[1], cg_y
+    )
+
+    cg_vec = cg_vec.set(
+        csdl.slice[2], cg_z
+    )
+
+    return cg_vec
 
 class M4RegLPCBooms: 
     def evaluate(
@@ -102,17 +162,8 @@ class M4RegLPCBooms:
             reg_dict["BoomInPort_struct_cg_Z"]
         )
 
-        boom_li_cg_vec = csdl.Variable(shape=(3, ), value=0.)
-        boom_li_cg_vec = boom_li_cg_vec.set(
-            csdl.slice[0], boom_li_cgx
-        )
-
-        boom_li_cg_vec = boom_li_cg_vec.set(
-            csdl.slice[1], boom_li_cgx
-        )
-
-        boom_li_cg_vec = boom_li_cg_vec.set(
-            csdl.slice[2], boom_li_cgx
+        boom_li_cg_vec = assemble_cg_vec(
+            boom_li_cgx, boom_li_cgy, boom_li_cgz
         )
 
         boom_li_ixx = evaluate_regression(
@@ -133,9 +184,6 @@ class M4RegLPCBooms:
             reg_dict["BoomInPort_struct_Izz_local"]
         )
 
-        # booms_li_mps = MassProperties(
-        #     cg_vector=csdl.Variable()
-        # )
 
 
         # left outer

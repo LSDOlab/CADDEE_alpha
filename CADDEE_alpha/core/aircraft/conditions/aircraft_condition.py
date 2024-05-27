@@ -359,7 +359,6 @@ class AircraftCondition(Condition):
         # sum of the aero-propulsive forces and moments
         for i in range(len(aero_propulsive_forces)):
             force = aero_propulsive_forces[i]
-            print(f"force {i}", force.value)
             # Check that the forces are csdl variables and have the right shape
             if not isinstance(force, csdl.Variable):
                 raise TypeError(f"Received invalid type {force}. Forces must be of type {csdl.Variable}")
