@@ -38,12 +38,15 @@ def define_base_config(caddee : cd.CADDEE):
     wing = cd.aircraft.components.Wing(AR=7.43, S_ref=174, taper_ratio=0.75, geometry=wing_geometry, tight_fit_ffd=False)
 
     # wing material info
-    
-    thickness_space = wing_geometry.create_parallel_space(fs.ConstantSpace(1))
+    # aluminum = cd.materials.IsotropicMaterial(name='aluminum', E=69E9, G=26E9, density=2700, nu=0.33)
+    # aluminum.export_xml('materials/Al_6061-T6.xml')
+    # exit()
+
+    aluminum = cd.materials.import_material('materials/Al_6061-T6.xml')
+    thickness_space = wing_geometry.create_parallel_space(fs.ConstantSpace(2))
     thickness_var, thickness_function = thickness_space.initialize_function(1, value=0.1)
-    wing.quantities.thickness_space = thickness_space
-
-
+    # could make the thickness var a design variable here
+    wing.quantities.material_properties.set_material(aluminum, thickness_function)
 
     # wing function spaces
     force_space = fs.IDWFunctionSpace(num_parametric_dimensions=2, grid_size=4, order=2, conserve=True)
@@ -71,9 +74,8 @@ def define_base_config(caddee : cd.CADDEE):
     num_beam_nodes = 15
     wing_box_beam = cd.mesh.make_1d_box_beam(wing, num_beam_nodes, 0.5, plot=plot)
     beam_mesh.discretizations["wing_box_beam"] = wing_box_beam
+    # manually set shear web thickness because we don't have internal structure geometry
     wing_box_beam.shear_web_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * 0.1)
-    wing_box_beam.top_skin_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * 0.1)
-    wing_box_beam.bottom_skin_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * 0.1)
 
     # add wing to airframe
     airframe.comps["wing"] = wing
@@ -214,7 +216,10 @@ def define_analysis(caddee: cd.CADDEE):
     # print('vlm wing force', vlm_outputs.surface_force[0].value)
 
     # beam analysis
-    beam_material = af.Material(name='aluminum', E=69E9, G=26E9, rho=2700, v=0.33)
+    material = wing.quantities.material_properties.material
+    E, nu, G = material.from_compliance()
+    rho = material.density
+    beam_material = af.Material(name='aluminum', E=E, G=G, rho=rho, v=nu)
     beam_cs = af.CSBox(
         height=wing_box_beam.beam_height, 
         width=wing_box_beam.beam_width, 
@@ -242,23 +247,23 @@ def define_analysis(caddee: cd.CADDEE):
     wing.quantities.displacement_function = displacement_function
 
     # solve implicit system
-    # solver = csdl.nonlinear_solvers.GaussSeidel(max_iter=10)
-    # disp_residual = displacement_function.stack_coefficients() - disp_coeff_implicit
-    # force_residual = force_function.stack_coefficients() - force_coeff_implicit
-    # solver.add_state(disp_coeff_implicit, disp_residual, state_update=disp_coeff_implicit + 0.1 * disp_residual)
-    # solver.add_state(force_coeff_implicit, force_residual, state_update=force_coeff_implicit + 0.1 * force_residual)
-    # solver.run()
-
-    # solve implicit system
-    solver = csdl.nonlinear_solvers.Newton(max_iter=100)
+    solver = csdl.nonlinear_solvers.GaussSeidel(max_iter=1)
     disp_residual = displacement_function.stack_coefficients() - disp_coeff_implicit
     force_residual = force_function.stack_coefficients() - force_coeff_implicit
-    solver.add_state(disp_coeff_implicit, disp_residual)
-    solver.add_state(force_coeff_implicit, force_residual)
-    start = time.time()
+    solver.add_state(disp_coeff_implicit, disp_residual, state_update=disp_coeff_implicit + 0.1 * disp_residual)
+    solver.add_state(force_coeff_implicit, force_residual, state_update=force_coeff_implicit + 0.1 * force_residual)
     solver.run()
-    end = time.time()
-    print("Implicit system solve time", end-start)
+
+    # solve implicit system
+    # solver = csdl.nonlinear_solvers.Newton(max_iter=1)
+    # disp_residual = displacement_function.stack_coefficients() - disp_coeff_implicit
+    # force_residual = force_function.stack_coefficients() - force_coeff_implicit
+    # solver.add_state(disp_coeff_implicit, disp_residual)
+    # solver.add_state(force_coeff_implicit, force_residual)
+    # start = time.time()
+    # solver.run()
+    # end = time.time()
+    # print("Implicit system solve time", end-start)
 
     # look at results
     plot_vlm(vlm_outputs)
