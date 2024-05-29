@@ -20,7 +20,7 @@ recorder.start()
 caddee = cd.CADDEE()
 
 # Import and plot the geometry
-c_172_geometry = cd.import_geometry('pseudo_c172_cambered.stp')
+c_172_geometry = cd.import_geometry('pseudo_c172_cambered.stp', scale=cd.Units.length.foot_to_m)
 
 def define_base_config(caddee : cd.CADDEE):
     """Build the base configuration."""
@@ -38,21 +38,21 @@ def define_base_config(caddee : cd.CADDEE):
     wing = cd.aircraft.components.Wing(AR=7.43, S_ref=174, taper_ratio=0.75, geometry=wing_geometry, tight_fit_ffd=False)
 
     # wing function spaces
-    force_space = fs.IDWFunctionSpace(num_parametric_dimensions=2, grid_size=8, order=2, conserve=True)
+    force_space = fs.IDWFunctionSpace(num_parametric_dimensions=2, grid_size=4, order=2, conserve=True)
     wing.quantities.force_space = wing_geometry.create_parallel_space(force_space)
     wing.quantities.force_single_space = force_space
 
     pressure_space = fs.BSplineSpace(2, (5,5), (7,7))
     wing.quantities.pressure_space = wing_geometry.create_parallel_space(pressure_space)
 
-    displacement_space = fs.BSplineSpace(2, (3,3), (5,5))
+    displacement_space = fs.BSplineSpace(2, (1,1), (3,3))
     wing.quantities.displacement_space = wing_geometry.create_parallel_space(displacement_space)
     wing.quantities.displacement_single_space = displacement_space
 
     # wing camber surface
     vlm_mesh = cd.mesh.VLMMesh()
     wing_camber_surface = cd.mesh.make_vlm_surface(
-        wing, 30, 15, plot=plot, spacing_spanwise='linear', 
+        wing, 30, 20, plot=plot, spacing_spanwise='linear', 
         spacing_chordwise='linear', grid_search_density=20
     )
     vlm_mesh.discretizations["wing_camber_surface"] = wing_camber_surface
@@ -63,9 +63,9 @@ def define_base_config(caddee : cd.CADDEE):
     num_beam_nodes = 15
     wing_box_beam = cd.mesh.make_1d_box_beam(wing, num_beam_nodes, 0.5, plot=plot)
     beam_mesh.discretizations["wing_box_beam"] = wing_box_beam
-    wing_box_beam.shear_web_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * 0.01)
-    wing_box_beam.top_skin_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * 0.01)
-    wing_box_beam.bottom_skin_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * 0.01)
+    wing_box_beam.shear_web_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * 0.1)
+    wing_box_beam.top_skin_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * 0.1)
+    wing_box_beam.bottom_skin_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * 0.1)
 
     # add wing to airframe
     airframe.comps["wing"] = wing
@@ -141,50 +141,8 @@ def define_analysis(caddee: cd.CADDEE):
     force_space = wing.quantities.force_space
     displacement_space = wing.quantities.displacement_space
 
-    disp_coeff_implicit, implicit_disp = displacement_space.generate_implicit_function(num_physical_dimensions=3)
-    force_coeff_implicit, implicit_force = force_space.generate_implicit_function(num_physical_dimensions=3)
+    force_coeff_implicit, implicit_force = force_space.initialize_function(3, implicit=True)
 
-    # Set up VLM analysis
-    vlm_mesh = mesh_container["vlm_mesh"]
-    wing_camber_surface = vlm_mesh.discretizations["wing_camber_surface"]
-    tail_camber_surface = vlm_mesh.discretizations["tail_camber_surface"]
-    wing_camber_mesh = wing_camber_surface.nodal_coordinates
-
-    # deform vlm mesh via displacement function
-    # TODO: these 3 lines can probably be abstracted
-    transfer_mesh_para = implicit_force.generate_parametric_grid((20, 20))
-    transfer_mesh_phys = wing.geometry.evaluate(transfer_mesh_para)
-    transfer_mesh_disp = implicit_disp.evaluate(transfer_mesh_para)
-    
-    # TODO: these 3 lines can probably be abstracted
-    map = acu.NodalMap()
-    weights = map.evaluate(csdl.reshape(wing_camber_mesh, (np.prod(wing_camber_mesh.shape[0:-1]), 3)), transfer_mesh_phys)
-    wing_camber_mesh_displacement = (weights @ transfer_mesh_disp).reshape(wing_camber_mesh.shape)
-
-    camber_surface_coordinates = [wing_camber_mesh + wing_camber_mesh_displacement, tail_camber_surface.nodal_coordinates]
-    camber_surface_nodal_velocities = [wing_camber_surface.nodal_velocities, tail_camber_surface.nodal_velocities]
-
-    # run vlm solver
-    vlm_outputs = vlm_solver(camber_surface_coordinates, camber_surface_nodal_velocities)
-    plot_vlm(vlm_outputs)
-
-    # VLM forces to oml (sifr)
-
-    # VLM to framework
-    areas = vlm_outputs.surface_panel_areas[0]
-    forces = vlm_outputs.surface_panel_forces[0]
-    pressures = csdl.reshape(csdl.norm(forces, axes=(3,)) / areas, (np.prod(forces.shape[0:-1]), 1))
-    forces = csdl.reshape(forces, (np.prod(forces.shape[0:-1]), 3))
-    camber_force_points = vlm_outputs.surface_panel_force_points[0].value.reshape(-1,3)
-    split_fp = np.vstack((camber_force_points + np.array([0, 0, -1]), camber_force_points + np.array([0, 0, 1])))
-    oml_fp_para = wing.geometry.project(split_fp, plot=plot)
-
-    force_function = force_space.fit_function_set(csdl.blockmat([[forces/2], [forces/2]]), oml_fp_para)
-    wing.quantities.force_function = force_function
-
-    pressure_function = wing.quantities.pressure_space.fit_function_set(csdl.blockmat([[pressures/2], [pressures/2]]), 
-                                                                        oml_fp_para, regularization_parameter=1)
-    
     # Set up beam analysis
     beam_mesh = mesh_container["beam_mesh"]
     wing_box_beam = beam_mesh.discretizations["wing_box_beam"]
@@ -195,7 +153,8 @@ def define_analysis(caddee: cd.CADDEE):
     num_beam_nodes = beam_nodes.shape[0]
 
     # implicit framework to beam
-
+    transfer_mesh_para = implicit_force.generate_parametric_grid((20, 20))
+    transfer_mesh_phys = wing.geometry.evaluate(transfer_mesh_para)
     transfer_mesh_forces = implicit_force.evaluate(transfer_mesh_para)
     nodal_map = acu.NodalMap()
     weights = nodal_map.evaluate(transfer_mesh_phys, beam_nodes)
@@ -233,13 +192,65 @@ def define_analysis(caddee: cd.CADDEE):
     displacement_function = displacement_space.fit_function_set(nodal_displacement, transfer_mesh_para)
     wing.quantities.displacement_function = displacement_function
 
+
+
+    # Set up VLM analysis
+    vlm_mesh = mesh_container["vlm_mesh"]
+    wing_camber_surface = vlm_mesh.discretizations["wing_camber_surface"]
+    tail_camber_surface = vlm_mesh.discretizations["tail_camber_surface"]
+    wing_camber_mesh = wing_camber_surface.nodal_coordinates
+
+    # deform vlm mesh via displacement function
+    # TODO: these 3 lines can probably be abstracted
+    transfer_mesh_disp = displacement_function.evaluate(transfer_mesh_para)
+    
+    # TODO: these 3 lines can probably be abstracted
+    map = acu.NodalMap()
+    weights = map.evaluate(csdl.reshape(wing_camber_mesh, (np.prod(wing_camber_mesh.shape[0:-1]), 3)), transfer_mesh_phys)
+    wing_camber_mesh_displacement = (weights @ transfer_mesh_disp).reshape(wing_camber_mesh.shape)
+
+    camber_surface_coordinates = [wing_camber_mesh + wing_camber_mesh_displacement, tail_camber_surface.nodal_coordinates]
+    camber_surface_nodal_velocities = [wing_camber_surface.nodal_velocities, tail_camber_surface.nodal_velocities]
+
+    # run vlm solver
+    vlm_outputs = vlm_solver(camber_surface_coordinates, camber_surface_nodal_velocities)
+    plot_vlm(vlm_outputs)
+
+    # VLM forces to oml (sifr)
+
+    # VLM to framework
+    areas = vlm_outputs.surface_panel_areas[0]
+    forces = vlm_outputs.surface_panel_forces[0]
+    pressures = csdl.reshape(csdl.norm(forces, axes=(3,)) / areas, (np.prod(forces.shape[0:-1]), 1))
+    forces = csdl.reshape(forces, (np.prod(forces.shape[0:-1]), 3))
+    camber_force_points = vlm_outputs.surface_panel_force_points[0].value.reshape(-1,3)
+    split_fp = np.vstack((camber_force_points + np.array([0, 0, -1]), camber_force_points + np.array([0, 0, 1])))
+    oml_fp_para = wing.geometry.project(split_fp, plot=plot)
+
+    force_function = force_space.fit_function_set(csdl.blockmat([[forces/2], [forces/2]]), oml_fp_para)
+    wing.quantities.force_function = force_function
+
+    pressure_function = wing.quantities.pressure_space.fit_function_set(csdl.blockmat([[pressures/2], [pressures/2]]), 
+                                                                        oml_fp_para, regularization_parameter=1)
+    
+
+
     # solve implicit system
-    solver = csdl.nonlinear_solvers.GaussSeidel(max_iter=10)
-    disp_residual = displacement_function.stack_coefficients() - disp_coeff_implicit
+    # solver = csdl.nonlinear_solvers.GaussSeidel(max_iter=10)
+    # disp_residual = displacement_function.stack_coefficients() - disp_coeff_implicit
+    # force_residual = force_function.stack_coefficients() - force_coeff_implicit
+    # solver.add_state(disp_coeff_implicit, disp_residual, state_update=disp_coeff_implicit + 0.1 * disp_residual)
+    # solver.add_state(force_coeff_implicit, force_residual, state_update=force_coeff_implicit + 0.1 * force_residual)
+    # solver.run()
+
+    # solve implicit system
+    solver = csdl.nonlinear_solvers.Newton(max_iter=1)
     force_residual = force_function.stack_coefficients() - force_coeff_implicit
-    solver.add_state(disp_coeff_implicit, disp_residual)
     solver.add_state(force_coeff_implicit, force_residual)
+    start = time.time()
     solver.run()
+    end = time.time()
+    print("Implicit system solve time", end-start)
 
     # look at results
     plot_vlm(vlm_outputs)

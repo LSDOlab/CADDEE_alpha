@@ -15,7 +15,8 @@ def import_geometry(
         refit_num_coefficients: tuple = (40, 40), 
         refit_b_spline_order: tuple = (4, 4),
         refit_resolution: tuple = (200, 200),
-        rotate_to_body_fixed_frame: bool = True
+        rotate_to_body_fixed_frame: bool = True,
+        scale: float = 1.0
     ) -> lg.Geometry:
         """Import a (OpenVSP) .stp file.
 
@@ -59,7 +60,7 @@ def import_geometry(
             raise Exception(f"Unknown file path or file. File path: {file_path}/{file_name}")
 
 
-        geometry = lg.import_geometry(TEST_GEOMETRY_FOLDER / file_name, parallelize=False)
+        geometry = lg.import_geometry(TEST_GEOMETRY_FOLDER / file_name, parallelize=False, scale=scale)
 
         if refit:
             refit_space = lfs.BSplineSpace(2, refit_b_spline_order, refit_num_coefficients)
