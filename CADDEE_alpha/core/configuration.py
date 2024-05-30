@@ -60,7 +60,11 @@ class Configuration:
             parameters_copy = copy.copy(comp.parameters)
             comp_copy.parameters = parameters_copy
 
-            # 6) TODO: meshes
+            # 6) discretizations
+            discretizations_copy = comp_copy._discretizations.copy()
+            for discr_name, discr in discretizations_copy.items():
+                discretizations_copy[discr_name] = copy.copy(discr)
+            comp_copy._discretizations = discretizations_copy
 
             # 7) Recursively copy children of comp
             for child_comp_copy_name, child_comp_copy in children_comps_copy.items():
@@ -72,8 +76,32 @@ class Configuration:
             return comp_copy
 
         system_copy = copy_comps(self.system)
+
+        # Copy the mesh containers
+        # 1) copy the dictionary of meshes
+        mesh_container_copy = self.mesh_container.copy()
+
+        # 2) copy the meshes themselves
+        for mesh_name, mesh in mesh_container_copy.items():
+            mesh_copy = copy.copy(mesh)
+            
+            # 2a) copy the discretizations dict
+            discretizations_copy = mesh_copy.discretizations.copy()
+            
+            # 2b) loop over and copy the individual discretizations
+            for discr_name, discr in discretizations_copy.items():
+                discretizations_copy[discr_name] = copy.copy(discr)
+            
+            # 2c) assign the copied discretizations to the mesh copy
+            mesh_copy.discretizations = discretizations_copy
+
+            # 2d) updated the copied mesh
+            mesh_container_copy[mesh_name] = mesh_copy
+
+        # Make a new instance of a Configuration
         copied_config = Configuration(system_copy)
-        
+        copied_config.mesh_container = mesh_container_copy
+
         return copied_config
     
     def remove_component(self, comp : Component):
@@ -208,7 +236,7 @@ class Configuration:
         # 2) mass and cg have been defined and inertia tensor is None
         elif system_mps.mass is not None and system_mps.cg_vector is not None and system_mps.inertia_tensor is None:
             system_inertia_tensor = np.zeros((3, 3))
-            warnings.warn(f"System already has defined mass and cg vectotr; will compute inertia tensor based on point mass assumption")
+            warnings.warn(f"System already has defined mass and cg vector; will compute inertia tensor based on point mass assumption")
             x = system_mps.cg_vector[0]
             y = system_mps.cg_vector[1]
             z = system_mps.cg_vector[2]

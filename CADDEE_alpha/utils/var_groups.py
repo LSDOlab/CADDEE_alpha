@@ -19,6 +19,14 @@ class AircaftStates(csdl.VariableGroup):
     y : Union[float, int, csdl.Variable, np.ndarray] = 0
     z : Union[float, int, csdl.Variable, np.ndarray] = 0
 
+@dataclass
+class AtmosphericStates(csdl.VariableGroup):
+    density : Union[float, int, csdl.Variable] = 1.225
+    speed_of_sound : Union[float, int, csdl.Variable] = 343
+    temperature : Union[float, int, csdl.Variable] =  288.16
+    pressure : Union[float, int, csdl.Variable] = 101325
+    dynamic_viscosity : Union[float, int, csdl.Variable] = 1.735e-5
+
 
 @dataclass
 class MassProperties:

@@ -486,7 +486,8 @@ def make_1d_box_beam(
         cannot be greater than 1 and should usually not be greater than 0.5, by default 0.5
     
     spacing : str, optional
-        set spacing for the beam nodes, by default "linear"
+        set spacing for the beam nodes - "linear" and "cosine" are allowed
+        where "cosine" skews the nodes toward the wing tip, by default "linear"
     
     plot : bool, optional
         plot the projections, by default False

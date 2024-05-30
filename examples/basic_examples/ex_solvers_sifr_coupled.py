@@ -127,12 +127,24 @@ def define_conditions(caddee: cd.CADDEE):
         range=60e3,
         mach_number=np.array([0.2]),
     )
-    cruise.configuration = base_config
+    cruise.configuration = base_config.copy()
     conditions["cruise"] = cruise
 
 def define_analysis(caddee: cd.CADDEE):
     cruise = caddee.conditions["cruise"]
     cruise_config = cruise.configuration
+    base_config = caddee.base_configuration
+
+    mesh_base = base_config.mesh_container
+    mesh_cruise = cruise_config.mesh_container
+
+    vlm_mesh_base = mesh_base["vlm_mesh"]
+    vlm_mesh_cruise = mesh_cruise["vlm_mesh"]
+
+    wing_camber_base = vlm_mesh_base.discretizations["wing_camber_surface"]
+    wing_camber_base.nodal_velocities = 'hello'
+
+
     mesh_container = cruise_config.mesh_container
     wing = cruise_config.system.comps['airframe'].comps['wing']
     

@@ -41,7 +41,7 @@ def define_base_config(caddee: cd.CADDEE):
     # tail
     tail_geometry = aircraft.create_subgeometry(search_names=["Stabilizer"])
     tail = cd.aircraft.components.Wing(
-        AR=5, S_ref=2, geometry=tail_geometry, tight_fit_ffd=True,
+        AR=5, S_ref=2, geometry=tail_geometry, tight_fit_ffd=False,
     )
     aircraft.comps["tail"] = tail
 

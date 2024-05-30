@@ -6,13 +6,13 @@ from typing import Union
 import numpy as np
 
 
-_REPO_ROOT_FOLDER = Path(__file__).parents[0]
+# _REPO_ROOT_FOLDER = Path(__file__).parents[0]
 
-with open(_REPO_ROOT_FOLDER / "regression_mass_dict.pickle", "rb") as handle:
-    reg_dict = pickle.load(handle)
+# with open(_REPO_ROOT_FOLDER / "regression_parameters_empennage.pickle", "rb") as handle:
+#     reg_dict = pickle.load(handle)
 
-print(reg_dict)
-exit()
+# print(reg_dict)
+# exit()
 
 booms_left_inner = {
     'BoomInPort_struct_cg_X': [ 1.54766201e-02, -2.51307016e-02, 2.54893639e-01, 5.95809033e-07, 9.06333588e-05, 1.192134517922292],
@@ -50,11 +50,11 @@ booms_right_outer = {
     'BoomOutStar_struct_Izz_local': [ 4.07718041e+00,  6.62642379e+00, -9.00930186e-02, -1.38145329e-04,1.65079702e-02, -111.1214387032658],
 }
 
-boom_mass = {'boom_mass': [ 3.33883108e+00,  5.40016118e+00, -9.17180256e-02,  1.28646937e-04, -6.25697773e-03, -1.17008833e+01]}
+boom_mass_coeffs = [ 3.33883108e+00,  5.40016118e+00, -9.17180256e-02,  1.28646937e-04, -6.25697773e-03, -1.17008833e+01]
 
-booms_reg = [booms_left_inner, booms_left_outer, booms_right_inner, booms_left_outer]
+booms_reg = [booms_left_inner, booms_left_outer, booms_right_inner, booms_right_outer]
 
-fuselage = {
+fuselage_reg = {
     'fuselage_mass': [ 1.01472161e+00, -4.06758251e-01,  4.25974124e+01,  3.10575276e-02, 6.87345416e-02, -1.16727769e+02],
     'fuselage_struct_cg_X': [ 1.67449602e-02, -1.23207371e-02,  4.90804477e-01, -2.85732761e-04, 1.29581238e-03, -0.6211621578156898],
     'fuselage_struct_cg_Z': [ 2.04733876e-03,  9.80617344e-06,  5.74947432e-02, -6.70040225e-07, -1.56022401e-05, 1.1209786221663782],
@@ -64,8 +64,8 @@ fuselage = {
     'fuselage_struct_Ixz_local': [-1.60504311e+00, -6.56730156e-01,  3.38025631e+01, -3.04377534e-03, 1.66851198e-01, -123.8341477054152],
 }
 
-wing = {
-    'wing_mass': [ 1.11379136e+01,  3.14761829e+01,  7.89132288e-01, -2.14257921e-02, 2.40041303e-01, -3.20236992e+02],
+wing_reg = {
+    'wing_mass': [1.11379136e+01,  3.14761829e+01,  7.89132288e-01, -2.14257921e-02, 2.40041303e-01, -3.20236992e+02],
     'wing_struct_cg_X': [ 9.94396743e-03, -3.05611792e-02,  2.56921181e-01, -7.39025396e-06,-1.03626829e-04, 1.4057829024098356],
     'wing_struct_cg_Z': [-9.55284281e-04,  3.96588505e-04,  4.31125644e-02, -4.73824146e-06, -1.07005070e-04, 2.156881222891959],
     'wing_struct_Ixx_local': [2.76071395e+02, 3.59794413e+02, 9.66210889e+01, 1.64281071e-01, 8.94049058e+00, -7780.772684440635],
@@ -74,6 +74,27 @@ wing = {
     'wing_struct_Ixz_local': [-3.01635151e-01, -1.19201026e-01, -6.01160477e-02, -3.71504542e-05, -3.12613363e-03, 5.2272209068023425]
 }
 
+h_tail_reg = {
+    'htail_struct_cg_X': [7.06883576e-02, 3.84929919e-04, 8.61381597e+00], 
+    'htail_struct_cg_Z': [-1.16697306e-03, -2.91660614e-04,  2.43639119e+00], 
+    'htail_struct_Ixx_local': [ 18.92005127,  -0.35697627, -33.45142861], 
+    'htail_struct_Iyy_local': [ 1.19654233, -0.00797203, -2.17981443], 
+    'htail_struct_Izz_local': [ 20.54893615,  -0.20019707, -37.82299028], 
+    'htail_struct_Iyz_local': [ 0.00561562,  0.01458515, -0.05720038]
+}
+
+v_tail_reg = {
+    'vtail_struct_cg_X': [1.22303656e-03, 4.29673559e-01, 7.44086060e+00], 
+    'vtail_struct_cg_Z': [3.14155013e-05, 1.15201331e-01, 2.80560953e+00], 
+    'vtail_struct_Ixx_local': [ 0.01142087,  5.03615053, -6.3960446 ], 
+    'vtail_struct_Iyy_local': [ -0.02605902,  16.15112795, -20.49196436], 
+    'vtail_struct_Izz_local': [ -0.02455155,  11.32820227, -14.38350579], 
+    'vtail_struct_Ixz_local': [-0.01761771,  4.91034131, -6.19919581], 
+}
+
+empennage_reg = [h_tail_reg, v_tail_reg]
+
+empennage_mass_coeff = [8.43266623, 10.05410839, -0.19944806479469435]
 
 def compute_boom_mps(
     wing_area: Union[csdl.Variable, float, int],
@@ -81,9 +102,38 @@ def compute_boom_mps(
     fuselage_length: Union[csdl.Variable, float, int],
     battery_mass: Union[csdl.Variable, float, int],
     cruise_speed: Union[csdl.Variable, float, int],
-):
+    reference_frame: str = "flight_dynamics"
+) -> MassProperties:
+    """Compute the mass properties of the booms of NASA's 
+    lift-plus-cruise air taxi.
+
+    Parameters
+    ----------
+    wing_area : Union[csdl.Variable, float, int]
+        _description_
+    wing_AR : Union[csdl.Variable, float, int]
+        _description_
+    fuselage_length : Union[csdl.Variable, float, int]
+        _description_
+    battery_mass : Union[csdl.Variable, float, int]
+        _description_
+    cruise_speed : Union[csdl.Variable, float, int]
+        _description_
+    reference_frame : str, optional
+        the reference w.r.t. which the mass properties are computed;
+        options are "geometric" (x back, y right z up) and "flight_dynamics"
+        (x forward, y right, z down), by default "flight_dynamics"
+
+    Returns
+    -------
+    MassProperties
+        instance of MassProperties data class
+    """
+    csdl.check_parameter(reference_frame, "reference_frame",
+                         values=("flight_dynamics", "geometric"))
+    
     cg_list = []
-    i_lit = []
+    it_list = []
     for boom_reg in booms_reg:
         cg_vec = csdl.Variable(shape=(3, ), value=0.)
         i_mat = csdl.Variable(shape=(3, 3), value=0.)
@@ -105,10 +155,291 @@ def compute_boom_mps(
             elif 'Izz' in name:
                 i_mat = i_mat.set(csdl.slice[2, 2], qty)
         cg_list.append(cg_vec)
-        i_lit.append(i_mat)
+        it_list.append(i_mat)
 
+    mass_coeffs = boom_mass_coeffs
+    total_boom_mass = evaluate_regression(
+        wing_area, wing_AR, fuselage_length,
+        battery_mass, cruise_speed, mass_coeffs,
+    )
+
+    mass_per_boom_pair = total_boom_mass / 4 # left/right + inner/outer
+    total_boom_cg = csdl.Variable(shape=(3, ), value=0.)
+
+    # compute total boom cg
+    for cg in cg_list:
+        total_boom_cg = total_boom_cg + cg * mass_per_boom_pair
+
+    total_boom_cg = total_boom_cg / total_boom_mass
+
+    # zero out cg-y and flip x,z depending on reference frame
+    if reference_frame == "flight_dynamics":
+        total_boom_cg = total_boom_cg * np.array([-1, 0, -1])
+
+    else:
+        total_boom_cg = total_boom_cg * np.array([1, 0, 1])
+
+    # compute total boom inertia tensor (about total cg)
+    total_boom_I = csdl.Variable(shape=(3, 3), value=0.)
     
+    # parallel axis theorem (parallel axis is total boom cg)
+    x =  total_boom_cg[0]
+    y =  total_boom_cg[1]
+    z =  total_boom_cg[2]
+    
+    transl_mat = csdl.Variable(shape=(3, 3), value=0.)
+    transl_mat = transl_mat.set(csdl.slice[0, 0], y**2 + z**2)
+    transl_mat = transl_mat.set(csdl.slice[0, 1], -x * y)
+    transl_mat = transl_mat.set(csdl.slice[0, 2], -x * z)
+    transl_mat = transl_mat.set(csdl.slice[1, 0], -y * x)
+    transl_mat = transl_mat.set(csdl.slice[1, 1], x**2 + z**2)
+    transl_mat = transl_mat.set(csdl.slice[1, 2], -y * z)
+    transl_mat = transl_mat.set(csdl.slice[2, 0], -z * x)
+    transl_mat = transl_mat.set(csdl.slice[2, 1], -z * y)
+    transl_mat = transl_mat.set(csdl.slice[2, 2], x**2 + y**2)
+    transl_mat = mass_per_boom_pair * transl_mat
 
+    for it in it_list:
+        it_boom_cg = it + transl_mat
+        total_boom_I = total_boom_I + it_boom_cg
+
+    # assemble boom mps data class
+    boom_mps = MassProperties(
+        mass=total_boom_mass,
+        cg_vector=total_boom_cg,
+        inertia_tensor=total_boom_I,
+    )
+
+    return boom_mps
+
+def compute_empennage_mps(
+    h_tail_area: Union[csdl.Variable, float, int],
+    v_tail_area: Union[csdl.Variable, float, int],
+    reference_frame: str = "flight_dynamics"
+):
+    csdl.check_parameter(reference_frame, "reference_frame",
+                         values=("flight_dynamics", "geometric"))
+    cg_list = []
+    it_list = []
+    for reg in empennage_reg:
+        cg_vec = csdl.Variable(shape=(3, ), value=0.)
+        i_mat = csdl.Variable(shape=(3, 3), value=0.)
+        for name, coeffs in reg.items():
+            qty = evaluate_empennage_regression(
+                h_tail_area, v_tail_area, coeffs
+            )
+            if 'cg_X' in name:
+                cg_vec =  cg_vec.set(csdl.slice[0], qty)
+            elif 'cg_Y' in name:
+                cg_vec =  cg_vec.set(csdl.slice[1], qty)
+            elif 'cg_Z' in name:
+                cg_vec =  cg_vec.set(csdl.slice[2], qty)
+            elif 'Ixx' in name:
+                i_mat = i_mat.set(csdl.slice[0, 0], qty)
+            elif 'Iyy' in name:
+                i_mat = i_mat.set(csdl.slice[1, 1], qty)
+            elif 'Izz' in name:
+                i_mat = i_mat.set(csdl.slice[2, 2], qty)
+            elif 'Ixz' in name:
+                i_mat = i_mat.set(csdl.slice[0, 2], qty)
+                i_mat = i_mat.set(csdl.slice[2, 0], qty)
+            elif 'Iyz' in name:
+                i_mat = i_mat.set(csdl.slice[1, 2], qty)
+                i_mat = i_mat.set(csdl.slice[2, 1], qty)
+
+        cg_list.append(cg_vec)
+        it_list.append(i_mat)
+
+    mass_coeffs = empennage_mass_coeff
+    total_empennage_mass = evaluate_empennage_regression(
+        htail_area=h_tail_area, vtail_area=v_tail_area, coeffs=mass_coeffs
+    )
+
+    total_empennage_cg = csdl.Variable(shape=(3, ), value=0.)
+
+    # compute total boom cg
+    for i, cg in enumerate(cg_list):
+        if i == 0:
+            # weigh h tail a more
+            total_empennage_cg = total_empennage_cg + cg * 0.65 * total_empennage_mass
+        else:
+            # weigh v tail a less
+            total_empennage_cg = total_empennage_cg + cg * 0.35 * total_empennage_mass
+
+    total_empennage_cg = total_empennage_cg / total_empennage_mass
+
+    # zero out cg-y and flip x,z depending on reference frame
+    if reference_frame == "flight_dynamics":
+        total_empennage_cg = total_empennage_cg * np.array([-1, 0, -1])
+
+    else:
+        total_empennage_cg = total_empennage_cg * np.array([1, 0, 1])
+
+    # compute total empennage inertia tensor (about total cg)
+    total_empennage_I = csdl.Variable(shape=(3, 3), value=0.)
+    
+    # parallel axis theorem (parallel axis is total empennage cg)
+    x =  total_empennage_cg[0]
+    y =  total_empennage_cg[1]
+    z =  total_empennage_cg[2]
+    
+    transl_mat = csdl.Variable(shape=(3, 3), value=0.)
+    transl_mat = transl_mat.set(csdl.slice[0, 0], y**2 + z**2)
+    transl_mat = transl_mat.set(csdl.slice[0, 1], -x * y)
+    transl_mat = transl_mat.set(csdl.slice[0, 2], -x * z)
+    transl_mat = transl_mat.set(csdl.slice[1, 0], -y * x)
+    transl_mat = transl_mat.set(csdl.slice[1, 1], x**2 + z**2)
+    transl_mat = transl_mat.set(csdl.slice[1, 2], -y * z)
+    transl_mat = transl_mat.set(csdl.slice[2, 0], -z * x)
+    transl_mat = transl_mat.set(csdl.slice[2, 1], -z * y)
+    transl_mat = transl_mat.set(csdl.slice[2, 2], x**2 + y**2)
+    transl_mat = (total_empennage_mass / 2) * transl_mat
+
+    for it in it_list:
+        it_empennage_cg = it + transl_mat
+        total_empennage_I = total_empennage_I + it_empennage_cg
+
+    empennage_mps = MassProperties(
+        mass=total_empennage_mass,
+        cg_vector=total_empennage_cg,
+        inertia_tensor=total_empennage_I,
+    )
+
+    return empennage_mps
+
+def compute_wing_mps(
+    wing_area: Union[csdl.Variable, float, int],
+    wing_AR: Union[csdl.Variable, float, int],
+    fuselage_length: Union[csdl.Variable, float, int],
+    battery_mass: Union[csdl.Variable, float, int],
+    cruise_speed: Union[csdl.Variable, float, int],
+    reference_frame: str = "flight_dynamics"
+) -> MassProperties:
+    """Compute the mass properties of the wing of NASA's 
+    lift-plus-cruise air taxi.
+
+    Parameters
+    ----------
+    wing_area : Union[csdl.Variable, float, int]
+        _description_
+    wing_AR : Union[csdl.Variable, float, int]
+        _description_
+    fuselage_length : Union[csdl.Variable, float, int]
+        _description_
+    battery_mass : Union[csdl.Variable, float, int]
+        _description_
+    cruise_speed : Union[csdl.Variable, float, int]
+        _description_
+    reference_frame : str, optional
+        the reference w.r.t. which the mass properties are computed;
+        options are "geometric" (x back, y right z up) and "flight_dynamics"
+        (x forward, y right, z down), by default "flight_dynamics"
+
+    Returns
+    -------
+    MassProperties
+        instance of MassProperties data class
+    """
+
+    cg_vec = csdl.Variable(shape=(3, ), value=0.)
+    i_mat = csdl.Variable(shape=(3, 3), value=0.)
+
+    for name, coeffs in wing_reg.items():
+        qty = evaluate_regression(
+            wing_area, wing_AR, fuselage_length,
+            battery_mass, cruise_speed, coeffs
+        )
+        if "mass" in name:
+            m = qty
+        elif 'cg_X' in name:
+            cg_vec =  cg_vec.set(csdl.slice[0], qty)
+        elif 'cg_Z' in name:
+            cg_vec =  cg_vec.set(csdl.slice[2], qty)
+        elif 'Ixx' in name:
+            i_mat = i_mat.set(csdl.slice[0, 0], qty)
+        elif 'Iyy' in name:
+            i_mat = i_mat.set(csdl.slice[1, 1], qty)
+        elif 'Izz' in name:
+            i_mat = i_mat.set(csdl.slice[2, 2], qty)
+        elif 'Ixz' in name:
+            i_mat = i_mat.set(csdl.slice[0, 2], qty)
+            i_mat = i_mat.set(csdl.slice[2, 0], qty)
+
+    if reference_frame == "flight_dynamics":
+        cg_vec = cg_vec * np.array([-1, 0, -1])
+
+    wing_mps = MassProperties(
+        mass=m, cg_vector=cg_vec, inertia_tensor=i_mat
+    )
+
+    return wing_mps
+
+def compute_fuselage_mps(
+    wing_area: Union[csdl.Variable, float, int],
+    wing_AR: Union[csdl.Variable, float, int],
+    fuselage_length: Union[csdl.Variable, float, int],
+    battery_mass: Union[csdl.Variable, float, int],
+    cruise_speed: Union[csdl.Variable, float, int],
+    reference_frame: str = "flight_dynamics"
+) -> MassProperties:
+    """Compute the mass properties of the fuselage of NASA's 
+    lift-plus-cruise air taxi.
+
+    Parameters
+    ----------
+    wing_area : Union[csdl.Variable, float, int]
+        _description_
+    wing_AR : Union[csdl.Variable, float, int]
+        _description_
+    fuselage_length : Union[csdl.Variable, float, int]
+        _description_
+    battery_mass : Union[csdl.Variable, float, int]
+        _description_
+    cruise_speed : Union[csdl.Variable, float, int]
+        _description_
+    reference_frame : str, optional
+        the reference w.r.t. which the mass properties are computed;
+        options are "geometric" (x back, y right z up) and "flight_dynamics"
+        (x forward, y right, z down), by default "flight_dynamics"
+
+    Returns
+    -------
+    MassProperties
+        instance of MassProperties data class
+    """
+
+    cg_vec = csdl.Variable(shape=(3, ), value=0.)
+    i_mat = csdl.Variable(shape=(3, 3), value=0.)
+
+    for name, coeffs in fuselage_reg.items():
+        qty = evaluate_regression(
+            wing_area, wing_AR, fuselage_length,
+            battery_mass, cruise_speed, coeffs
+        )
+        if "mass" in name:
+            m = qty
+        elif 'cg_X' in name:
+            cg_vec =  cg_vec.set(csdl.slice[0], qty)
+        elif 'cg_Z' in name:
+            cg_vec =  cg_vec.set(csdl.slice[2], qty)
+        elif 'Ixx' in name:
+            i_mat = i_mat.set(csdl.slice[0, 0], qty)
+        elif 'Iyy' in name:
+            i_mat = i_mat.set(csdl.slice[1, 1], qty)
+        elif 'Izz' in name:
+            i_mat = i_mat.set(csdl.slice[2, 2], qty)
+        elif 'Ixz' in name:
+            i_mat = i_mat.set(csdl.slice[0, 2], qty)
+            i_mat = i_mat.set(csdl.slice[2, 0], qty)
+
+    if reference_frame == "flight_dynamics":
+        cg_vec = cg_vec * np.array([-1, 0, -1])
+
+    wing_mps = MassProperties(
+        mass=m, cg_vector=cg_vec, inertia_tensor=i_mat
+    )
+
+    return wing_mps
 
 def evaluate_regression(wing_area, wing_AR, fuselage_length, battery_mass, cruise_speed, coeffs):
     qty = coeffs[0] * wing_area + coeffs[1] * wing_AR + coeffs[2] * fuselage_length \
@@ -116,190 +447,71 @@ def evaluate_regression(wing_area, wing_AR, fuselage_length, battery_mass, cruis
     
     return qty
 
-def assemble_cg_vec(cg_x, cg_y, cg_z):
-    cg_vec = csdl.Variable(shape=(3, ), value=0.)
+def evaluate_empennage_regression(htail_area, vtail_area, coeffs):
+    qty = coeffs[0] * htail_area + coeffs[1] * vtail_area + coeffs[2]
+    
+    return qty
 
-    cg_vec = cg_vec.set(
-        csdl.slice[0], cg_x
+if __name__ == "__main__":
+    recorder = csdl.Recorder(inline=True)
+    recorder.start()
+
+    wing_AR = 12
+    wing_area = 19.5
+    fuselage_length = 9
+    battery_mass = 800
+    cruise_speed = 67
+
+    boom_mps = compute_boom_mps(
+        wing_area=wing_area,
+        wing_AR=wing_AR,
+        fuselage_length=fuselage_length,
+        battery_mass=battery_mass,
+        cruise_speed=cruise_speed,
     )
 
-    cg_vec = cg_vec.set(
-        csdl.slice[1], cg_y
+    print("Boom MPs")
+    print(boom_mps.mass)
+    print(boom_mps.cg_vector.value)
+    print(boom_mps.inertia_tensor.value)
+    print("\n")
+
+    wing_mps = compute_wing_mps(
+        wing_area=wing_area,
+        wing_AR=wing_AR,
+        fuselage_length=fuselage_length,
+        battery_mass=battery_mass,
+        cruise_speed=cruise_speed,
     )
 
-    cg_vec = cg_vec.set(
-        csdl.slice[2], cg_z
+    print("wing MPs")
+    print(wing_mps.mass)
+    print(wing_mps.cg_vector.value)
+    print(wing_mps.inertia_tensor.value)
+    print("\n")
+
+    fuselage_mps = compute_fuselage_mps(
+        wing_area=wing_area,
+        wing_AR=wing_AR,
+        fuselage_length=fuselage_length,
+        battery_mass=battery_mass,
+        cruise_speed=cruise_speed,
     )
 
-    return cg_vec
+    print("fuselage MPs")
+    print(fuselage_mps.mass)
+    print(fuselage_mps.cg_vector.value)
+    print(fuselage_mps.inertia_tensor.value)
+    print("\n")
 
-class M4RegLPCBooms: 
-    def evaluate(
-        self,
-        wing_area,
-        wing_AR,
-        fuselage_length,
-        battery_mass,
-        cruise_speed,
-    ): 
-        
-        # left inner
-        boom_li_cgx = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomInPort_struct_cg_X"]
-        )
+    empennage_mps = compute_empennage_mps(
+        h_tail_area=3.5,
+        v_tail_area=2.5,
+    )
 
-        boom_li_cgy = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomInPort_struct_cg_Y"]
-        )
+    print("empennage MPs")
+    print(empennage_mps.mass)
+    print(empennage_mps.cg_vector.value)
+    print(empennage_mps.inertia_tensor.value)
+    print("\n")
 
-        boom_li_cgz = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomInPort_struct_cg_Z"]
-        )
-
-        boom_li_cg_vec = assemble_cg_vec(
-            boom_li_cgx, boom_li_cgy, boom_li_cgz
-        )
-
-        boom_li_ixx = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomInPort_struct_Ixx_local"]
-        )
-
-        boom_li_iyy = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomInPort_struct_yy_local"]
-        )
-
-        boom_li_izz = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomInPort_struct_Izz_local"]
-        )
-
-
-
-        # left outer
-        boom_lo_cgx = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomOutPort_struct_cg_X"]
-        )
-
-        boom_lo_cgy = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomOutPort_struct_cg_Y"]
-        )
-
-        boom_lo_cgz = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomOutPort_struct_cg_Z"]
-        )
-
-        boom_lo_ixx = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomOutPort_struct_Ixx_local"]
-        )
-
-        boom_lo_iyy = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomOutPort_struct_yy_local"]
-        )
-
-        boom_lo_izz = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomOutPort_struct_Izz_local"]
-        )
-
-        # right inner
-        boom_ri_cgx = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomInStar_struct_cg_X"]
-        )
-
-        boom_ri_cgy = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomInStar_struct_cg_Y"]
-        )
-
-        boom_ri_cgz = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomInStar_struct_cg_Z"]
-        )
-
-        boom_ri_ixx = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomInStar_struct_Ixx_local"]
-        )
-
-        boom_ri_iyy = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomInStar_struct_yy_local"]
-        )
-
-        boom_ri_izz = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomInStar_struct_Izz_local"]
-        )
-
-
-        # right outer
-        boom_ro_cgx = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomOutStar_struct_cg_X"]
-        )
-
-        boom_ro_cgy = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomOutStar_struct_cg_Y"]
-        )
-
-        boom_ro_cgz = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomOutStar_struct_cg_Z"]
-        )
-
-        boom_ro_ixx = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomOutStar_struct_Ixx_local"]
-        )
-
-        boom_ro_iyy = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomOutStar_struct_yy_local"]
-        )
-
-        boom_ro_izz = evaluate_regression(
-            wing_area, wing_AR, fuselage_length,
-            battery_mass, cruise_speed, 
-            reg_dict["BoomOutStar_struct_Izz_local"]
-        )
-
-
-
-class M4RegLPCWing: pass
-
-class M4RegLPCFuselage: pass
