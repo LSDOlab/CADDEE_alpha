@@ -42,11 +42,11 @@ class Component:
         - meshes
     """
     # Default function spaces for components 
-    _constant_b_spline_curve_1_dof_space = bsp.BSplineSpace(name='constant_b_spline_curve_1_dof_space', order=1, parametric_coefficients_shape=(1,))
-    _linear_b_spline_curve_2_dof_space = bsp.BSplineSpace(name='linear_b_spline_curve_2_dof_space', order=2, parametric_coefficients_shape=(2,))
-    _linear_b_spline_curve_3_dof_space = bsp.BSplineSpace(name='linear_b_spline_curve_3_dof_space', order=2, parametric_coefficients_shape=(3,))
-    _quadratic_b_spline_curve_3_dof_space = bsp.BSplineSpace(name='quadratic_b_spline_curve_3_dof_space', order=3, parametric_coefficients_shape=(3,))
-    _cubic_b_spline_curve_5_dof_space = bsp.BSplineSpace(name='cubic_b_spline_curve_5_dof_space', order=4, parametric_coefficients_shape=(5,))
+    # _constant_b_spline_curve_1_dof_space = bsp.BSplineSpace(name='constant_b_spline_curve_1_dof_space', order=1, parametric_coefficients_shape=(1,))
+    # _linear_b_spline_curve_2_dof_space = bsp.BSplineSpace(name='linear_b_spline_curve_2_dof_space', order=2, parametric_coefficients_shape=(2,))
+    # _linear_b_spline_curve_3_dof_space = bsp.BSplineSpace(name='linear_b_spline_curve_3_dof_space', order=2, parametric_coefficients_shape=(3,))
+    # _quadratic_b_spline_curve_3_dof_space = bsp.BSplineSpace(name='quadratic_b_spline_curve_3_dof_space', order=3, parametric_coefficients_shape=(3,))
+    # _cubic_b_spline_curve_5_dof_space = bsp.BSplineSpace(name='cubic_b_spline_curve_5_dof_space', order=4, parametric_coefficients_shape=(5,))
     
     # Instance counter for naming components under the hood
     _instance_count = 0
@@ -112,7 +112,7 @@ class Component:
         raise NotImplementedError(f"'actuate' has not been implemented for component of type {type(self)}")
 
 
-    def _make_ffd_block(self, entities : List[bsp.BSpline], 
+    def _make_ffd_block(self, entities : list, 
                         num_coefficients : tuple=(2, 2, 2), 
                         order: tuple=(1, 1, 1), 
                         num_physical_dimensions : int=3):

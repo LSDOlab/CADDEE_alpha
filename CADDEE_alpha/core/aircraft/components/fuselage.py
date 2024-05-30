@@ -1,5 +1,4 @@
 from CADDEE_alpha.core.component import Component
-from lsdo_geo import  BSplineSet
 from lsdo_geo.core.parameterization.parameterization_solver import ParameterizationSolver
 from lsdo_geo.core.parameterization.volume_sectional_parameterization import VolumeSectionalParameterization
 from lsdo_geo import FFDBlock
@@ -9,6 +8,7 @@ import csdl
 import m3l
 import lsdo_geo.splines.b_splines as bsp
 from dataclasses import dataclass
+from lsdo_function_spaces import FunctionSet
 
 
 @dataclass
@@ -46,7 +46,7 @@ class Fuselage(Component):
                  max_height : Union[int, float, csdl.Variable], 
                  cabin_depth : Union[int, float, csdl.Variable], 
                  S_wet : Union[int, float, csdl.Variable, None] = None,
-                 geometry : Union[BSplineSet, None] = None,
+                 geometry : Union[FunctionSet, None] = None,
                  **kwargs
                  ) -> None:
         super().__init__(geometry, **kwargs)
@@ -61,8 +61,8 @@ class Fuselage(Component):
 
         if self.geometry is not None:
             # Check for appropriate geometry type
-            if not isinstance(self.geometry, (BSplineSet)):
-                raise TypeError(f"wing gometry must be of type {BSplineSet}")
+            if not isinstance(self.geometry, (FunctionSet)):
+                raise TypeError(f"wing gometry must be of type {FunctionSet}")
             else:
                 # Automatically make the FFD block upon instantiation 
                 self._ffd_block = self._make_ffd_block(self.geometry)
@@ -116,7 +116,7 @@ class Fuselage(Component):
         fuselage_coefficients = ffd_block.evaluate(fuselage_ffd_block_coefficients, plot=True)
 
         # Assign the coefficients to the top-level parent (i.e., system) geometry
-        if isinstance(self.geometry, BSplineSet):
+        if isinstance(self.geometry, FunctionSet):
             system_geometry.assign_coefficients(coefficients=fuselage_coefficients)
         else:
             system_geometry.assign_coefficients(coefficients=fuselage_coefficients, b_spline_names=self.geometry.b_spline_names)

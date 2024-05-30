@@ -588,31 +588,27 @@ def make_1d_box_beam(
     beam_height = (beam_height_nodal[0:-1] + beam_height_nodal[1:]) / 2
 
     # Compute top and bottom thicknesses of the beam
-    # TODO: handle more than 1 material? maybe not needed
-    if wing_comp.quantities.material_properties.material is not None:
-        thickness = wing_comp.quantities.material_properties.thickness
-        num_chordwise = 10
-        num_spanwise = 10
-        beam_width_offset = np.zeros((num_beam_nodes-1, 3))
-        beam_width_offset[:, 0] = beam_width.value
-        node_grid = np.zeros((num_beam_nodes-1, num_chordwise*num_spanwise, 3))
-        for i in range(num_beam_nodes-1):
-            spanwise = np.linspace(beam_nodes.value[i,:], beam_nodes.value[i+1,:], num_spanwise)
-            grid = np.linspace(spanwise+beam_width_offset[i]/2, spanwise-beam_width_offset[i]/2, num_chordwise).reshape(-1,3)
-            node_grid[i,:,:] = grid
-        node_grid = node_grid.reshape(-1,3)
-        top_grid = wing_geometry.project(node_grid + offset, direction=np.array([0., 0., -1]), plot=plot)
-        bottom_grid = wing_geometry.project(node_grid - offset, direction=np.array([0., 0., 1]), plot=plot)
-        top_thickness_grid = thickness.evaluate(top_grid).reshape((num_beam_nodes-1, num_chordwise*num_spanwise, 1))
-        bottom_thickness_grid = thickness.evaluate(bottom_grid).reshape((num_beam_nodes-1, num_chordwise*num_spanwise, 1))
+    material_properties = wing_comp.quantities.material_properties
+    num_chordwise = 10
+    num_spanwise = 10
+    beam_width_offset = np.zeros((num_beam_nodes-1, 3))
+    beam_width_offset[:, 0] = beam_width.value
+    node_grid = np.zeros((num_beam_nodes-1, num_chordwise*num_spanwise, 3))
+    for i in range(num_beam_nodes-1):
+        spanwise = np.linspace(beam_nodes.value[i,:], beam_nodes.value[i+1,:], num_spanwise)
+        grid = np.linspace(spanwise+beam_width_offset[i]/2, spanwise-beam_width_offset[i]/2, num_chordwise).reshape(-1,3)
+        node_grid[i,:,:] = grid
+    node_grid = node_grid.reshape(-1,3)
+    top_grid = wing_geometry.project(node_grid + offset, direction=np.array([0., 0., -1]), plot=plot)
+    bottom_grid = wing_geometry.project(node_grid - offset, direction=np.array([0., 0., 1]), plot=plot)
+    top_thickness_grid = material_properties.evaluate_thickness(top_grid).reshape((num_beam_nodes-1, num_chordwise*num_spanwise, 1))
+    bottom_thickness_grid = material_properties.evaluate_thickness(bottom_grid).reshape((num_beam_nodes-1, num_chordwise*num_spanwise, 1))
 
-        top_thickness = csdl.Variable(shape=(num_beam_nodes-1,), value=0.)
-        bottom_thickness = csdl.Variable(shape=(num_beam_nodes-1,), value=0.)
-        for i in csdl.frange(num_beam_nodes-1):
-            top_thickness = top_thickness.set(csdl.slice[i], csdl.average(top_thickness_grid[i,:,:]))
-            bottom_thickness = bottom_thickness.set(csdl.slice[i], csdl.average(bottom_thickness_grid[i,:,:]))
-
-
+    top_thickness = csdl.Variable(shape=(num_beam_nodes-1,), value=0.)
+    bottom_thickness = csdl.Variable(shape=(num_beam_nodes-1,), value=0.)
+    for i in csdl.frange(num_beam_nodes-1):
+        top_thickness = top_thickness.set(csdl.slice[i], csdl.average(top_thickness_grid[i,:,:]))
+        bottom_thickness = bottom_thickness.set(csdl.slice[i], csdl.average(bottom_thickness_grid[i,:,:]))
 
     beam_mesh = OneDBoxBeam(
         nodal_coordinates=beam_nodes,

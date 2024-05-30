@@ -171,30 +171,60 @@ class IsotropicMaterial(Material):
         self.strength = np.array([[Ft, Ft, Ft],[Fc, Fc, Fc],[F12, F12, F12]])
 
 class TransverseMaterial(Material):
-    def set_compliance(self, EA, ET, vA, GA, vT = None, GT = None):
-            # E1 = EA
-            # E2 = E3 = ET
-            # v12 = v13 = vA
-            # v23 = vT
-            # G12 = G13 = GA
+    def set_compliance(self, EA:float, ET:float, vA:float, GA:float, vT:float=None, GT:float=None):
+        """Set the compliance matrix for the material.
 
-            if vT is not None and GT is None:
-                GT = ET/(2*(1+vT)) # = G23
-            elif GT is not None and vT is None:
-                vT = ET/(2*GT)-1
-            else:
-                raise Exception('Material is underdefined')
+        This method calculates and sets the compliance matrix based on the given material properties.
 
-            self.compliance = np.array(
-                [[1/ET, -vT/ET, -vA/EA, 0, 0, 0],
-                [-vT/ET, 1/ET, -vA/EA, 0, 0, 0],
-                [-vA/EA, -vA/EA, 1/EA, 0, 0, 0],
-                [0, 0, 0, 1/GA, 0, 0],
-                [0, 0, 0, 0, 1/GA, 0],
-                [0, 0, 0, 0, 0, 1/GT]]
-            )
+        Parameters
+        ----------
+        EA : float
+            Young's modulus in the A direction.
+        ET : float
+            Young's modulus in the T direction.
+        vA : float
+            Poisson's ratio in the A direction.
+        GA : float
+            Shear modulus in the A direction.
+        vT : float, optional
+            Poisson's ratio in the T direction. Default is None.
+        GT : float, optional
+            Shear modulus in the T direction. Default is None.
+
+        Raises
+        ------
+        Exception
+            If the material properties are not sufficient to define the compliance matrix.
+        """
+        if vT is not None and GT is None:
+            GT = ET / (2 * (1 + vT))  # = G23
+        elif GT is not None and vT is None:
+            vT = ET / (2 * GT) - 1
+        else:
+            raise Exception('Material is underdefined')
+
+        self.compliance = np.array(
+            [[1 / ET, -vT / ET, -vA / EA, 0, 0, 0],
+             [-vT / ET, 1 / ET, -vA / EA, 0, 0, 0],
+             [-vA / EA, -vA / EA, 1 / EA, 0, 0, 0],
+             [0, 0, 0, 1 / GA, 0, 0],
+             [0, 0, 0, 0, 1 / GA, 0],
+             [0, 0, 0, 0, 0, 1 / GT]]
+        )
 
     def from_compliance(self):
+        """Calculate material properties from compliance matrix.
+
+        Returns
+        -------
+        tuple
+            A tuple containing the following material properties:
+            - EA: Young's modulus in the axial direction
+            - ET: Young's modulus in the transverse direction
+            - vA: Poisson's ratio in the axial direction
+            - vT: Poisson's ratio in the transverse direction
+            - GA: Shear modulus
+        """
         ET = 1/self.compliance[0,0]
         EA = 1/self.compliance[5,5]
         vT = -self.compliance[1,0]*ET

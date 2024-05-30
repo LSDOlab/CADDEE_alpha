@@ -167,7 +167,7 @@ class Wing(Component):
 
 
     def _make_ffd_block(self, 
-                        entities : List[bsp.BSpline], 
+                        entities : list, 
                         num_coefficients : tuple=(2, 2, 2), 
                         order: tuple=(1, 1, 1), 
                         num_physical_dimensions : int=3,

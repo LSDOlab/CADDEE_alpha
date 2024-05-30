@@ -137,6 +137,7 @@ class MaterialProperties:
         -------
         list
             Material stack for the given surface index.
+            List of tuples containing (material, bounding_function, thickness, orientation)
         """
         material_stack = []
         for material, surface_indices, bounding_function, thickness, orientation in self.material_stack:
@@ -144,7 +145,43 @@ class MaterialProperties:
                 material_stack.append((material, bounding_function, thickness, orientation))
         return material_stack 
     
-    def evaluate(self, parametric_coordinates):
+    def evaluate_thickness(self, parametric_coordinates):
+        """Evaluates the thickness of the material or material stack at the given parametric coordinates.
+
+        Parameters
+        ----------
+        parametric_coordinates : list
+            Parametric coordinates at which to evaluate the material stack.
+
+        Returns
+        -------
+        list
+            List of thicknesses evaluated at the given parametric coordinates.
+        """
+        out = csdl.Variable(shape=(len(parametric_coordinates),), value=0)
+        for i, parametric_coordinate in enumerate(parametric_coordinates):
+            ind = parametric_coordinate[0]
+            material_stack = self.get_material_stack(ind)
+            if len(material_stack) == 0:
+                if isinstance(self.thickness, fs.FunctionSet):
+                    evaluated_thickness = self.thickness.evaluate([parametric_coordinate])
+                elif self.thickness is not None:
+                    evaluated_thickness = self.thickness
+                else:
+                    evaluated_thickness = 0
+            else:
+                evaluated_thickness = 0
+                for material, bounding_function, thickness, orientation in material_stack:
+                    if isinstance(thickness, fs.FunctionSet):
+                        thickness = thickness.evaluate([parametric_coordinate])
+                    if isinstance(bounding_function, fs.FunctionSet):
+                        bounding_function = bounding_function.evaluate([parametric_coordinate])
+                        thickness = thickness * bounding_function
+                    evaluated_thickness = evaluated_thickness + thickness
+            out = out.set(csdl.slice[i], evaluated_thickness)
+        return out
+
+    def evaluate_stack(self, parametric_coordinates):
         """Evaluates the material stack at the given parametric coordinates.
 
         Parameters
