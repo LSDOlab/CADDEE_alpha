@@ -1,9 +1,9 @@
-from lsdo_geo import BSplineSet
 from CADDEE_alpha.core.component import Component
 import numpy as np
 from dataclasses import dataclass
 import csdl_alpha as csdl
 from typing import Union
+from lsdo_function_spaces import FunctionSet
 
 
 @dataclass
@@ -15,7 +15,7 @@ class RotorParameters(csdl.VariableGroup):
 class Rotor(Component):
     def __init__(self, 
                  radius: Union[int, float, csdl.Variable],
-                 geometry: Union[BSplineSet, None] = None,
+                 geometry: Union[FunctionSet, None] = None,
                  **kwargs) -> None:
         csdl.check_parameter(radius, "radius", types=(float, int, csdl.Variable))
         super().__init__(geometry, **kwargs)

@@ -8,3 +8,4 @@ import CADDEE_alpha.core.aircraft as aircraft
 import CADDEE_alpha.core.mesh as mesh
 from CADDEE_alpha.utils.import_geometry import import_geometry
 from CADDEE_alpha.utils.units import Units
+import CADDEE_alpha.utils.materials as materials

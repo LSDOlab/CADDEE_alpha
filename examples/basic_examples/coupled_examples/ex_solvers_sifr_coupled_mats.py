@@ -4,9 +4,13 @@ import aframe as af
 import numpy as np
 import time
 from VortexAD.core.vlm.vlm_solver import vlm_solver
+import matplotlib.pyplot as plt
 import lsdo_function_spaces as fs
 import aeroelastic_coupling_utils as acu
 from ex_utils import plot_vlm
+
+# NOTE: wip
+
 
 plot = False
 
@@ -16,8 +20,7 @@ recorder.start()
 caddee = cd.CADDEE()
 
 # Import and plot the geometry
-# scaling from feet to meters
-c_172_geometry = cd.import_geometry('pseudo_c172_cambered.stp', scale=0.3048)
+c_172_geometry = cd.import_geometry('pseudo_c172_cambered.stp', scale=cd.Units.length.foot_to_m)
 
 def define_base_config(caddee : cd.CADDEE):
     """Build the base configuration."""
@@ -29,22 +32,33 @@ def define_base_config(caddee : cd.CADDEE):
 
     # wing comp
     wing_geometry = aircraft.create_subgeometry(search_names=["Wing, 0, 2", 
-                                                              "Wing, 0, 3",
-                                                              "Wing, 1, 8",
-                                                              "Wing, 1, 9"])
-
+                                                            "Wing, 0, 3",
+                                                            "Wing, 1, 8",
+                                                            "Wing, 1, 9"])
     wing = cd.aircraft.components.Wing(AR=7.43, S_ref=174, taper_ratio=0.75, geometry=wing_geometry, tight_fit_ffd=False)
 
+    # wing material info
+    # aluminum = cd.materials.IsotropicMaterial(name='aluminum', E=69E9, G=26E9, density=2700, nu=0.33)
+    # aluminum.export_xml('materials/Al_6061-T6.xml')
+    # exit()
+
+    aluminum = cd.materials.import_material('materials/Al_6061-T6.xml')
+    thickness_space = wing_geometry.create_parallel_space(fs.ConstantSpace(2))
+    thickness_var, thickness_function = thickness_space.initialize_function(1, value=0.1)
+    # could make the thickness var a design variable here
+    wing.quantities.material_properties.set_material(aluminum, thickness_function)
 
     # wing function spaces
-    force_space = fs.IDWFunctionSpace(num_parametric_dimensions=2, grid_size=20, order=2, conserve=True)
+    force_space = fs.IDWFunctionSpace(num_parametric_dimensions=2, grid_size=4, order=2, conserve=True)
     wing.quantities.force_space = wing_geometry.create_parallel_space(force_space)
+    wing.quantities.force_single_space = force_space
 
     pressure_space = fs.BSplineSpace(2, (5,5), (7,7))
     wing.quantities.pressure_space = wing_geometry.create_parallel_space(pressure_space)
 
-    displacement_space = fs.BSplineSpace(2, (3,3), (10,10))
+    displacement_space = fs.BSplineSpace(2, (1,1), (3,3))
     wing.quantities.displacement_space = wing_geometry.create_parallel_space(displacement_space)
+    wing.quantities.displacement_single_space = displacement_space
 
     # wing camber surface
     vlm_mesh = cd.mesh.VLMMesh()
@@ -60,9 +74,8 @@ def define_base_config(caddee : cd.CADDEE):
     num_beam_nodes = 15
     wing_box_beam = cd.mesh.make_1d_box_beam(wing, num_beam_nodes, 0.5, plot=plot)
     beam_mesh.discretizations["wing_box_beam"] = wing_box_beam
-    wing_box_beam.shear_web_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * .01)
-    wing_box_beam.top_skin_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * .01)
-    wing_box_beam.bottom_skin_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * .01)
+    # manually set shear web thickness because we don't have internal structure geometry
+    wing_box_beam.shear_web_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * 0.1)
 
     # add wing to airframe
     airframe.comps["wing"] = wing
@@ -127,8 +140,6 @@ def define_conditions(caddee: cd.CADDEE):
     cruise.configuration = base_config
     conditions["cruise"] = cruise
 
-
-
 def define_analysis(caddee: cd.CADDEE):
     cruise = caddee.conditions["cruise"]
     cruise_config = cruise.configuration
@@ -137,19 +148,37 @@ def define_analysis(caddee: cd.CADDEE):
     
     cruise.finalize_meshes()
 
+    force_space = wing.quantities.force_space
+    displacement_space = wing.quantities.displacement_space
+
+    disp_coeff_implicit, implicit_disp = displacement_space.initialize_function(3, implicit=True)
+    force_coeff_implicit, implicit_force = force_space.initialize_function(3, implicit=True)
+
     # Set up VLM analysis
     vlm_mesh = mesh_container["vlm_mesh"]
     wing_camber_surface = vlm_mesh.discretizations["wing_camber_surface"]
     tail_camber_surface = vlm_mesh.discretizations["tail_camber_surface"]
+    wing_camber_mesh = wing_camber_surface.nodal_coordinates
 
-    camber_surface_coordinates = [wing_camber_surface.nodal_coordinates, tail_camber_surface.nodal_coordinates]
+    # deform vlm mesh via displacement function
+    # TODO: these 3 lines can probably be abstracted
+    transfer_mesh_para = implicit_force.generate_parametric_grid((20, 20))
+    transfer_mesh_phys = wing.geometry.evaluate(transfer_mesh_para)
+    transfer_mesh_disp = implicit_disp.evaluate(transfer_mesh_para)
+    
+    # TODO: these 3 lines can probably be abstracted
+    map = acu.NodalMap()
+    weights = map.evaluate(csdl.reshape(wing_camber_mesh, (np.prod(wing_camber_mesh.shape[0:-1]), 3)), transfer_mesh_phys)
+    wing_camber_mesh_displacement = (weights @ transfer_mesh_disp).reshape(wing_camber_mesh.shape)
+
+    camber_surface_coordinates = [wing_camber_mesh + wing_camber_mesh_displacement, tail_camber_surface.nodal_coordinates]
     camber_surface_nodal_velocities = [wing_camber_surface.nodal_velocities, tail_camber_surface.nodal_velocities]
 
-        # run vlm solver
+    # run vlm solver
     vlm_outputs = vlm_solver(camber_surface_coordinates, camber_surface_nodal_velocities)
     plot_vlm(vlm_outputs)
 
-    # VLM forces to beam (sifr)
+    # VLM forces to oml (sifr)
 
     # VLM to framework
     areas = vlm_outputs.surface_panel_areas[0]
@@ -160,13 +189,13 @@ def define_analysis(caddee: cd.CADDEE):
     split_fp = np.vstack((camber_force_points + np.array([0, 0, -1]), camber_force_points + np.array([0, 0, 1])))
     oml_fp_para = wing.geometry.project(split_fp, plot=plot)
 
-    force_function = wing.quantities.force_space.fit_function_set(csdl.blockmat([[forces/2], [forces/2]]), oml_fp_para)
+    force_function = force_space.fit_function_set(csdl.blockmat([[forces/2], [forces/2]]), oml_fp_para)
     wing.quantities.force_function = force_function
 
     pressure_function = wing.quantities.pressure_space.fit_function_set(csdl.blockmat([[pressures/2], [pressures/2]]), 
-                                                                            oml_fp_para, regularization_parameter=1)
+                                                                        oml_fp_para, regularization_parameter=1)
     
-    # Set up beam analysis (with pseudo vlm inputs)
+    # Set up beam analysis
     beam_mesh = mesh_container["beam_mesh"]
     wing_box_beam = beam_mesh.discretizations["wing_box_beam"]
     ttop = wing_box_beam.top_skin_thickness
@@ -175,23 +204,22 @@ def define_analysis(caddee: cd.CADDEE):
     beam_nodes = wing_box_beam.nodal_coordinates[0, :, :]
     num_beam_nodes = beam_nodes.shape[0]
 
-    # framework to beam
-    transfer_mesh_para = force_function.generate_parametric_grid((20, 20))
-    transfer_mesh_phys = wing.geometry.evaluate(transfer_mesh_para)
-    transfer_mesh_forces = force_function.evaluate(transfer_mesh_para)
+    # implicit framework to beam
+
+    transfer_mesh_forces = implicit_force.evaluate(transfer_mesh_para)
     nodal_map = acu.NodalMap()
     weights = nodal_map.evaluate(transfer_mesh_phys, beam_nodes)
     beam_nodal_forces = weights.T() @ transfer_mesh_forces
 
-    # show that total force is conserved
-    print("beam nodal forces", np.sum(beam_nodal_forces.value, axis=0))
-    print('vlm wing force', vlm_outputs.surface_force[0].value)
-
-    # print(wing_box_beam.beam_height.value, wing_box_beam.beam_width.value)
-    # exit()
+    # # show that total force is conserved
+    # print("beam nodal forces", np.sum(beam_nodal_forces.value, axis=0))
+    # print('vlm wing force', vlm_outputs.surface_force[0].value)
 
     # beam analysis
-    beam_material = af.Material(name='aluminum', E=69E9, G=26E9, rho=2700, v=0.33)
+    material = wing.quantities.material_properties.material
+    E, nu, G = material.from_compliance()
+    rho = material.density
+    beam_material = af.Material(name='aluminum', E=E, G=G, rho=rho, v=nu)
     beam_cs = af.CSBox(
         height=wing_box_beam.beam_height, 
         width=wing_box_beam.beam_width, 
@@ -211,15 +239,36 @@ def define_analysis(caddee: cd.CADDEE):
 
     # displacement
     beam_1_displacement = solution.get_displacement(beam_1)
-    print("beam displacement", (beam_1_displacement - beam_nodes).value)
+    print("beam displacement", beam_1_displacement.value)
 
-    nodal_displacement = weights @ (beam_1_displacement - beam_nodes)
-    displacement_function = wing.quantities.displacement_space.fit_function_set(nodal_displacement, transfer_mesh_para)
+    # displacement to oml
+    nodal_displacement = weights @ beam_1_displacement
+    displacement_function = displacement_space.fit_function_set(nodal_displacement, transfer_mesh_para)
     wing.quantities.displacement_function = displacement_function
 
+    # solve implicit system
+    solver = csdl.nonlinear_solvers.GaussSeidel(max_iter=1)
+    disp_residual = displacement_function.stack_coefficients() - disp_coeff_implicit
+    force_residual = force_function.stack_coefficients() - force_coeff_implicit
+    solver.add_state(disp_coeff_implicit, disp_residual, state_update=disp_coeff_implicit + 0.1 * disp_residual)
+    solver.add_state(force_coeff_implicit, force_residual, state_update=force_coeff_implicit + 0.1 * force_residual)
+    solver.run()
+
+    # solve implicit system
+    # solver = csdl.nonlinear_solvers.Newton(max_iter=1)
+    # disp_residual = displacement_function.stack_coefficients() - disp_coeff_implicit
+    # force_residual = force_function.stack_coefficients() - force_coeff_implicit
+    # solver.add_state(disp_coeff_implicit, disp_residual)
+    # solver.add_state(force_coeff_implicit, force_residual)
+    # start = time.time()
+    # solver.run()
+    # end = time.time()
+    # print("Implicit system solve time", end-start)
+
+    # look at results
+    plot_vlm(vlm_outputs)
     wing.geometry.plot(color=displacement_function)
     wing.geometry.plot(color=pressure_function)
-
 
     # stress
     beam_1_stress = solution.get_stress(beam_1)
@@ -242,5 +291,8 @@ define_conditions(caddee)
 define_analysis(caddee)
 tf = time.time()
 print("total time", tf-ts)
+
+# This takes some time
+# recorder.visualize_graph('coupled_sifr')
 
 recorder.stop()

@@ -1,4 +1,4 @@
-from CADDEE_alpha.utils.var_groups import MassProperties
+from CADDEE_alpha.utils.var_groups import MassProperties, MaterialProperties
 from lsdo_geo import Geometry
 from lsdo_function_spaces import FunctionSet
 from CADDEE_alpha.utils.caddee_dict import CADDEEDict
@@ -14,8 +14,11 @@ from dataclasses import dataclass
 @dataclass
 class ComponentQuantities:
     mass_properties : MassProperties = None
+    material_properties : MaterialProperties = None
     def __post_init__(self):
         self.mass_properties = MassProperties()
+        if self.material_properties is None:
+            self.material_properties = MaterialProperties(self)
         self.surface_area = None
         self.characteristic_length = None
         self.form_factor = None
