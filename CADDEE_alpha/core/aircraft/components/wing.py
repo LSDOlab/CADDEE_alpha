@@ -118,14 +118,14 @@ class Wing(Component):
                 self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=tight_fit_ffd)
                 # self._ffd_block.plot()
 
-                # Compute the corner points of the wing  
-                self._LE_left_point = geometry.project(self._ffd_block.evaluate(np.array([1., 0., 0.62])))
-                self._LE_mid_point = geometry.project(self._ffd_block.evaluate(np.array([1., 0.5, 0.62])))
-                self._LE_right_point = geometry.project(self._ffd_block.evaluate(np.array([1., 1.0, 0.62])))
+                # Compute the corner points of the wing 
+                self._LE_left_point = geometry.project(self._ffd_block.evaluate(np.array([1., 0., 0.62])), extrema=True)
+                self._LE_mid_point = geometry.project(self._ffd_block.evaluate(np.array([1., 0.5, 0.62])), extrema=True)
+                self._LE_right_point = geometry.project(self._ffd_block.evaluate(np.array([1., 1.0, 0.62])), extrema=True)
 
-                self._TE_left_point = geometry.project(self._ffd_block.evaluate(np.array([0., 0., 0.5])))
-                self._TE_mid_point = geometry.project(self._ffd_block.evaluate(np.array([0., 0.5, 0.5])))
-                self._TE_right_point = geometry.project(self._ffd_block.evaluate(np.array([0., 1.0, 0.5])))
+                self._TE_left_point = geometry.project(self._ffd_block.evaluate(np.array([0., 0., 0.5])), extrema=True)
+                self._TE_mid_point = geometry.project(self._ffd_block.evaluate(np.array([0., 0.5, 0.5])), extrema=True)
+                self._TE_right_point = geometry.project(self._ffd_block.evaluate(np.array([0., 1.0, 0.5])), extrema=True)
 
 
     def actuate(self, angle : Union[float, int, csdl.Variable], axis_location : float=0.25):
