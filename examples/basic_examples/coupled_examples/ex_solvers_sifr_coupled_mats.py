@@ -35,6 +35,8 @@ def define_base_config(caddee : cd.CADDEE):
     fuselage = cd.aircraft.components.Fuselage(length=None, max_width=None, max_height=None, 
                                                cabin_depth=None, geometry=fuselage_geometry)
     
+    c_172_geometry.plot_meshes(fuselage.quantities.surface_mesh)
+
     airframe.comps["fuselage"] = fuselage
 
     # wing comp
