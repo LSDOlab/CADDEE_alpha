@@ -1,10 +1,10 @@
 from CADDEE_alpha.core.component import Component
-from typing import List
 from lsdo_geo import construct_ffd_block_around_entities, construct_tight_fit_ffd_block
 import lsdo_function_spaces as lfs
-from typing import Union
-from lsdo_geo.core.parameterization.volume_sectional_parameterization import VolumeSectionalParameterization, VolumeSectionalParameterizationInputs
-from lsdo_geo import FFDBlock
+from typing import Union, List
+from lsdo_geo.core.parameterization.volume_sectional_parameterization import (
+    VolumeSectionalParameterization, VolumeSectionalParameterizationInputs
+)
 import csdl_alpha as csdl
 import numpy as np
 from dataclasses import dataclass
@@ -88,8 +88,8 @@ class Wing(Component):
 
         if all(arg is not None for arg in [AR, S_ref, span]):
             raise Exception("Cannot specifiy AR, S_ref, and span at the same time.")
-        if any(arg is not None for arg in [dihedral, sweep, incidence]) and geometry is not None:
-            raise NotImplementedError("'sweep' and 'dihedral' and 'incidence' not implemented if geometry is not None")
+        # if any(arg is not None for arg in [dihedral, sweep, incidence]) and geometry is not None:
+        #     raise NotImplementedError("'sweep' and 'dihedral' and 'incidence' not implemented if geometry is not None")
         
         self._name = f"wing_{self._instance_count}"
         self.parameters : WingParameters =  WingParameters(
@@ -177,50 +177,50 @@ class Wing(Component):
 
 
     def _make_ffd_block(self, 
-                        entities : List[lfs.Function], 
-                        num_coefficients : tuple=(2, 2, 2), 
-                        order: tuple=(1, 1, 1), 
-                        num_physical_dimensions : int=3,
-                        tight_fit: bool = True,
-                    ):
+            entities : List[lfs.Function], 
+            num_coefficients : tuple=(2, 2, 2), 
+            degree: tuple=(1, 1, 1), 
+            num_physical_dimensions : int=3,
+            tight_fit: bool = True,
+        ):
         """
         Call 'construct_ffd_block_around_entities' function. 
 
         Note that we overwrite the Component class's method to 
         - make a "tight-fit" ffd block instead of a cartesian one
-        - to provide higher order B-splines or more degrees of freedom
+        - to provide higher degree B-splines or more degrees of freedom
         if needed (via num_coefficients)
         """
         if tight_fit:
             ffd_block = construct_tight_fit_ffd_block(name=self._name, entities=entities, 
-                                                    num_coefficients=num_coefficients, degree=order)
+                                                    num_coefficients=num_coefficients, degree=degree)
         else:
+            num_coefficients = (2, 3, 2) # NOTE: hard coding here might be limiting
             ffd_block = construct_ffd_block_around_entities(name=self._name, entities=entities,
-                                                            num_coefficients=num_coefficients, degree=order)
+                                                            num_coefficients=num_coefficients, degree=degree)
         
         ffd_block.coefficients.name = f'{self._name}_coefficients'
 
         return ffd_block 
     
-    def _setup_ffd_block(self, ffd_block, system_geometry, plot : bool=False):
+    def _setup_ffd_block(self, ffd_block, parameterization_solver, plot : bool=False):
         """Set up the wing ffd block."""
         
         # Instantiate a volume sectional parameterization object
         ffd_block_sectional_parameterization = VolumeSectionalParameterization(
             name=f'{self._name}_sectional_parameterization',
             parameterized_points=ffd_block.coefficients,
-            parameterized_points_shape=ffd_block.coefficients_shape,
             principal_parametric_dimension=1
         )
         if plot:
             ffd_block_sectional_parameterization.plot()
         
-        # Make B-spline functions for geometric quantities
+        # Make B-spline functions for changing geometric quantities
         chord_stretch_b_spline = lfs.Function(
             space=self._linear_b_spline_3_dof_space, 
             coefficients=csdl.ImplicitVariable(
                 shape=(3, ), 
-                value=np.array([-1e6, 1e-6, -1e-6])
+                value=np.array([-0, 0, 0])
             ),
             name=f"{self._name}_chord_stretch_b_sp_coeffs"
         )
@@ -252,17 +252,17 @@ class Wing(Component):
             name=f"{self._name}_dihedral_transl_b_sp_coeffs"
         )
 
-        twist_b_spline = lfs.Function(
-            space=self._linear_b_spline_3_dof_space,
-            coefficients=csdl.ImplicitVariable(
-                shape=(3, ),
-                value=np.array([0., 0., 0.,]),
-            ),
-            name=f"{self._name}_twist_b_sp_coeffs"
-        )
+        # twist_b_spline = lfs.Function(
+        #     space=self._linear_b_spline_3_dof_space,
+        #     coefficients=csdl.ImplicitVariable(
+        #         shape=(3, ),
+        #         value=np.array([0., 0., 0.,]),
+        #     ),
+        #     name=f"{self._name}_twist_b_sp_coeffs"
+        # )
 
         # evaluate b-splines 
-        num_ffd_sections = 2
+        num_ffd_sections = ffd_block_sectional_parameterization.num_sections
         parametric_b_spline_inputs = np.linspace(0.0, 1.0, num_ffd_sections).reshape((-1, 1))
         
         chord_stretch_sectional_parameters = chord_stretch_b_spline.evaluate(
@@ -277,9 +277,9 @@ class Wing(Component):
         dihedral_translation_sectional_parameters = dihedral_translation_b_spline.evaluate(
             parametric_b_spline_inputs
         )
-        twist_sectional_parameters = twist_b_spline.evaluate(
-            parametric_b_spline_inputs
-        )
+        # twist_sectional_parameters = twist_b_spline.evaluate(
+        #     parametric_b_spline_inputs
+        # )
 
         sectional_parameters = VolumeSectionalParameterizationInputs()
         sectional_parameters.add_sectional_stretch(axis=0, stretch=chord_stretch_sectional_parameters)
@@ -293,13 +293,23 @@ class Wing(Component):
         geometry_coefficients = ffd_block.evaluate_ffd(ffd_coefficients, plot=False)
         self.geometry.set_coefficients(geometry_coefficients)
 
-        # return the coefficients of all B-splines 
-        return [chord_stretch_b_spline.coefficients, span_stretch_b_spline.coefficients, 
-                sweep_translation_b_spline.coefficients, dihedral_translation_b_spline.coefficients]
+        # Add rigid body translation (without FFD)
+        rigid_body_translation = csdl.ImplicitVariable(shape=(3, ), value=0.)
+        for function in self.geometry.functions.values():
+            shape = function.coefficients.shape
+            function.coefficients = function.coefficients + csdl.expand(rigid_body_translation, shape, action='j->ij')
+
+        # Add the coefficients of all B-splines to the parameterization solver
+        parameterization_solver.add_parameter(chord_stretch_b_spline.coefficients)
+        parameterization_solver.add_parameter(span_stretch_b_spline.coefficients)
+        parameterization_solver.add_parameter(sweep_translation_b_spline.coefficients)
+        parameterization_solver.add_parameter(dihedral_translation_b_spline.coefficients)
+        parameterization_solver.add_parameter(rigid_body_translation, cost=0.1)
 
 
+        return 
 
-    def _extract_geometric_quantities_from_ffd_block(self, ffd_block : FFDBlock, system_geometry, plot : bool=False) -> WingGeometricQuantities:
+    def _extract_geometric_quantities_from_ffd_block(self) -> WingGeometricQuantities:
         """Extract the following quantities from the FFD block:
             - Span
             - root chord length
@@ -356,7 +366,7 @@ class Wing(Component):
 
         return wing_geometric_qts
 
-    def _setup_ffd_parameterization(self, wing_geom_qts: WingGeometricQuantities):
+    def _setup_ffd_parameterization(self, wing_geom_qts: WingGeometricQuantities, ffd_geometric_variables):
         """Set up the wing parameterization."""
 
         # Set or compute the values for those quantities
@@ -410,36 +420,46 @@ class Wing(Component):
             dihedral_input = csdl.Variable(shape=(1, ), value=0.)
 
         # Compute constraints: user input - geometric qty equivalent
-        span_constraint = wing_geom_qts.span - span_input
-        center_chord_constraint = wing_geom_qts.center_chord - root_chord_input
-        tip_chord_left_constraint = wing_geom_qts.left_tip_chord - tip_chord_left_input
-        tip_chord_right_constraint = wing_geom_qts.right_tip_chord - tip_chord_right_input
+        # span_constraint = wing_geom_qts.span - span_input
+        # center_chord_constraint = wing_geom_qts.center_chord - root_chord_input
+        # tip_chord_left_constraint = wing_geom_qts.left_tip_chord - tip_chord_left_input
+        # tip_chord_right_constraint = wing_geom_qts.right_tip_chord - tip_chord_right_input
 
-        sweep_constraint_1 = wing_geom_qts.sweep_angle_left - sweep_input
-        sweep_constraint_2 = wing_geom_qts.sweep_angle_right - sweep_input
+        # sweep_constraint_1 = wing_geom_qts.sweep_angle_left - sweep_input
+        # sweep_constraint_2 = wing_geom_qts.sweep_angle_right - sweep_input
 
-        dihedral_constraint_1 = wing_geom_qts.dihedral_angle_left - dihedral_input
-        dihedral_constraint_2 = wing_geom_qts.dihedral_angle_right - dihedral_input
+        # dihedral_constraint_1 = wing_geom_qts.dihedral_angle_left - dihedral_input
+        # dihedral_constraint_2 = wing_geom_qts.dihedral_angle_right - dihedral_input
 
-        return [span_constraint, center_chord_constraint, tip_chord_left_constraint, 
-                tip_chord_right_constraint, sweep_constraint_1, sweep_constraint_2, 
-                dihedral_constraint_1, dihedral_constraint_2]
+        ffd_geometric_variables.add_geometric_variable(wing_geom_qts.span, span_input)
+        ffd_geometric_variables.add_geometric_variable(wing_geom_qts.center_chord, root_chord_input)
+        ffd_geometric_variables.add_geometric_variable(wing_geom_qts.left_tip_chord, tip_chord_left_input)
+        ffd_geometric_variables.add_geometric_variable(wing_geom_qts.right_tip_chord, tip_chord_right_input)
+        ffd_geometric_variables.add_geometric_variable(wing_geom_qts.sweep_angle_left, sweep_input)
+        ffd_geometric_variables.add_geometric_variable(wing_geom_qts.sweep_angle_right, sweep_input)
+        ffd_geometric_variables.add_geometric_variable(wing_geom_qts.dihedral_angle_left, dihedral_input)
+        ffd_geometric_variables.add_geometric_variable(wing_geom_qts.dihedral_angle_right, dihedral_input)
 
-    def _setup_geometry(self, parameterization_solver, system_geometry, plot=False):
+        return
+
+        # return [span_constraint, center_chord_constraint, tip_chord_left_constraint, 
+        #         tip_chord_right_constraint, sweep_constraint_1, sweep_constraint_2, 
+        #         dihedral_constraint_1, dihedral_constraint_2]
+
+    def _setup_geometry(self, parameterization_solver, ffd_geometric_variables, plot=False):
         """Set up the wing geometry (mainly the FFD)"""
-        # Get/ Make the ffd block
-        wing_ffd_block = self._ffd_block #self._make_ffd_block(self.geometry)
+        # Get the ffd block
+        wing_ffd_block = self._ffd_block
 
         # Set up the ffd block
-        coefficients = self._setup_ffd_block(wing_ffd_block, parameterization_solver, system_geometry)
+        self._setup_ffd_block(wing_ffd_block, parameterization_solver, plot=plot)
 
-        # Get wing geometric quantities (as m3l/csdl variable)
-        wing_geom_qts = \
-            self._extract_geometric_quantities_from_ffd_block(wing_ffd_block, system_geometry, plot=plot)
+        # Get wing geometric quantities (as csdl variable)
+        wing_geom_qts = self._extract_geometric_quantities_from_ffd_block()
 
-        # Get the parameterization inputs dictionary
-        constraints = self._setup_ffd_parameterization(parameterization_solver, wing_geom_qts)
+        # Define the geometric constraints
+        self._setup_ffd_parameterization(wing_geom_qts, ffd_geometric_variables)
         
-        return coefficients, constraints
+        return 
         
          

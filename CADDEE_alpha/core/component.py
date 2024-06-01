@@ -15,10 +15,12 @@ from dataclasses import dataclass
 class ComponentQuantities:
     mass_properties : MassProperties = None
     material_properties : MaterialProperties = None
+    surface_mesh: List[csdl.Variable] = None
     def __post_init__(self):
         self.mass_properties = MassProperties()
         if self.material_properties is None:
             self.material_properties = MaterialProperties(self)
+        self.surface_mesh = []
         self.surface_area = None
         self.characteristic_length = None
         self.form_factor = None
@@ -69,6 +71,7 @@ class Component:
     _is_copy = False
 
     parent = None
+
     def __init__(self, geometry : Union[FunctionSet, None]=None, 
                  **kwargs) -> None: 
         csdl.check_parameter(geometry, "geometry", types=(FunctionSet), allow_none=True)
@@ -224,6 +227,8 @@ class Component:
         surfaces = geometry.functions
         surface_area = csdl.Variable(shape=(1, ), value=1)
 
+        surface_mesh = self.quantities.surface_mesh
+
         for i in surfaces.keys():
             oml_para_mesh = []
             for u in np.linspace(0, 1, parametric_mesh_grid_num):
@@ -231,6 +236,7 @@ class Component:
                     oml_para_mesh.append((i, np.array([u,v]).reshape((1,2))))
             
             coords_vec = geometry.evaluate(oml_para_mesh).reshape((parametric_mesh_grid_num, parametric_mesh_grid_num, 3))
+            surface_mesh.append(coords_vec)
             
             coords_u_end = coords_vec[1:, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))
             coords_u_start = coords_vec[:-1, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))

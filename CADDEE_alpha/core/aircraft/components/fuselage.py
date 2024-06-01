@@ -1,12 +1,11 @@
 from CADDEE_alpha.core.component import Component
-from lsdo_geo.core.parameterization.parameterization_solver import ParameterizationSolver
-from lsdo_geo.core.parameterization.volume_sectional_parameterization import VolumeSectionalParameterization
-from lsdo_geo import FFDBlock
+from lsdo_geo.core.parameterization.volume_sectional_parameterization import (
+    VolumeSectionalParameterization, VolumeSectionalParameterizationInputs
+)
+import lsdo_function_spaces as lfs
 from typing import Union
 import numpy as np
-import csdl 
-import m3l
-import lsdo_geo.splines.b_splines as bsp
+import csdl_alpha as csdl 
 from dataclasses import dataclass
 from lsdo_function_spaces import FunctionSet
 
@@ -18,6 +17,12 @@ class FuselageParameters:
     max_height : Union[float, int, csdl.Variable]
     cabin_depth : Union[float, int, csdl.Variable]
     S_wet : Union[float, int, csdl.Variable]
+
+@dataclass
+class FuselageGeometricQuantities:
+    length: csdl.Variable
+    width: csdl.Variable
+    height: csdl.Variable
 
 class Fuselage(Component):
     """The fuslage component class.
@@ -67,132 +72,167 @@ class Fuselage(Component):
                 # Automatically make the FFD block upon instantiation 
                 self._ffd_block = self._make_ffd_block(self.geometry)
 
-    def _setup_ffd_block(self, ffd_block, parameterization_solver : ParameterizationSolver, 
-                         system_geometry, plot : bool=False):
-        """Set up the wing ffd block."""
+                # Extract dimensions (height, width, length) from the FFD block
+                self._nose_point = geometry.project(self._ffd_block.evaluate(np.array([0., 0.5, 0.5])))
+                self._tail_point = geometry.project(self._ffd_block.evaluate(np.array([1., 0.5, 0.5])))
+
+                self._left_point = geometry.project(self._ffd_block.evaluate(np.array([0.5, 0., 0.5])))
+                self._right_point = geometry.project(self._ffd_block.evaluate(np.array([0.5, 1., 0.5])))
+
+                self._top_point = geometry.project(self._ffd_block.evaluate(np.array([0.5, 0.5, 1.])))
+                self._bottom_point = geometry.project(self._ffd_block.evaluate(np.array([0.5, 0.5, 0.])))
+
+
+
+    def _setup_ffd_block(self, ffd_block, parameterization_solver, plot : bool=False):
+        """Set up the fuselage ffd block."""
+        
         # Instantiate a volume sectional parameterization object
         ffd_block_sectional_parameterization = VolumeSectionalParameterization(
             name=f'{self._name}_sectional_parameterization',
             parameterized_points=ffd_block.coefficients,
-            parameterized_points_shape=ffd_block.coefficients_shape,
-            principal_parametric_dimension=1
+            principal_parametric_dimension=0
+        )
+        if plot:
+            ffd_block_sectional_parameterization.plot()
+
+        # Make B-spline functions for changing geometric quantities
+        length_stretch_b_spline = lfs.Function(
+            space=self._linear_b_spline_2_dof_space,
+            coefficients=csdl.ImplicitVariable(
+                shape=(2, ),
+                value=np.array([0., 0.]),
+            ),
+            name=f"{self._name}_length_stretch_b_sp_coeffs",
         )
 
-        ffd_block_sectional_parameterization.add_sectional_translation(name=f'{self._name}_stretch_x', axis=0)
-        ffd_block_sectional_parameterization.add_sectional_translation(name=f'{self._name}_stretch_y', axis=1)
-        ffd_block_sectional_parameterization.add_sectional_translation(name=f'{self._name}_stretch_z', axis=2)
+        height_stretch_b_spline = lfs.Function(
+            space=self._linear_b_spline_2_dof_space,
+            coefficients=csdl.ImplicitVariable(
+                shape=(2, ),
+                value=np.array([0., 0.]),
+            ),
+            name=f"{self._name}_height_stretch_b_sp_coeffs",
+        )
 
-        fuselage_stretch_coefficients_x = m3l.Variable(name=f'{self._name}_stretch_x_coefficients', shape=(2,), value=np.array([-0., 0.]))
-        fuselage_stretch_b_spline_x = bsp.BSpline(name=f'{self._name}_stretch_x_b_spline', space=self._linear_b_spline_curve_2_dof_space, 
-                                                coefficients=fuselage_stretch_coefficients_x, num_physical_dimensions=1)
+        width_stretch_b_spline = lfs.Function(
+            space=self._linear_b_spline_2_dof_space,
+            coefficients=csdl.ImplicitVariable(
+                shape=(2, ),
+                value=np.array([0., 0.]),
+            ),
+            name=f"{self._name}_width_stretch_b_sp_coeffs",
+        )
 
-        fuselage_stretch_coefficients_y = m3l.Variable(name=f'{self._name}_stretch_y_coefficients', shape=(2,), value=np.array([-0., 0.]))
-        fuselage_stretch_b_spline_y = bsp.BSpline(name=f'{self._name}_stretch_y_b_spline', space=self._linear_b_spline_curve_2_dof_space, 
-                                                coefficients=fuselage_stretch_coefficients_y, num_physical_dimensions=1)
-        
-        fuselage_stretch_coefficients_z = m3l.Variable(name=f'{self._name}_stretch_z_coefficients', shape=(2,), value=np.array([-0., 0.]))
-        fuselage_stretch_b_spline_z = bsp.BSpline(name=f'{self._name}_stretch_z_b_spline', space=self._linear_b_spline_curve_2_dof_space, 
-                                                coefficients=fuselage_stretch_coefficients_z, num_physical_dimensions=1)
-        
-        parameterization_solver.declare_state(name=f'{self._name}_stretch_x_coefficients', state=fuselage_stretch_coefficients_x)
-        parameterization_solver.declare_state(name=f'{self._name}_stretch_y_coefficients', state=fuselage_stretch_coefficients_y)
-        parameterization_solver.declare_state(name=f'{self._name}_stretch_z_coefficients', state=fuselage_stretch_coefficients_z)
+        # evaluate b-splines 
+        num_ffd_sections = ffd_block_sectional_parameterization.num_sections
+        parametric_b_spline_inputs = np.linspace(0.0, 1.0, num_ffd_sections).reshape((-1, 1))
 
-        # Evaluate the B-splines to obtain sectional parameters
-        section_parametric_coordinates = np.linspace(0., 1., ffd_block_sectional_parameterization.num_sections).reshape((-1,1))
-        fuselage_stretch_x = fuselage_stretch_b_spline_x.evaluate(section_parametric_coordinates)
-        fuselage_stretch_y = fuselage_stretch_b_spline_y.evaluate(section_parametric_coordinates)
-        fuselage_stretch_z = fuselage_stretch_b_spline_z.evaluate(section_parametric_coordinates)
+        length_stretch_sectional_parameters = length_stretch_b_spline.evaluate(
+            parametric_b_spline_inputs
+        )
+        height_stretch_sectional_parameters = height_stretch_b_spline.evaluate(
+            parametric_b_spline_inputs
+        )
+        width_stretch_sectional_parameters = width_stretch_b_spline.evaluate(
+            parametric_b_spline_inputs
+        )
 
-         # Store sectional parameters
-        sectional_parameters = {
-            f'{self._name}_stretch_x' : fuselage_stretch_x,
-            f'{self._name}_stretch_y' : fuselage_stretch_y,
-            f'{self._name}_stretch_z' : fuselage_stretch_z, 
-        }
+        sectional_parameters = VolumeSectionalParameterizationInputs()
+        sectional_parameters.add_sectional_translation(axis=0, translation=length_stretch_sectional_parameters)
+        sectional_parameters.add_sectional_stretch(axis=1, stretch=height_stretch_sectional_parameters)
+        sectional_parameters.add_sectional_stretch(axis=2, stretch=width_stretch_sectional_parameters)
 
-        # Evaluate entire FFD block based on sectional parameters
-        fuselage_ffd_block_coefficients = ffd_block_sectional_parameterization.evaluate(sectional_parameters, plot=True)
-        fuselage_coefficients = ffd_block.evaluate(fuselage_ffd_block_coefficients, plot=True)
+        ffd_coefficients = ffd_block_sectional_parameterization.evaluate(sectional_parameters, plot=False)
 
-        # Assign the coefficients to the top-level parent (i.e., system) geometry
-        if isinstance(self.geometry, FunctionSet):
-            system_geometry.assign_coefficients(coefficients=fuselage_coefficients)
-        else:
-            system_geometry.assign_coefficients(coefficients=fuselage_coefficients, b_spline_names=self.geometry.b_spline_names)
+        # set the coefficient in the geometry
+        geometry_coefficients = ffd_block.evaluate_ffd(ffd_coefficients, plot=False)
+                    
+        self.geometry.set_coefficients(geometry_coefficients)
 
-    def _extract_geometric_quantities_from_ffd_block(self, ffd_block : FFDBlock, system_geometry, plot : bool=False):
+        # Add rigid body translation (without FFD)
+        rigid_body_translation = csdl.ImplicitVariable(shape=(3, ), value=0.)
+        for function in self.geometry.functions.values():
+            shape = function.coefficients.shape
+            function.coefficients = function.coefficients + csdl.expand(rigid_body_translation, shape, action='j->ij')
+
+        # Add B-spline coefficients to parameterization solver
+        parameterization_solver.add_parameter(length_stretch_b_spline.coefficients, cost=100)
+        parameterization_solver.add_parameter(height_stretch_b_spline.coefficients, cost=100)
+        parameterization_solver.add_parameter(width_stretch_b_spline.coefficients, cost=100)
+        parameterization_solver.add_parameter(rigid_body_translation, cost=1000)
+
+        return
+
+
+    def _extract_geometric_quantities_from_ffd_block(self):
         """Extract the following quantities from the FFD block:
             - fuselage length
             - fuselage max width
             - fuselage max heigtht
         """
-        ffd_block_coefficients = ffd_block.coefficients.value
 
-        B_matrix_nose = ffd_block.compute_evaluation_map(np.array([0., 0.5, 0.5]))
-        B_matrix_tail = ffd_block.compute_evaluation_map(np.array([1., 0.5, 0.5]))
-        nose_point = B_matrix_nose @ ffd_block_coefficients
-        tail_point = B_matrix_tail @ ffd_block_coefficients
+        # Re-evaluate dimensions from FFD block
+        nose = self.geometry.evaluate(self._nose_point)
+        tail = self.geometry.evaluate(self._tail_point)
 
-        nose = self.geometry.project(nose_point, plot=plot)
-        tail = self.geometry.project(tail_point, plot=plot)
+        left = self.geometry.evaluate(self._left_point)
+        right = self.geometry.evaluate(self._right_point)
 
-        B_matrix_left = ffd_block.compute_evaluation_map(np.array([0.5, 0., 0.5]))
-        B_matrix_right = ffd_block.compute_evaluation_map(np.array([0.5, 1.0, 0.5]))
-        left_point = B_matrix_left @ ffd_block_coefficients
-        right_point = B_matrix_right @ ffd_block_coefficients
+        top = self.geometry.evaluate(self._top_point)
+        bottom = self.geometry.evaluate(self._bottom_point)
 
-        left = self.geometry.project(left_point, plot=plot)
-        right = self.geometry.project(right_point, plot=plot)
+        fuselage_length = csdl.norm(tail - nose)
+        fuselage_width = csdl.norm(right - left)
+        fuselage_height = csdl.norm(top - bottom)
 
-        B_matrix_top = ffd_block.compute_evaluation_map(np.array([0.5, 0.5, 1.]))
-        B_matrix_bottom = ffd_block.compute_evaluation_map(np.array([0.5, 0.5, 0]))
-        top_point = B_matrix_top @ ffd_block_coefficients
-        bottom_point = B_matrix_bottom @ ffd_block_coefficients
+        fuselage_geometric_qts = FuselageGeometricQuantities(
+            length=fuselage_length,
+            width=fuselage_width,
+            height=fuselage_height,
+        )
 
-        top = self.geometry.project(top_point, plot=plot)
-        bottom = self.geometry.project(bottom_point, plot=plot)
-
-        fuselage_length = tail - nose
-        fuselage_width = right - left
-        fuselage_height = top - bottom
-
-        return m3l.norm(fuselage_length), m3l.norm(fuselage_width), m3l.norm(fuselage_height)
+        return fuselage_geometric_qts
     
-    def _setup_ffd_parameterization(self, parameterization_solver : ParameterizationSolver, length, 
-                                    width, height):
+    def _setup_ffd_parameterization(self, fuselage_geometric_qts : FuselageGeometricQuantities, ffd_geometric_variables):
         """Set up the fuselage parameterization."""
+        # If user doesn't specify length, use initial geometry
+        if self.parameters.length is None:
+            pass
+        else:
+            length_input = self.parameters.length
+            ffd_geometric_variables.add_geometric_variable(fuselage_geometric_qts.length, length_input)
 
-        # Declare quantities that the inner optimization will aim to enforce
-        parameterization_solver.declare_input(name=f'{self._name}_length', input=length)
-        parameterization_solver.declare_input(name=f'{self._name}_height', input=width)
-        parameterization_solver.declare_input(name=f'{self._name}_width', input=height)
+        # If user doesn't specify height, use initial geometry
+        if self.parameters.max_height is None:
+            pass
+        else:
+            height_input = self.parameters.max_height
+            ffd_geometric_variables.add_geometric_variable(fuselage_geometric_qts.height, height_input)
 
-        # Store the parameterization inputs in a dictionary 
-        parameterization_inputs = {}
-        parameterization_inputs[f'{self._name}_length'] = self.parameters.length
-        parameterization_inputs[f'{self._name}_height'] = self.parameters.max_height
-        parameterization_inputs[f'{self._name}_width'] = self.parameters.max_width
+        # If user doesn't specify width, use initial geometry
+        if self.parameters.max_width is None:
+            pass
+        else:
+            width_input = self.parameters.max_width
+            ffd_geometric_variables.add_geometric_variable(fuselage_geometric_qts.width, width_input)
 
-        return parameterization_inputs
+
+        return 
     
-    def _setup_geometry(self, parameterization_solver, system_geometry, plot: bool = False):
+    def _setup_geometry(self, parameterization_solver, ffd_geometric_variables, plot: bool = False):
         """Set up the fuselage geometry (mainly for FFD)"""
 
         # Get ffd block
         fuselage_ffd_block = self._ffd_block
 
         # Set up the ffd block
-        self._setup_ffd_block(fuselage_ffd_block, parameterization_solver, system_geometry)
+        self._setup_ffd_block(fuselage_ffd_block, parameterization_solver)
 
         # Get fuselage geometric quantities
-        length, width, height = self._extract_geometric_quantities_from_ffd_block(
-            fuselage_ffd_block, system_geometry, plot=plot
-        )
+        fuselage_geom_qts = self._extract_geometric_quantities_from_ffd_block()
 
-        # Get parameterization inputs dictionary
-        parameterization_inputs = self._setup_ffd_parameterization(
-            parameterization_solver, length, width, height
-        )
+        # Define geometric constraints
+        self._setup_ffd_parameterization(fuselage_geom_qts, ffd_geometric_variables)
         
-        return parameterization_inputs
+        return

@@ -61,6 +61,7 @@ def define_base_config(caddee: cd.CADDEE):
     pusher_prop_geom = aircraft.create_subgeometry(search_names=["PropPusher"])
     pusher_prop = cd.aircraft.components.Rotor(radius=0.8, geometry=pusher_prop_geom)
 
+
     aircraft.comps["pusher_prop"] = pusher_prop
 
     num_radial = 30

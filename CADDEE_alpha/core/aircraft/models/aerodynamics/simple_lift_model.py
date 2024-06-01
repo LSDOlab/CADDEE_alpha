@@ -1,4 +1,4 @@
-import csdl
+import csdl_alpha as csdl
 from dataclasses import dataclass
 from typing import Union
 import numpy as np

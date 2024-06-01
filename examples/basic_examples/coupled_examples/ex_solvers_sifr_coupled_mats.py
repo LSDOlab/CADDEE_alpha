@@ -30,19 +30,29 @@ def define_base_config(caddee : cd.CADDEE):
 
     airframe = aircraft.comps["airframe"] = cd.Component()
 
+    # Fuselage
+    fuselage_geometry = aircraft.create_subgeometry(search_names=["Fuselage"])
+    fuselage = cd.aircraft.components.Fuselage(length=None, max_width=None, max_height=None, 
+                                               cabin_depth=None, geometry=fuselage_geometry)
+    
+    c_172_geometry.plot_meshes(fuselage.quantities.surface_mesh)
+
+    airframe.comps["fuselage"] = fuselage
+
     # wing comp
-    wing_geometry = aircraft.create_subgeometry(search_names=["Wing, 0, 2", 
-                                                            "Wing, 0, 3",
-                                                            "Wing, 1, 8",
-                                                            "Wing, 1, 9"])
-    wing = cd.aircraft.components.Wing(AR=7.43, S_ref=174, taper_ratio=0.75, geometry=wing_geometry, tight_fit_ffd=False)
+    wing_geometry = aircraft.create_subgeometry(search_names=["Wing"]) #, 0, 2", 
+                                                            # "Wing, 0, 3",
+                                                            # "Wing, 1, 8",
+                                                            # "Wing, 1, 9"])
+    wing = cd.aircraft.components.Wing(AR=7.43, S_ref=15, sweep=np.deg2rad(-10), dihedral=np.deg2rad(-10), 
+                                       taper_ratio=0.75, geometry=wing_geometry, tight_fit_ffd=False)
 
     # wing material info
-    # aluminum = cd.materials.IsotropicMaterial(name='aluminum', E=69E9, G=26E9, density=2700, nu=0.33)
+    aluminum = cd.materials.IsotropicMaterial(name='aluminum', E=69E9, G=26E9, density=2700, nu=0.33)
     # aluminum.export_xml('materials/Al_6061-T6.xml')
     # exit()
 
-    aluminum = cd.materials.import_material('materials/Al_6061-T6.xml')
+    # aluminum = cd.materials.import_material('materials/Al_6061-T6.xml')
     thickness_space = wing_geometry.create_parallel_space(fs.ConstantSpace(2))
     thickness_var, thickness_function = thickness_space.initialize_function(1, value=0.1)
     # could make the thickness var a design variable here
@@ -84,7 +94,7 @@ def define_base_config(caddee : cd.CADDEE):
     # tail comp
     h_tail_geometry = aircraft.create_subgeometry(search_names=["Tail"])
     h_tail = cd.aircraft.components.Wing(
-        S_ref=21.56, span=11.12, AR=None, 
+        S_ref=4, span=4, AR=None, 
         taper_ratio=0.75, geometry=h_tail_geometry
     )
 
@@ -120,6 +130,13 @@ def define_base_config(caddee : cd.CADDEE):
 
     # create the base configuration
     base_config = cd.Configuration(system=aircraft)
+
+    # Add geometric constraints to the fuselage
+    base_config.connect_component_geometries(wing, fuselage, np.array([-3., 0., -0.5]))
+
+    # Set up the configuration geometry (i.e., run FFD)
+    base_config.setup_geometry()
+    
     caddee.base_configuration = base_config
 
     # assign meshes to mesh container
@@ -286,6 +303,7 @@ def define_analysis(caddee: cd.CADDEE):
 ts = time.time()
 define_base_config(caddee)
 
+# exit()
 define_conditions(caddee)
 
 define_analysis(caddee)
