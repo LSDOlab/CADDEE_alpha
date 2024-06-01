@@ -231,6 +231,8 @@ class Component:
                     oml_para_mesh.append((i, np.array([u,v]).reshape((1,2))))
             
             coords_vec = geometry.evaluate(oml_para_mesh).reshape((parametric_mesh_grid_num, parametric_mesh_grid_num, 3))
+
+            # self.geometry.plot_meshes(coords_vec)
             
             coords_u_end = coords_vec[1:, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))
             coords_u_start = coords_vec[:-1, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))

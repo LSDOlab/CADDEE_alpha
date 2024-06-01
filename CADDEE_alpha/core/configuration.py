@@ -5,7 +5,8 @@ from lsdo_function_spaces import FunctionSet
 import numpy as np 
 import csdl_alpha as csdl
 import warnings
-import copy 
+import copy
+from typing import Union
 
 
 class Configuration:
@@ -15,12 +16,15 @@ class Configuration:
         if not isinstance(system, Component):
             raise TypeError(f"system must by of type {Component}")
         # Check that if system geometry is not None, it is of the correct type
-        if not isinstance(system.geometry, FunctionSet ) and system.geometry is not None:
-            raise TypeError(f"If system geometry is not None, it must be of type '{FunctionSet}', received object of type '{type(system.geometry)}'")
+        if system.geometry is not None:
+            if not isinstance(system.geometry, FunctionSet ):
+                raise TypeError(f"If system geometry is not None, it must be of type '{FunctionSet}', received object of type '{type(system.geometry)}'")
         self.system = system
         self.mesh_container : MeshContainer = MeshContainer()
 
         self._is_copy : bool = False
+        self._geometry_setup_has_been_called = False
+        self._geometric_connections = []
 
     def assemble_meshes(self):
         """Assemble all component meshes into the mesh container."""
@@ -290,63 +294,91 @@ class Configuration:
             system.quantities.mass_properties.cg_vector = system_cg
             system.quantities.mass_properties.inertia_tensor = system_inertia_tensor
 
+    
+    def connect_component_geometries(
+        self,
+        comp_1: Component,
+        comp_2: Component,
+        connection_point: Union[csdl.Variable, np.ndarray, None],
+    ):
+        csdl.check_parameter(comp_1, "comp_1", types=Component)
+        csdl.check_parameter(comp_2, "comp_2", types=Component)
+        csdl.check_parameter(connection_point, "connection_point" ,
+                             types=(csdl.Variable, np.ndarray), allow_none=True)
+
+        # Check that comp_1 and comp_2 have geometries
+        if comp_1.geometry is None:
+            raise Exception(f"Comp {comp_1.name} does not have a geometry.")
+        if comp_2.geometry is None:
+            raise Exception(f"Comp {comp_2.name} does not have a geometry.")
+        
+        # If connection point provided, check that it is shape (3, )
+        if connection_point is not None:
+            try:
+                connection_point.reshape((3, ))
+            except:
+                raise Exception(f"'connection_point' must be of shape (3, ) or reshapable to (3, ). Received shape {connection_point.shape}")
+
+            projection_1 = comp_1.geometry.project(connection_point)
+            projection_2 = comp_2.geometry.project(connection_point)
+
+        self._geometric_connections.append((projection_1, projection_2, comp_1, comp_2))
+        
+        return
+
 
     def setup_geometry(self, run_ffd : bool=True, plot : bool=False):
         """Run the geometry parameterization solver. 
         
         Note: This is only allowed on the based configuration.
         """
+        self._geometry_setup_has_been_called = True
+
         if self._is_copy and run_ffd:
-            raise Exception("Cannot call setup_geometry with run_ffd=True on a copy of a configuration")
+            raise Exception("With curent version of CADDEE, Cannot call setup_geometry with run_ffd=True on a copy of a configuration.")
         
-        from lsdo_geo.core.parameterization.parameterization_solver import ParameterizationSolver
+        from lsdo_geo.core.parameterization.parameterization_solver import ParameterizationSolver, GeometricVariables
         parameterization_solver = ParameterizationSolver()
+        ffd_geometric_variables = GeometricVariables()
         system_geometry = self.system.geometry
 
         if system_geometry is None:
             raise TypeError("'setup_geometry' cannot be called because the geometry asssociated with the system component is None")
 
         if not isinstance(system_geometry, FunctionSet):
-            raise TypeError(f"The geometry of the system must be of type {FunctionSet}")
+            raise TypeError(f"The geometry of the system must be of type {FunctionSet}. Received {type(system_geometry)}")
 
-        parameterization_inputs = {}
-        def setup_geometries(component : Component):
+        def setup_geometries(component: Component):
+            # If component has a geometry, set up its geometry
             if component.geometry is not None:
-                try: # NOTE: this might be potentially dangerous because it can obscure errors in lower-level implementations
-                    parameterization_inputs.update(
-                        component._setup_geometry(parameterization_solver, system_geometry, plot=plot)
-                    )
-                except:
-                    warnings.warn(f"'_setup_geometry' has not been implemented for component {type(component)}")
+                try: # NOTE: might cause some issues because try/except might hide some errors that shouldn't be hidden
+                    component._setup_geometry(parameterization_solver, ffd_geometric_variables, plot=plot)
 
-            if component.comps is not None:
+                except NotImplementedError:
+                    warnings.warn(f"'_setup_geometry' has not been implemented for component {component._name} of {type(component)}")
+            
+            # If component has children, set up their geometries
+            if component.comps:
                 for comp_name, comp in component.comps.items():
                     setup_geometries(comp)
-            return parameterization_inputs
 
-        parameterization_inputs = setup_geometries(self.system)
+            return
+    
+        setup_geometries(self.system)
         
-        if run_ffd:
-            if not parameterization_inputs:
-                raise Exception(f"Cannot run FFD since there are no parameterization inputs. Make sure that your system component knows about all its children component" + \
-                                " by calling system.comps['child_comp'] = child_comp. Your system component is {self.system} and has children components {self.system.comps}.")
+        for connection in self._geometric_connections:
+            projection_1 = connection[0]
+            projection_2 = connection[1]
+            comp_1 = connection[2]
+            comp_2 = connection[3]
+            # connection = csdl.norm(comp_1.geometry.evaluate(projection_1) - comp_2.geometry.evaluate(projection_2))
+            connection = comp_1.geometry.evaluate(projection_1) - comp_2.geometry.evaluate(projection_2)
+            ffd_geometric_variables.add_geometric_variable(connection, connection.value)
 
-            parameterization_solver_states = parameterization_solver.evaluate(parameterization_inputs)
-
-            def re_assign_coefficients(component : Component):
-                if component.geometry is not None:
-                    if hasattr(component, "_update_dict"):
-                        component._update_coefficients_after_inner_optimization(
-                            parameterization_solver_states, system_geometry, component._update_dict
-                        )
-
-                if component.comps:
-                    for comp_name, comp in component.comps.items():
-                        re_assign_coefficients(comp)
-
-            re_assign_coefficients(self.system)
-
+        # Evalauate the parameterization solver
+        parameterization_solver.evaluate(ffd_geometric_variables)
+        
+        if plot:
             system_geometry.plot()
 
-        else:
-            system_geometry.plot()
+        # TODO: re-evaluate meshes

@@ -189,6 +189,8 @@ class SixDofEulerFlatEarthModel:
         state = csdl.ImplicitVariable(shape=(6, self.num_nodes), value=0.)
         residual = mp_matrix @ state - rhs.T()
 
+        # Using a newton solver to solve linear system instead of looping
+        # over num_nodes
         solver = csdl.nonlinear_solvers.Newton(tolerance=1e-12)
         solver.add_state(state, residual)
         solver.run()
