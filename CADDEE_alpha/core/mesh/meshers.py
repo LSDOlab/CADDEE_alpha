@@ -4,6 +4,7 @@ import numpy as np
 from typing import Union
 from dataclasses import dataclass
 from CADDEE_alpha.utils.caddee_dict import CADDEEDict
+from CADDEE_alpha.utils.mesh_utils import import_mesh
 import lsdo_function_spaces as fs
 
 
@@ -779,4 +780,39 @@ def make_rotor_mesh(
     rotor_comp._discretizations[f"{rotor_comp._name}_rotor_mesh_parameters"] = rotor_mesh_parameters
 
     return rotor_mesh_parameters
+
+@dataclass
+class ShellDiscretization(Discretization):
+    geometry:csdl.Variable=None
+    connectivity:csdl.Variable=None
+    nodes_parametric:csdl.Variable=None
+
+    def _update(self):
+        self.nodes = self.geometry.evaluate(self.nodes_parametric)
+        return self
+        
+def import_shell_mesh(file_name:str, 
+                      component:'Component',
+                      plot=False,
+                      rescale=[1,1,1],
+                      grid_search_n = 1):
+    """
+    Create a shell mesh for a component using a mesh file
+    """
+    geometry = component.geometry
+    nodes, nodes_parametric, connectivity = import_mesh(file_name, 
+                                                        geometry, 
+                                                        rescale=rescale, 
+                                                        plot=plot,
+                                                        grid_search_n=grid_search_n)
+    shell_mesh = ShellDiscretization(nodal_coordinates=nodes, 
+                                     connectivity=connectivity,
+                                     nodes_parametric=nodes_parametric,
+                                     geometry=geometry)
+    return shell_mesh
+
+class ShellMesh(SolverMesh):
+    def __init__(self):
+        self.discretizations = DiscretizationsDict()
+        
         

@@ -9,9 +9,6 @@ import lsdo_function_spaces as fs
 import aeroelastic_coupling_utils as acu
 from ex_utils import plot_vlm
 
-# NOTE: wip
-
-
 plot = False
 
 recorder = csdl.Recorder(inline=True)
@@ -61,14 +58,12 @@ def define_base_config(caddee : cd.CADDEE):
     # wing function spaces
     force_space = fs.IDWFunctionSpace(num_parametric_dimensions=2, grid_size=4, order=2, conserve=True)
     wing.quantities.force_space = wing_geometry.create_parallel_space(force_space)
-    wing.quantities.force_single_space = force_space
 
     pressure_space = fs.BSplineSpace(2, (5,5), (7,7))
     wing.quantities.pressure_space = wing_geometry.create_parallel_space(pressure_space)
 
     displacement_space = fs.BSplineSpace(2, (1,1), (3,3))
     wing.quantities.displacement_space = wing_geometry.create_parallel_space(displacement_space)
-    wing.quantities.displacement_single_space = displacement_space
 
     # wing camber surface
     vlm_mesh = cd.mesh.VLMMesh()

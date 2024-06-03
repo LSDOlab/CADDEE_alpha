@@ -96,4 +96,4 @@ def import_mesh(file, component:lg.Geometry, rescale:list=[1,1,1], remove_dupes=
         ma_nodes_parametric = component.project(nodes, grid_search_density_parameter=grid_search_n, plot=plot)
         ma_nodes = component.evaluate(ma_nodes_parametric)
 
-    return ma_nodes, connectivity
+    return ma_nodes, ma_nodes_parametric, connectivity

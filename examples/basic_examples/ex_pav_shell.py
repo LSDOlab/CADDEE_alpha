@@ -5,6 +5,9 @@ import numpy as np
 import lsdo_function_spaces as fs
 import lsdo_geo as lg
 
+# fs.num_workers = 1     # uncommont this if projections break
+plot=False
+
 recorder = csdl.Recorder(inline=True)
 recorder.start()
 
@@ -21,13 +24,29 @@ def define_base_config(caddee: cd.CADDEE):
     # aircraft.quantities.mass_properties.cg_vector = np.array([-1, 1., -1])
 
     # wing
+    # TODO: get rid of non-rib rib stuff in the original geometry maybe
     wing_geometry = aircraft.create_subgeometry(search_names=["Wing"])
     
-
     wing = cd.aircraft.components.Wing(
         AR=7, S_ref=15, geometry=wing_geometry, tight_fit_ffd=False,
     )
     # wing.plot()
+
+    # wing material
+    aluminum = cd.materials.IsotropicMaterial(name='aluminum', E=69E9, G=26E9, density=2700, nu=0.33)
+    thickness_space = wing_geometry.create_parallel_space(fs.ConstantSpace(2))
+    thickness_var, thickness_function = thickness_space.initialize_function(1, value=0.1)
+    wing.quantities.material_properties.set_material(aluminum, thickness_function)
+
+    # wing state spaces
+    force_space = fs.IDWFunctionSpace(num_parametric_dimensions=2, grid_size=4, order=2, conserve=True)
+    wing.quantities.force_space = wing_geometry.create_parallel_space(force_space)
+
+    pressure_space = fs.BSplineSpace(2, (5,5), (7,7))
+    wing.quantities.pressure_space = wing_geometry.create_parallel_space(pressure_space)
+
+    displacement_space = fs.BSplineSpace(2, (1,1), (3,3))
+    wing.quantities.displacement_space = wing_geometry.create_parallel_space(displacement_space)
 
 
     aircraft.comps["wing"] = wing
@@ -41,6 +60,15 @@ def define_base_config(caddee: cd.CADDEE):
     )
     # pav_geometry.plot_meshes(wing_camber_surface.nodal_coordinates.value)
 
+    wing_shell_discritization = cd.mesh.import_shell_mesh(
+        'pav_wing_6rib_caddee_mesh_2374_quad.xdmf', 
+        wing,
+        plot=plot,
+        rescale=[-1,1,-1]
+    )
+
+    pav_shell_mesh = cd.mesh.ShellMesh()
+    pav_shell_mesh.discretizations['wing'] = wing_shell_discritization
 
     # tail
     tail_geometry = aircraft.create_subgeometry(search_names=["Stabilizer"])
@@ -65,8 +93,8 @@ def define_base_config(caddee: cd.CADDEE):
     base_config = cd.Configuration(aircraft)
     mesh_container = base_config.mesh_container
     mesh_container["vlm_mesh"] = pav_vlm_mesh
+    mesh_container["shell_mesh"] = pav_shell_mesh
     caddee.base_configuration = base_config
-
 
 def define_conditions(caddee: cd.CADDEE):
     conditions = caddee.conditions
@@ -83,7 +111,6 @@ def define_conditions(caddee: cd.CADDEE):
     conditions["cruise"] = cruise
     return pitch_angle
 
-
 def define_analysis(caddee: cd.CADDEE, pitch_angle=None):
     cruise = caddee.conditions["cruise"]
     cruise_config = cruise.configuration
@@ -91,11 +118,15 @@ def define_analysis(caddee: cd.CADDEE, pitch_angle=None):
     
     aircraft = cruise_config.system
     tail = aircraft.comps["tail"]
+    wing = aircraft.comps["wing"]
     elevator = csdl.ImplicitVariable(shape=(1, ), value=0.)
     tail.actuate(elevator)
 
-
     cruise.finalize_meshes()
+
+    # prep transfer mesh for wing (SIFR)
+    transfer_mesh_para = wing.geometry.generate_parametric_grid((20, 20))
+    transfer_mesh_phys = wing.geometry.evaluate(transfer_mesh_para)
 
     # VLM analysis
     vlm_mesh = mesh_container["vlm_mesh"]
@@ -108,7 +139,36 @@ def define_analysis(caddee: cd.CADDEE, pitch_angle=None):
 
     vlm_outputs = vlm_solver(camber_surface_coordinates, camber_surface_nodal_velocities, alpha_ML=None)
 
+    # VLM to framework (SIFR)
+    areas = vlm_outputs.surface_panel_areas[0]
+    forces = vlm_outputs.surface_panel_forces[0]
+    pressures = csdl.reshape(csdl.norm(forces, axes=(3,)) / areas, (np.prod(forces.shape[0:-1]), 1))
+    forces = csdl.reshape(forces, (np.prod(forces.shape[0:-1]), 3))
+    camber_force_points = vlm_outputs.surface_panel_force_points[0].value.reshape(-1,3)
+    split_fp = np.vstack((camber_force_points + np.array([0, 0, -1]), camber_force_points + np.array([0, 0, 1])))
 
+    oml_fp_para = wing.geometry.project(split_fp, plot=plot)
+    force_function = wing.quantities.force_space.fit_function_set(csdl.blockmat([[forces/2], [forces/2]]), oml_fp_para)
+    wing.quantities.force_function = force_function
+    pressure_function = wing.quantities.pressure_space.fit_function_set(csdl.blockmat([[pressures/2], [pressures/2]]), 
+                                                                        oml_fp_para, regularization_parameter=1)
+
+
+    # framework to shell (SIFR)
+    pav_shell_mesh = mesh_container["shell_mesh"]
+    wing_shell_mesh = pav_shell_mesh.discretizations['wing']
+    nodes = wing_shell_mesh.nodal_coordinates
+    nodes_parametric = wing_shell_mesh.nodes_parametric
+    conenectivity = wing_shell_mesh.connectivity
+    shell_forces = force_function.evaluate(nodes_parametric)
+
+    # gather material info
+    # TODO: make an evaluate that spits out a list of material and a variable for thickness (for varying mat props)
+    #       This works fine for a single material
+    material = wing.quantities.material_properties.material
+    thickness = wing.quantities.material_properties.evaluate_thickness(nodes_parametric)
+
+    # (Insert shell analysis here)
 
 def construct_internal_geometry():
     aircraft = cd.aircraft.components.Aircraft(geometry=pav_geometry)
@@ -221,18 +281,10 @@ def construct_internal_geometry():
     # pav_geometry.plot(opacity=0.3)
 
 
-    
 construct_internal_geometry()
 
-
 define_base_config(caddee)
-cd.mesh_utils.import_mesh('pav_wing_6rib_caddee_mesh_2374_quad.xdmf', 
-                          caddee.base_configuration.system.comps['wing'].geometry,
-                          plot=True,
-                          rescale=[-1,1,-1])
-
 
 pitch_angle = define_conditions(caddee)
-
 
 define_analysis(caddee, pitch_angle)

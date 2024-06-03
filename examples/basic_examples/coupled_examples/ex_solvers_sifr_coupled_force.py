@@ -9,9 +9,6 @@ import lsdo_function_spaces as fs
 import aeroelastic_coupling_utils as acu
 from ex_utils import plot_vlm
 
-# NOTE: wip
-
-
 plot = False
 
 recorder = csdl.Recorder(inline=True)
