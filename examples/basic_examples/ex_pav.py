@@ -18,8 +18,8 @@ pav_geometry = cd.import_geometry('pav.stp')
 def define_base_config(caddee: cd.CADDEE):
     aircraft = cd.aircraft.components.Aircraft(geometry=pav_geometry)
 
-    aircraft.quantities.mass_properties.mass = 800
-    aircraft.quantities.mass_properties.cg_vector = np.array([-3., 0., -0.5])
+    # aircraft.quantities.mass_properties.mass = 815
+    # aircraft.quantities.mass_properties.cg_vector = np.array([-1, 1., -1])
 
     # wing
     wing_geometry = aircraft.create_subgeometry(search_names=["Wing"])
@@ -27,6 +27,9 @@ def define_base_config(caddee: cd.CADDEE):
         AR=7, S_ref=15, geometry=wing_geometry, tight_fit_ffd=False,
     )
     aircraft.comps["wing"] = wing
+
+    wing.quantities.mass_properties.mass = 250
+    wing.quantities.mass_properties.cg_vector = np.array([-3, 0., -1])
 
     pav_vlm_mesh = cd.mesh.VLMMesh()
     wing_camber_surface = cd.mesh.make_vlm_surface(
@@ -38,7 +41,7 @@ def define_base_config(caddee: cd.CADDEE):
     # tail
     tail_geometry = aircraft.create_subgeometry(search_names=["Stabilizer"])
     tail = cd.aircraft.components.Wing(
-        AR=5, S_ref=2, geometry=tail_geometry, tight_fit_ffd=True,
+        AR=5, S_ref=2, geometry=tail_geometry, tight_fit_ffd=False,
     )
     aircraft.comps["tail"] = tail
 
@@ -47,6 +50,9 @@ def define_base_config(caddee: cd.CADDEE):
     )
     # pav_geometry.plot_meshes(tail_camber_surface.nodal_coordinates.value)
 
+    tail.quantities.mass_properties.mass = 250
+    tail.quantities.mass_properties.cg_vector = np.array([-3, 0., -0])
+
     pav_vlm_mesh.discretizations["wing_camber_surface"] = wing_camber_surface
     pav_vlm_mesh.discretizations["tail_camber_surface"] = tail_camber_surface
 
@@ -54,6 +60,7 @@ def define_base_config(caddee: cd.CADDEE):
     # pusher prop
     pusher_prop_geom = aircraft.create_subgeometry(search_names=["PropPusher"])
     pusher_prop = cd.aircraft.components.Rotor(radius=0.8, geometry=pusher_prop_geom)
+
 
     aircraft.comps["pusher_prop"] = pusher_prop
 
@@ -79,7 +86,7 @@ def define_conditions(caddee: cd.CADDEE):
     conditions = caddee.conditions
     base_config = caddee.base_configuration
 
-    pitch_angle = csdl.ImplicitVariable(shape=(1, ), value=np.deg2rad(3.))
+    pitch_angle = csdl.ImplicitVariable(shape=(1, ), value=np.deg2rad(2.))
     cruise = cd.aircraft.conditions.CruiseCondition(
         altitude=1e3,
         range=60e3,
@@ -134,7 +141,36 @@ def define_analysis(caddee: cd.CADDEE):
         aero_propulsive_moments=[bem_outputs.moments, vlm_outputs.total_moment],
     )
 
-    print(total_forces, total_moments)
+    cruise_config.assemble_system_mass_properties()
+    ac_mps = aircraft.quantities.mass_properties
+
+    eom_model = cd.aircraft.models.eom.SixDofEulerFlatEarthModel()
+
+    print(total_forces.value)
+    print(total_moments.value)
+
+    # ang_to_lin_accel = csdl.cross( total_moments
+
+    acceleartions = eom_model.evaluate(
+        total_forces, total_moments,
+        cruise.quantities.ac_states, ac_mps
+    )
+
+    print(acceleartions.accel_norm.value)
+    print(acceleartions.du_dt.value)
+    print(acceleartions.dv_dt.value)
+    print(acceleartions.dw_dt.value)
+    # print(total_forces.value)
+    # print(total_moments.value)
+
+    # z_force = total_forces[0, 2]
+
+    # solver = csdl.nonlinear_solvers.BracketedSearch(max_iter=30)
+    # solver.add_state(pitch_angle, z_force, bracket=(np.deg2rad(-20), np.deg2rad(20)))
+    # solver.run()
+
+    # print(pitch_angle.value * 180/np.pi)
+
 
 
     

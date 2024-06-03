@@ -95,11 +95,11 @@ class SixDofEulerFlatEarthModel:
         mp_matrix = mp_matrix.set(csdl.slice[1, 1], m)
         mp_matrix = mp_matrix.set(csdl.slice[1, 3], -m * Rbcz)
         mp_matrix = mp_matrix.set(csdl.slice[1, 5], m * Rbcx)
-        
+
         mp_matrix = mp_matrix.set(csdl.slice[2, 2], m)
         mp_matrix = mp_matrix.set(csdl.slice[2, 3], m * Rbcy)
         mp_matrix = mp_matrix.set(csdl.slice[2, 4], -m * Rbcx)
-        
+
         mp_matrix = mp_matrix.set(csdl.slice[3, 1], -m * Rbcz)
         mp_matrix = mp_matrix.set(csdl.slice[3, 2], m * Rbcy)
         mp_matrix = mp_matrix.set(csdl.slice[3, 3], Ixx)
@@ -189,6 +189,8 @@ class SixDofEulerFlatEarthModel:
         state = csdl.ImplicitVariable(shape=(6, self.num_nodes), value=0.)
         residual = mp_matrix @ state - rhs.T()
 
+        # Using a newton solver to solve linear system instead of looping
+        # over num_nodes
         solver = csdl.nonlinear_solvers.Newton(tolerance=1e-12)
         solver.add_state(state, residual)
         solver.run()
@@ -216,11 +218,11 @@ class SixDofEulerFlatEarthModel:
 if __name__ == "__main__":
     recorder = csdl.Recorder(inline=True)
     recorder.start()
-    num_nodes = 3
-    total_forces= csdl.Variable(shape=(num_nodes, 3), value=10.) 
-    total_moments= csdl.Variable(shape=(num_nodes, 3), value=2)
+    num_nodes = 5
+    total_forces= csdl.Variable(shape=(num_nodes, 3), value=100.) 
+    total_moments= csdl.Variable(shape=(num_nodes, 3), value=20)
     ac_states= AircaftStates(
-        u=csdl.Variable(shape=(num_nodes, ), value=10),
+        u=csdl.Variable(shape=(num_nodes, ), value=0),
         v=csdl.Variable(shape=(num_nodes, ), value=0),
         w=csdl.Variable(shape=(num_nodes, ), value=5),
         p=csdl.Variable(shape=(num_nodes, ), value=0),
@@ -234,12 +236,12 @@ if __name__ == "__main__":
         z=csdl.Variable(shape=(num_nodes, ), value=0),
     )
     ac_mass_properties= MassProperties(
-        mass=csdl.Variable(shape=(1, ), value=100.),
-        cg_vector=csdl.Variable(shape=(3, ), value=np.array([-4., 0., -2])),
+        mass=csdl.Variable(shape=(1, ), value=7126.1992),
+        cg_vector=csdl.Variable(shape=(3, ), value=np.array([12.57675332, 0., 7.084392152])),
         inertia_tensor=csdl.Variable(shape=(3, 3), value=np.array([
-            [10., 5, 0],
-            [5., 5, 5],
-            [0., 5, 9],
+            [4376.344208, 0, 213.8989507],
+            [0., 2174.842852, 0],
+            [213.8989507, 0, 6157.83761],
         ])
     ))
 

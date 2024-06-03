@@ -1,16 +1,8 @@
 import csdl_alpha as csdl
 from typing import Union
 import numpy as np
-from dataclasses import dataclass
+from CADDEE_alpha.utils.var_groups import AtmosphericStates
 
-
-@dataclass
-class AtmosphericStates(csdl.VariableGroup):
-    density : Union[float, int, csdl.Variable] = 1.225
-    speed_of_sound : Union[float, int, csdl.Variable] = 343
-    temperature : Union[float, int, csdl.Variable] =  288.16
-    pressure : Union[float, int, csdl.Variable] = 101325
-    dynamic_viscosity : Union[float, int, csdl.Variable] = 1.735e-5
 
 class SimpleAtmosphereModel:
     """Model class for simple atmosphere model."""

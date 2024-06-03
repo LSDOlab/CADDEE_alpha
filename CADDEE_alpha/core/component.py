@@ -1,4 +1,4 @@
-from CADDEE_alpha.utils.var_groups import MassProperties
+from CADDEE_alpha.utils.var_groups import MassProperties, MaterialProperties
 from lsdo_geo import Geometry
 from lsdo_function_spaces import FunctionSet
 from CADDEE_alpha.utils.caddee_dict import CADDEEDict
@@ -6,7 +6,7 @@ from CADDEE_alpha.core.mesh.mesh import DiscretizationsDict
 from typing import Union, List
 import numpy as np
 from lsdo_geo.core.parameterization.free_form_deformation_functions import construct_ffd_block_around_entities
-import lsdo_geo.splines.b_splines as bsp
+import lsdo_function_spaces as lfs
 import csdl_alpha as csdl
 from dataclasses import dataclass
 
@@ -14,9 +14,28 @@ from dataclasses import dataclass
 @dataclass
 class ComponentQuantities:
     mass_properties : MassProperties = None
+    material_properties : MaterialProperties = None
+    surface_mesh: List[csdl.Variable] = None
     def __post_init__(self):
         self.mass_properties = MassProperties()
+        if self.material_properties is None:
+            self.material_properties = MaterialProperties(self)
+        self.surface_mesh = []
         self.surface_area = None
+        self.characteristic_length = None
+        self.form_factor = None
+        self.interference_factor = 1.1
+        self.cf_laminar_fun = compute_cf_laminar
+        self.cf_turbulent_fun = compute_cf_turbulent
+        self.percent_laminar = 20
+        self.percent_turbulent = 80
+
+def compute_cf_laminar(Re):
+    return 1.328 / Re**0.5
+
+def compute_cf_turbulent(Re, M):
+    Cf = 0.455 / (csdl.log(Re, 10)**2.58 * (1 + 0.144 * M**2)**0.65)
+    return Cf
 
 @dataclass
 class ComponentParameters:
@@ -39,11 +58,11 @@ class Component:
         - meshes
     """
     # Default function spaces for components 
-    _constant_b_spline_curve_1_dof_space = bsp.BSplineSpace(name='constant_b_spline_curve_1_dof_space', order=1, parametric_coefficients_shape=(1,))
-    _linear_b_spline_curve_2_dof_space = bsp.BSplineSpace(name='linear_b_spline_curve_2_dof_space', order=2, parametric_coefficients_shape=(2,))
-    _linear_b_spline_curve_3_dof_space = bsp.BSplineSpace(name='linear_b_spline_curve_3_dof_space', order=2, parametric_coefficients_shape=(3,))
-    _quadratic_b_spline_curve_3_dof_space = bsp.BSplineSpace(name='quadratic_b_spline_curve_3_dof_space', order=3, parametric_coefficients_shape=(3,))
-    _cubic_b_spline_curve_5_dof_space = bsp.BSplineSpace(name='cubic_b_spline_curve_5_dof_space', order=4, parametric_coefficients_shape=(5,))
+    _constant_b_spline_1_dof_space = lfs.BSplineSpace(num_parametric_dimensions=1, degree=0, coefficients_shape=(1,))
+    _linear_b_spline_2_dof_space = lfs.BSplineSpace(num_parametric_dimensions=1, degree=1, coefficients_shape=(2,))
+    _linear_b_spline_3_dof_space = lfs.BSplineSpace(num_parametric_dimensions=1, degree=1, coefficients_shape=(3,))
+    _quadratic_b_spline_3_dof_space = lfs.BSplineSpace(num_parametric_dimensions=1, degree=2, coefficients_shape=(3,))
+    _cubic_b_spline_5_dof_space = lfs.BSplineSpace(num_parametric_dimensions=1, degree=3, coefficients_shape=(5,))
     
     # Instance counter for naming components under the hood
     _instance_count = 0
@@ -52,6 +71,7 @@ class Component:
     _is_copy = False
 
     parent = None
+
     def __init__(self, geometry : Union[FunctionSet, None]=None, 
                  **kwargs) -> None: 
         csdl.check_parameter(geometry, "geometry", types=(FunctionSet), allow_none=True)
@@ -109,7 +129,7 @@ class Component:
         raise NotImplementedError(f"'actuate' has not been implemented for component of type {type(self)}")
 
 
-    def _make_ffd_block(self, entities : List[bsp.BSpline], 
+    def _make_ffd_block(self, entities, 
                         num_coefficients : tuple=(2, 2, 2), 
                         order: tuple=(1, 1, 1), 
                         num_physical_dimensions : int=3):
@@ -207,19 +227,22 @@ class Component:
         surfaces = geometry.functions
         surface_area = csdl.Variable(shape=(1, ), value=1)
 
+        surface_mesh = self.quantities.surface_mesh
+
         for i in surfaces.keys():
             oml_para_mesh = []
             for u in np.linspace(0, 1, parametric_mesh_grid_num):
                 for v in np.linspace(0, 1, parametric_mesh_grid_num):
                     oml_para_mesh.append((i, np.array([u,v]).reshape((1,2))))
             
-            coords_m3l_vec = geometry.evaluate(oml_para_mesh).reshape((parametric_mesh_grid_num, parametric_mesh_grid_num, 3))
+            coords_vec = geometry.evaluate(oml_para_mesh).reshape((parametric_mesh_grid_num, parametric_mesh_grid_num, 3))
+            surface_mesh.append(coords_vec)
             
-            coords_u_end = coords_m3l_vec[1:, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))
-            coords_u_start = coords_m3l_vec[:-1, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))
+            coords_u_end = coords_vec[1:, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))
+            coords_u_start = coords_vec[:-1, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))
 
-            coords_v_end = coords_m3l_vec[:, 1:, :].reshape((parametric_mesh_grid_num, parametric_mesh_grid_num-1, 3))
-            coords_v_start = coords_m3l_vec[:, :-1, :].reshape((parametric_mesh_grid_num, parametric_mesh_grid_num-1, 3))
+            coords_v_end = coords_vec[:, 1:, :].reshape((parametric_mesh_grid_num, parametric_mesh_grid_num-1, 3))
+            coords_v_start = coords_vec[:, :-1, :].reshape((parametric_mesh_grid_num, parametric_mesh_grid_num-1, 3))
 
             u_vectors = coords_u_end - coords_u_start
             u_vectors_start = u_vectors # .reshape((-1, ))

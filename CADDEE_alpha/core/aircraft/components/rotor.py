@@ -4,6 +4,7 @@ import numpy as np
 from dataclasses import dataclass
 import csdl_alpha as csdl
 from typing import Union
+from lsdo_function_spaces import FunctionSet
 
 
 @dataclass

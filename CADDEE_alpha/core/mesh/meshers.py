@@ -5,6 +5,8 @@ from lsdo_function_spaces import FunctionSet
 from typing import Union
 from dataclasses import dataclass
 from CADDEE_alpha.utils.caddee_dict import CADDEEDict
+from CADDEE_alpha.utils.mesh_utils import import_mesh
+import lsdo_function_spaces as fs
 
 
 def cosine_spacing(num_pts, spanwise_points=None, chord_surface=None, num_chordwise=None, flip=False):
@@ -487,7 +489,8 @@ def make_1d_box_beam(
         cannot be greater than 1 and should usually not be greater than 0.5, by default 0.5
     
     spacing : str, optional
-        set spacing for the beam nodes, by default "linear"
+        set spacing for the beam nodes - "linear" and "cosine" are allowed
+        where "cosine" skews the nodes toward the wing tip, by default "linear"
     
     plot : bool, optional
         plot the projections, by default False
@@ -587,11 +590,36 @@ def make_1d_box_beam(
     beam_height_nodal = make_mesh_symmetric(beam_height_raw, num_beam_nodes, spanwise_index=None)
     beam_height = (beam_height_nodal[0:-1] + beam_height_nodal[1:]) / 2
 
+    # Compute top and bottom thicknesses of the beam
+    material_properties = wing_comp.quantities.material_properties
+    num_chordwise = 10
+    num_spanwise = 10
+    beam_width_offset = np.zeros((num_beam_nodes-1, 3))
+    beam_width_offset[:, 0] = beam_width.value
+    node_grid = np.zeros((num_beam_nodes-1, num_chordwise*num_spanwise, 3))
+    for i in range(num_beam_nodes-1):
+        spanwise = np.linspace(beam_nodes.value[i,:], beam_nodes.value[i+1,:], num_spanwise)
+        grid = np.linspace(spanwise+beam_width_offset[i]/2, spanwise-beam_width_offset[i]/2, num_chordwise).reshape(-1,3)
+        node_grid[i,:,:] = grid
+    node_grid = node_grid.reshape(-1,3)
+    top_grid = wing_geometry.project(node_grid + offset, direction=np.array([0., 0., -1]), plot=plot)
+    bottom_grid = wing_geometry.project(node_grid - offset, direction=np.array([0., 0., 1]), plot=plot)
+    top_thickness_grid = material_properties.evaluate_thickness(top_grid).reshape((num_beam_nodes-1, num_chordwise*num_spanwise, 1))
+    bottom_thickness_grid = material_properties.evaluate_thickness(bottom_grid).reshape((num_beam_nodes-1, num_chordwise*num_spanwise, 1))
+
+    top_thickness = csdl.Variable(shape=(num_beam_nodes-1,), value=0.)
+    bottom_thickness = csdl.Variable(shape=(num_beam_nodes-1,), value=0.)
+    for i in csdl.frange(num_beam_nodes-1):
+        top_thickness = top_thickness.set(csdl.slice[i], csdl.average(top_thickness_grid[i,:,:]))
+        bottom_thickness = bottom_thickness.set(csdl.slice[i], csdl.average(bottom_thickness_grid[i,:,:]))
+
     beam_mesh = OneDBoxBeam(
         nodal_coordinates=beam_nodes,
         beam_height=beam_height,
         beam_width=beam_width,
         num_beam_nodes=num_beam_nodes,
+        top_skin_thickness=top_thickness,
+        bottom_skin_thickness=bottom_thickness,
     )
 
     wing_comp._discretizations[f"{wing_comp._name}_1d_beam_mesh"] = beam_mesh
@@ -753,4 +781,39 @@ def make_rotor_mesh(
     rotor_comp._discretizations[f"{rotor_comp._name}_rotor_mesh_parameters"] = rotor_mesh_parameters
 
     return rotor_mesh_parameters
+
+@dataclass
+class ShellDiscretization(Discretization):
+    geometry:csdl.Variable=None
+    connectivity:csdl.Variable=None
+    nodes_parametric:csdl.Variable=None
+
+    def _update(self):
+        self.nodes = self.geometry.evaluate(self.nodes_parametric)
+        return self
+        
+def import_shell_mesh(file_name:str, 
+                      component:'Component',
+                      plot=False,
+                      rescale=[1,1,1],
+                      grid_search_n = 1):
+    """
+    Create a shell mesh for a component using a mesh file
+    """
+    geometry = component.geometry
+    nodes, nodes_parametric, connectivity = import_mesh(file_name, 
+                                                        geometry, 
+                                                        rescale=rescale, 
+                                                        plot=plot,
+                                                        grid_search_n=grid_search_n)
+    shell_mesh = ShellDiscretization(nodal_coordinates=nodes, 
+                                     connectivity=connectivity,
+                                     nodes_parametric=nodes_parametric,
+                                     geometry=geometry)
+    return shell_mesh
+
+class ShellMesh(SolverMesh):
+    def __init__(self):
+        self.discretizations = DiscretizationsDict()
+        
         
