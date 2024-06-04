@@ -1,16 +1,16 @@
+# NOTE: file is WIP
 import CADDEE_alpha as cd
 import csdl_alpha as csdl
 import aframe as af
 import numpy as np
-import time
 from VortexAD.core.vlm.vlm_solver import vlm_solver
-import matplotlib.pyplot as plt
 import lsdo_function_spaces as fs
 import aeroelastic_coupling_utils as acu
 from ex_utils import plot_vlm
 
-# NOTE: wip
 
+# NOTE: for Windows, parallization does not work (need num_workers=1)
+fs.num_workers = 1
 
 plot = False
 
@@ -21,6 +21,7 @@ caddee = cd.CADDEE()
 
 # Import and plot the geometry
 c_172_geometry = cd.import_geometry('pseudo_c172_cambered.stp', scale=cd.Units.length.foot_to_m)
+# c_172_geometry.plot()
 
 def define_base_config(caddee : cd.CADDEE):
     """Build the base configuration."""
@@ -32,7 +33,7 @@ def define_base_config(caddee : cd.CADDEE):
 
     # Fuselage
     fuselage_geometry = aircraft.create_subgeometry(search_names=["Fuselage"])
-    fuselage = cd.aircraft.components.Fuselage(length=None, max_width=None, max_height=None, 
+    fuselage = cd.aircraft.components.Fuselage(length=8, max_width=0.9, max_height=0.8, 
                                                cabin_depth=None, geometry=fuselage_geometry)
     
     # c_172_geometry.plot_meshes(fuselage.quantities.surface_mesh)
@@ -40,17 +41,16 @@ def define_base_config(caddee : cd.CADDEE):
     airframe.comps["fuselage"] = fuselage
 
     # wing comp
-    wing_geometry = aircraft.create_subgeometry(search_names=["Wing"]) #, 0, 2", 
-                                                            # "Wing, 0, 3",
-                                                            # "Wing, 1, 8",
-                                                            # "Wing, 1, 9"])
-    wing = cd.aircraft.components.Wing(AR=7.43, S_ref=15, sweep=np.deg2rad(-10), dihedral=np.deg2rad(-10), 
+    wing_geometry = aircraft.create_subgeometry(search_names=["Wing, 0, 2", 
+                                                            "Wing, 0, 3",
+                                                            "Wing, 1, 8",
+                                                            "Wing, 1, 9"])
+    wing = cd.aircraft.components.Wing(AR=8.5, S_ref=19.5, sweep=np.deg2rad(10), dihedral=np.deg2rad(10), 
                                        taper_ratio=0.75, geometry=wing_geometry, tight_fit_ffd=False)
 
     # wing material info
     aluminum = cd.materials.IsotropicMaterial(name='aluminum', E=69E9, G=26E9, density=2700, nu=0.33)
     # aluminum.export_xml('materials/Al_6061-T6.xml')
-    # exit()
 
     # aluminum = cd.materials.import_material('materials/Al_6061-T6.xml')
     thickness_space = wing_geometry.create_parallel_space(fs.ConstantSpace(2))
@@ -61,20 +61,18 @@ def define_base_config(caddee : cd.CADDEE):
     # wing function spaces
     force_space = fs.IDWFunctionSpace(num_parametric_dimensions=2, grid_size=4, order=2, conserve=True)
     wing.quantities.force_space = wing_geometry.create_parallel_space(force_space)
-    wing.quantities.force_single_space = force_space
 
     pressure_space = fs.BSplineSpace(2, (5,5), (7,7))
     wing.quantities.pressure_space = wing_geometry.create_parallel_space(pressure_space)
 
     displacement_space = fs.BSplineSpace(2, (1,1), (3,3))
     wing.quantities.displacement_space = wing_geometry.create_parallel_space(displacement_space)
-    wing.quantities.displacement_single_space = displacement_space
 
     # wing camber surface
     vlm_mesh = cd.mesh.VLMMesh()
     wing_camber_surface = cd.mesh.make_vlm_surface(
         wing, 30, 20, plot=plot, spacing_spanwise='linear', 
-        spacing_chordwise='linear', grid_search_density=20
+        spacing_chordwise='linear', grid_search_density=5, ignore_camber=True,
     )
     vlm_mesh.discretizations["wing_camber_surface"] = wing_camber_surface
     # c_172_geometry.plot_meshes(wing_camber_surface.nodal_coordinates)
@@ -84,7 +82,7 @@ def define_base_config(caddee : cd.CADDEE):
     num_beam_nodes = 15
     wing_box_beam = cd.mesh.make_1d_box_beam(wing, num_beam_nodes, 0.5, plot=plot)
     beam_mesh.discretizations["wing_box_beam"] = wing_box_beam
-    # manually set shear web thickness because we don't have internal structure geometry
+    # manually set shear web thickness because we don't have internal structure geometry (for spars)
     wing_box_beam.shear_web_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * 0.1)
 
     # add wing to airframe
@@ -100,7 +98,7 @@ def define_base_config(caddee : cd.CADDEE):
 
     # tail camber surface
     tail_camber_surface = cd.mesh.make_vlm_surface(
-        h_tail, 10, 8, plot=plot
+        h_tail, 10, 4, ignore_camber=True, plot=plot,
     )
     vlm_mesh.discretizations["tail_camber_surface"] = tail_camber_surface
     # c_172_geometry.plot_meshes(tail_camber_surface.nodal_coordinates)
@@ -153,6 +151,7 @@ def define_conditions(caddee: cd.CADDEE):
         altitude=3e3,
         range=60e3,
         mach_number=np.array([0.2]),
+        pitch_angle=np.deg2rad(2),
     )
     cruise.configuration = base_config
     conditions["cruise"] = cruise
@@ -163,6 +162,7 @@ def define_analysis(caddee: cd.CADDEE):
     mesh_container = cruise_config.mesh_container
     wing = cruise_config.system.comps['airframe'].comps['wing']
     
+    # Re-evaluate meshes and compute nodal velocities
     cruise.finalize_meshes()
 
     force_space = wing.quantities.force_space
@@ -299,16 +299,11 @@ def define_analysis(caddee: cd.CADDEE):
     print('deformed cg: ', dcg.value)
 
 
-
-ts = time.time()
 define_base_config(caddee)
 
-# exit()
 define_conditions(caddee)
 
 define_analysis(caddee)
-tf = time.time()
-print("total time", tf-ts)
 
 # This takes some time
 # recorder.visualize_graph('coupled_sifr')
