@@ -8,6 +8,7 @@ from lsdo_geo.core.parameterization.volume_sectional_parameterization import (
 import csdl_alpha as csdl
 import numpy as np
 from dataclasses import dataclass
+import lsdo_geo as lg
 
 
 @dataclass
@@ -462,4 +463,129 @@ class Wing(Component):
         
         return 
         
+    def construct_ribs_and_spars(self, geometry:lg.Geometry, 
+                             num_ribs:int=None, spar_locations:np.ndarray=None, 
+                             rib_locations:np.ndarray=None, surf_index:int=1000, 
+                             offset:np.ndarray=np.array([0., 0., .23]), 
+                             num_rib_pts:int=20, plot_projections:bool=False,
+                             spar_function_space:lfs.FunctionSpace=None,
+                             rib_function_space:lfs.FunctionSpace=None):
+        """
+        Construct ribs and spars for the given wing geometry.
+
+        Parameters
+        ----------
+        geometry : lg.Geometry
+            The geometry object to which the ribs and spars will be added.
+        num_ribs : int, optional
+            The number of ribs to be constructed. If not provided, it will be determined based on the rib_locations array.
+        spar_locations : np.ndarray, optional
+            The locations of the spars along the wing span. If not provided, default values of [0.25, 0.75] will be used.
+        rib_locations : np.ndarray, optional
+            The locations of the ribs along the wing span. If not provided, evenly spaced values between 0 and 1 will be used.
+        surf_index : int, optional
+            The starting index for the surface functions in the geometry object. Default value is 1000.
+        offset : np.ndarray, optional
+            The offset vector to be applied for projection. Default value is [0., 0., .23].
+        num_rib_pts : int, optional
+            The number of interpolation points to be used for each rib. Default value is 20.
+        plot_projections : bool, optional
+            Whether to plot the projection results. Default value is False.
+        spar_function_space : fs.FunctionSpace, optional
+            The function space to be used for the spars. Defaults to a linear BSplineSpace.
+        rib_function_space : fs.FunctionSpace, optional
+            The function space to be used for the ribs. Defaults to a linear BSplineSpace.
+        """
+
+        # TODO: reconstruct wing with ribs and spars (eg, reconstruct the ffd block?)
+        #       right now it just adds the ribs and spars to the geometry object, not the wing component (self)
+
+        # TODO: add interpolation for spars (between ribs)
+        # TODO: add surface panel creation for water-tightness
+        # TODO: add export for meshing
+        # TODO: add option to extend ribs to the root and tip
+        
+        wing = self
+
+        if spar_locations is None:
+            spar_locations = np.array([0.25, 0.75])
+        if rib_locations is None:
+            rib_locations = np.linspace(0, 1, num_ribs)
+        if num_ribs is None:
+            num_ribs = rib_locations.shape[0]
+        num_spars = spar_locations.shape[0]
+        if spar_function_space is None:
+            spar_function_space = lfs.BSplineSpace(2, 1, (num_ribs, 2))
+        if rib_function_space is None:
+            rib_function_space = lfs.BSplineSpace(2, 1, (num_rib_pts*(num_spars-1)+1, 2))
+
+        # gather important points (right only)
+        root_te = wing.geometry.evaluate(wing._TE_mid_point).value
+        root_le = wing.geometry.evaluate(wing._LE_mid_point).value
+        r_tip_te = wing.geometry.evaluate(wing._TE_right_point).value
+        r_tip_le = wing.geometry.evaluate(wing._LE_right_point).value
+
+        # get spar start/end points (root and tip)
+        root_tip_pts = np.zeros((num_spars, 2, 3))
+        for i in range(num_spars):
+            root_tip_pts[i,0] = (1-spar_locations[i]) * root_le + spar_locations[i] * root_te
+            root_tip_pts[i,1] = (1-spar_locations[i]) * r_tip_le + spar_locations[i] * r_tip_te
+
+        # get intersections between ribs and spars
+        # we'll use these points directly to make the spars
+        # TODO: vectorize across spars?
+        spar_projection_points = np.zeros((num_spars, num_ribs, 3))
+        for i in range(num_spars):
+            for j in range(num_ribs):
+                spar_projection_points[i,j] = root_tip_pts[i,0] * (1-rib_locations[j]) + root_tip_pts[i,1] * rib_locations[j]
+            
+        # make projection points for ribs
+        # TODO: vectorize across ribs?
+        rib_projection_points = np.zeros((num_ribs, num_rib_pts*(num_spars-1)+1, 3))
+        for i in range(num_ribs):
+            rib_projection_points[i,0] = spar_projection_points[0,i]
+            for j in range(num_spars-1):
+                rib_projection_points[i,j*num_rib_pts+1:(j+1)*num_rib_pts+1] = np.linspace(spar_projection_points[j,i], spar_projection_points[j+1,i], num_rib_pts+1)[1:]
+
+        direction = np.array([0., 0., 1.])
+        ribs_top = wing.geometry.project(rib_projection_points+offset, direction=-direction, grid_search_density_parameter=10, plot=plot_projections)
+        ribs_bottom = wing.geometry.project(rib_projection_points-offset, direction=direction, grid_search_density_parameter=10, plot=plot_projections)
+        ribs_top_array = np.array(ribs_top, dtype='O,O').reshape((num_ribs, num_rib_pts*(num_spars-1)+1))   # it's easier to keep track of this way
+        ribs_bottom_array = np.array(ribs_bottom, dtype='O,O').reshape((num_ribs, num_rib_pts*(num_spars-1)+1))
+
+        # create spars
+        coeff_flip = np.eye(3)
+        coeff_flip[1,1] = -1
+        for i in range(num_spars):
+            parametric_points = ribs_top_array[:,i*num_rib_pts].tolist() + ribs_bottom_array[:,i*num_rib_pts].tolist()
+            fitting_values = wing.geometry.evaluate(parametric_points).value    # TODO: .value or no .value? - at least convert to the coefficients thing
+            u_coords = np.linspace(0, 1, num_ribs)
+            fitting_coords = np.array([[u, 0] for u in u_coords] + [[u, 1] for u in u_coords])
+            spar_coeffs = spar_function_space.fit(fitting_values, fitting_coords)
+            spar = lfs.Function(spar_function_space, spar_coeffs)
+            right_spar_coeffs = spar_coeffs @ coeff_flip
+            right_spar = lfs.Function(spar_function_space, right_spar_coeffs)
+            geometry.functions[surf_index] = spar
+            geometry.function_names[surf_index] = "Wing_l_spar_"+str(i)
+            surf_index += 1
+            geometry.functions[surf_index] = right_spar
+            geometry.function_names[surf_index] = "Wing_r_spar_"+str(i)
+            surf_index += 1
+
+        for i in range(num_ribs):
+            parameteric_points = ribs_top_array[i].tolist() + ribs_bottom_array[i].tolist()
+            fitting_values = wing.geometry.evaluate(parameteric_points).value
+            u_coords = np.linspace(0, 1, ribs_top_array.shape[1])
+            fitting_coords = np.array([[u, 0] for u in u_coords] + [[u, 1] for u in u_coords])
+            rib_coeffs = rib_function_space.fit(fitting_values, fitting_coords)
+            rib = lfs.Function(rib_function_space, rib_coeffs)
+            geometry.functions[surf_index] = rib
+            geometry.function_names[surf_index] = "Wing_rib_"+str(i)
+            surf_index += 1
+            if i > 0:
+                right_rib_coeffs = rib_coeffs @ coeff_flip
+                right_rib = lfs.Function(rib_function_space, right_rib_coeffs)
+                geometry.functions[surf_index] = right_rib
+                geometry.function_names[surf_index] = "Wing_rib_"+str(-i)
+                surf_index += 1
          

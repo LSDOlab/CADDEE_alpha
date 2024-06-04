@@ -50,6 +50,7 @@ setup(
         'setuptools',
         'wheel',
         'twine',
+        'meshio'
     ],
     classifiers=[
         'Programming Language :: Python',
