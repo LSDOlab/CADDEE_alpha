@@ -1,4 +1,4 @@
-from CADDEE_alpha.utils.var_groups import MassProperties, MaterialProperties
+from CADDEE_alpha.utils.var_groups import MassProperties, MaterialProperties, DragBuildUpQuantities
 from lsdo_geo import Geometry
 from lsdo_function_spaces import FunctionSet
 from CADDEE_alpha.utils.caddee_dict import CADDEEDict
@@ -15,20 +15,16 @@ from dataclasses import dataclass
 class ComponentQuantities:
     mass_properties : MassProperties = None
     material_properties : MaterialProperties = None
-    surface_mesh: List[csdl.Variable] = None
+    drag_parameters : DragBuildUpQuantities = None
     def __post_init__(self):
         self.mass_properties = MassProperties()
         if self.material_properties is None:
             self.material_properties = MaterialProperties(self)
         self.surface_mesh = []
         self.surface_area = None
-        self.characteristic_length = None
-        self.form_factor = None
-        self.interference_factor = 1.1
-        self.cf_laminar_fun = compute_cf_laminar
-        self.cf_turbulent_fun = compute_cf_turbulent
-        self.percent_laminar = 20
-        self.percent_turbulent = 80
+        self.drag_parameters = DragBuildUpQuantities()
+        self.drag_parameters.cf_laminar_fun = compute_cf_laminar
+        self.drag_parameters.cf_turbulent_fun = compute_cf_turbulent
 
 def compute_cf_laminar(Re):
     return 1.328 / Re**0.5
@@ -93,10 +89,7 @@ class Component:
 
         if geometry is not None and isinstance(geometry, FunctionSet):
             self.quantities.surface_area = self._compute_surface_area(geometry=geometry)
-
-        # if isinstance(geometry, FunctionSet):
-        #     system_component_geometry = self.create_subgeometry(search_names=[""])
-        #     self.geometry = system_component_geometry
+            self._ffd_block = self._make_ffd_block(self.geometry)
 
     
     def create_subgeometry(self, search_names : List[str]) -> FunctionSet:
@@ -186,29 +179,6 @@ class Component:
  
         return geometry
 
-    # list of things that need to happen (for FFD)
-    # Figure out copies
-    # Ex wing:
-    # - Make ffd block
-    #   
-    # - Do the parameterization
-    #   - Instantiation of parameterization obejct 
-    #       - Make parameterization solver object
-    #       - Make ffd block
-    #       - Sectional parameterization
-    #       - B-spline parameterization of the sectional parameters
-    #       - define parameters in terms of geometry
-    #   
-    #   - Evaluation of parameterion object
-    #       - evaluate parameterization solver
-    #       - evaluate b-splines
-    #       - evaluate sectional parameterization
-    #       - evaluate ffd blcok 
-    #   - Assign coefficient
-    # - Evaluate actuations NOTE: actuations have to happen before the quantities are re-evaluated
-    # - Evaluate geometric quantities (for us, dependent on type of component)
-    #   - Extract the max dimensions from block (for projections to make meshes also span etc)
-    #   
     def _setup_geometry(self, parameterization_solver, system_geometry, plot : bool=False):
         raise NotImplementedError(f"'_setup_geometry' has not been implemented for component {type(self)}")
 

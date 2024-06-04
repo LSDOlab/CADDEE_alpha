@@ -20,7 +20,9 @@ class WingParameters:
     incidence : Union[float, int, csdl.Variable]
     taper_ratio : Union[float, int, csdl.Variable]
     dihedral : Union[float, int, csdl.Variable]
-    thickness_to_chord : Union[float, int, csdl.Variable]
+    thickness_to_chord : Union[float, int, csdl.Variable] = 0.15
+    thickness_to_chord_loc : float = 0.3
+    MAC: Union[float, None] = None
     S_wet : Union[float, int, csdl.Variable, None]=None
 
 @dataclass
@@ -61,15 +63,13 @@ class Wing(Component):
     - quantities : dictionary for storing (solver) data (e.g., field data)
     """
     def __init__(self, 
-                 AR : Union[int, float, csdl.Variable], 
-                 S_ref : Union[int, float, csdl.Variable], 
-                 S_wet : Union[int, float, csdl.Variable] = None,
+                 AR : Union[int, float, csdl.Variable, None], 
+                 S_ref : Union[int, float, csdl.Variable, None],
                  span : Union[int, float, csdl.Variable, None] = None, 
                  dihedral : Union[int, float, csdl.Variable, None] = None, 
                  sweep : Union[int, float, csdl.Variable, None] = None, 
                  incidence : Union[int, float, csdl.Variable, None] = None, 
                  taper_ratio : Union[int, float, csdl.Variable, None] = None, 
-                 thickness_to_chord_ratio : Union[int, float, csdl.Variable, None] = None, 
                  geometry : Union[lfs.FunctionSet, None]=None,
                  optimize_wing_twist : bool=False,
                  tight_fit_ffd: bool = True,
@@ -78,20 +78,23 @@ class Wing(Component):
         
         # Do type checking 
         csdl.check_parameter(AR, "AR", types=(int, float, csdl.Variable), allow_none=True)
-        csdl.check_parameter(S_ref, "S_ref", types=(int, float, csdl.Variable))
-        csdl.check_parameter(S_wet, "S_wet", types=(int, float, csdl.Variable), allow_none=True)
+        csdl.check_parameter(S_ref, "S_ref", types=(int, float, csdl.Variable), allow_none=True)
         csdl.check_parameter(span, "span", types=(int, float, csdl.Variable), allow_none=True)
         csdl.check_parameter(dihedral, "dihedral", types=(int, float, csdl.Variable), allow_none=True)
         csdl.check_parameter(sweep, "sweep", types=(int, float, csdl.Variable), allow_none=True)
         csdl.check_parameter(incidence, "incidence", types=(int, float, csdl.Variable), allow_none=True)
         csdl.check_parameter(taper_ratio, "taper_ratio", types=(int, float, csdl.Variable), allow_none=True)
-        csdl.check_parameter(thickness_to_chord_ratio, "thickness_to_chord_ratio", types=(int, float, csdl.Variable), allow_none=True)
 
+        # Check if wing is over-parameterized
         if all(arg is not None for arg in [AR, S_ref, span]):
-            raise Exception("Cannot specifiy AR, S_ref, and span at the same time.")
-        # if any(arg is not None for arg in [dihedral, sweep, incidence]) and geometry is not None:
-        #     raise NotImplementedError("'sweep' and 'dihedral' and 'incidence' not implemented if geometry is not None")
+            raise Exception("Wing comp over-parameterized: Cannot specifiy AR, S_ref, and span at the same time.")
+        # Check if wing is under-parameterized
+        if sum(1 for arg in [AR, S_ref, span] if arg is None) >= 2:
+            raise Exception("Wing comp under-parameterized: Must specify two out of three: AR, S_ref, and span.")
         
+        if incidence is not None:
+            raise NotImplementedError("incidence has not yet been implemented")
+
         self._name = f"wing_{self._instance_count}"
         self.parameters : WingParameters =  WingParameters(
             AR=AR,
@@ -101,7 +104,6 @@ class Wing(Component):
             incidence=incidence,
             dihedral=dihedral,
             taper_ratio=taper_ratio, 
-            thickness_to_chord=thickness_to_chord_ratio,
         )
 
         # Set the wetted area if a geometry is provided
@@ -109,6 +111,45 @@ class Wing(Component):
             self.parameters.S_wet = self.quantities.surface_area
 
         self._optimize_wing_twist = optimize_wing_twist
+
+        # Compute MAC (i.e., characteristic length)
+        if taper_ratio is None:
+            taper_ratio = 1
+        if AR is not None and S_ref is not None:
+            lam = taper_ratio
+            span = (AR * S_ref)**0.5
+            root_chord = 2 * S_ref/((1 + lam) * span)
+            MAC = (2/3) * (1 + lam + lam**2) / (1 + lam) * root_chord
+            self.quantities.drag_parameters.characteristic_length = MAC
+            self.parameters.MAC = MAC
+        elif S_ref is not None and span is not None:
+            lam = taper_ratio
+            span = self.parameters.span
+            root_chord = 2 * S_ref/((1 + lam) * span)
+            MAC = (2/3) * (1 + lam + lam**2) / (1 + lam) * root_chord
+            self.quantities.drag_parameters.characteristic_length = MAC
+            self.parameters.MAC = MAC
+        elif span is not None and AR is not None:
+            lam = taper_ratio
+            S_ref = span**2 / AR
+            self.parameters.S_ref = S_ref
+            root_chord = 2 * S_ref/((1 + lam) * span)
+            MAC = (2/3) * (1 + lam + lam**2) / (1 + lam) * root_chord
+            self.quantities.drag_parameters.characteristic_length = MAC
+            self.parameters.MAC = MAC
+
+        # Compute form factor according to Raymer 
+        # (ignoring Mach number; include in drag build up model)
+        x_c_m = self.parameters.thickness_to_chord_loc
+        t_o_c = self.parameters.thickness_to_chord
+
+        if t_o_c is None:
+            t_o_c = 0.15
+        if sweep is None:
+            sweep = 0.
+
+        FF = (1 + 0.6 / x_c_m + 100 * (t_o_c) ** 4) * csdl.cos(sweep) ** 0.28
+        self.quantities.drag_parameters.form_factor = FF
 
         if self.geometry is not None:
             # Check for appropriate geometry type
@@ -175,7 +216,6 @@ class Wing(Component):
             except AttributeError:
                 raise Exception(f"The discretization {discretization_name} does not have an '_update' method, which is neded to" + \
                                 " re-evaluate the geometry/meshes after the geometry coefficients have been changes")
-
 
     def _make_ffd_block(self, 
             entities : List[lfs.Function], 
@@ -406,6 +446,23 @@ class Wing(Component):
             root_chord_input = 2 * self.parameters.S_ref/((1 + taper_ratio) * span_input)
             tip_chord_left_input = root_chord_input * taper_ratio 
             tip_chord_right_input = tip_chord_left_input * 1
+        
+        elif self.parameters.span is not None and self.parameters.AR is not None:
+            if self.parameters.taper_ratio is None:
+                taper_ratio = 1.
+            else:
+                taper_ratio = self.parameters.taper_ratio
+
+            if not isinstance(self.parameters.AR , csdl.Variable):
+                self.parameters.AR = csdl.Variable(shape=(1, ), value=self.parameters.AR)
+
+            if not isinstance(self.parameters.span , csdl.Variable):
+                self.parameters.span = csdl.Variable(shape=(1, ), value=self.parameters.span)
+
+            span_input = self.parameters.span
+            root_chord_input = 2 * self.parameters.S_ref/((1 + taper_ratio) * span_input)
+            tip_chord_left_input = root_chord_input * taper_ratio 
+            tip_chord_right_input = tip_chord_left_input * 1
 
         else:
             raise NotImplementedError
@@ -420,18 +477,7 @@ class Wing(Component):
         else:
             dihedral_input = csdl.Variable(shape=(1, ), value=0.)
 
-        # Compute constraints: user input - geometric qty equivalent
-        # span_constraint = wing_geom_qts.span - span_input
-        # center_chord_constraint = wing_geom_qts.center_chord - root_chord_input
-        # tip_chord_left_constraint = wing_geom_qts.left_tip_chord - tip_chord_left_input
-        # tip_chord_right_constraint = wing_geom_qts.right_tip_chord - tip_chord_right_input
-
-        # sweep_constraint_1 = wing_geom_qts.sweep_angle_left - sweep_input
-        # sweep_constraint_2 = wing_geom_qts.sweep_angle_right - sweep_input
-
-        # dihedral_constraint_1 = wing_geom_qts.dihedral_angle_left - dihedral_input
-        # dihedral_constraint_2 = wing_geom_qts.dihedral_angle_right - dihedral_input
-
+        # Set constraints: user input - geometric qty equivalent
         ffd_geometric_variables.add_geometric_variable(wing_geom_qts.span, span_input)
         ffd_geometric_variables.add_geometric_variable(wing_geom_qts.center_chord, root_chord_input)
         ffd_geometric_variables.add_geometric_variable(wing_geom_qts.left_tip_chord, tip_chord_left_input)
@@ -442,10 +488,6 @@ class Wing(Component):
         ffd_geometric_variables.add_geometric_variable(wing_geom_qts.dihedral_angle_right, dihedral_input)
 
         return
-
-        # return [span_constraint, center_chord_constraint, tip_chord_left_constraint, 
-        #         tip_chord_right_constraint, sweep_constraint_1, sweep_constraint_2, 
-        #         dihedral_constraint_1, dihedral_constraint_2]
 
     def _setup_geometry(self, parameterization_solver, ffd_geometric_variables, plot=False):
         """Set up the wing geometry (mainly the FFD)"""

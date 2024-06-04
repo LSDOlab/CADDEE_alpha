@@ -1,7 +1,7 @@
 import CADDEE_alpha as cd
+import numpy as np
 import csdl_alpha as csdl
 from VortexAD.core.vlm.vlm_solver import vlm_solver
-import numpy as np
 from BladeAD.core.airfoil.ml_airfoil_models.NACA_4412.naca_4412_model import NACA4412MLAirfoilModel
 from BladeAD.core.BEM.bem_model import BEMModel
 from BladeAD.utils.var_groups import RotorAnalysisInputs
@@ -35,7 +35,7 @@ def define_base_config(caddee: cd.CADDEE):
     wing_camber_surface = cd.mesh.make_vlm_surface(
         wing, 30, 5, grid_search_density=20, ignore_camber=False,
     )
-    # pav_geometry.plot_meshes(wing_camber_surface.nodal_coordinates.value)
+    pav_geometry.plot_meshes(wing_camber_surface.nodal_coordinates.value)
 
 
     # tail
@@ -74,7 +74,7 @@ def define_base_config(caddee: cd.CADDEE):
     pusher_prop_discretization.chord_profile = csdl.Variable(shape=(num_radial, ), value=np.linspace(0.24, 0.08, num_radial))
     rotor_meshes.discretizations["pusher_prop"] = pusher_prop_discretization
     
-
+    # base config and meshes
     base_config = cd.Configuration(aircraft)
     mesh_container = base_config.mesh_container
     mesh_container["vlm_mesh"] = pav_vlm_mesh
@@ -98,7 +98,7 @@ def define_conditions(caddee: cd.CADDEE):
     return pitch_angle
 
 
-def define_analysis(caddee: cd.CADDEE, pitch_angle=None):
+def define_analysis(caddee: cd.CADDEE):
     cruise = caddee.conditions["cruise"]
     cruise_config = cruise.configuration
     mesh_container = cruise_config.mesh_container
@@ -107,7 +107,6 @@ def define_analysis(caddee: cd.CADDEE, pitch_angle=None):
     tail = aircraft.comps["tail"]
     elevator = csdl.ImplicitVariable(shape=(1, ), value=0.)
     tail.actuate(elevator)
-
 
     cruise.finalize_meshes()
 
@@ -128,7 +127,7 @@ def define_analysis(caddee: cd.CADDEE, pitch_angle=None):
 
     ml_model = NACA4412MLAirfoilModel()
     bem_model = BEMModel(num_nodes=cruise._num_nodes, airfoil_model=ml_model)
-    rpm=csdl.ImplicitVariable(shape=(1, ), value=2000.)
+    rpm=csdl.Variable(shape=(1, ), value=2000.)
     bem_inputs = RotorAnalysisInputs(
         rpm=rpm,
         mesh_velocity=push_prop_discretization.nodal_velocities,
@@ -136,11 +135,6 @@ def define_analysis(caddee: cd.CADDEE, pitch_angle=None):
     )
 
     bem_outputs = bem_model.evaluate(bem_inputs)
-
-    print(bem_outputs.forces.value)
-    print(bem_outputs.moments.value)
-    print(vlm_outputs.total_force.value)
-    print(vlm_outputs.total_moment.value)
 
     total_forces, total_moments = cruise.assemble_forces_and_moments(
         aero_propulsive_forces=[bem_outputs.forces, vlm_outputs.total_force],

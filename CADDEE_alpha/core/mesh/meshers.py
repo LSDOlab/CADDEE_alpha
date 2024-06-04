@@ -1,6 +1,7 @@
 import csdl_alpha as csdl
 from CADDEE_alpha.core.mesh.mesh import Discretization, SolverMesh, DiscretizationsDict
 import numpy as np
+from lsdo_function_spaces import FunctionSet
 from typing import Union
 from dataclasses import dataclass
 from CADDEE_alpha.utils.caddee_dict import CADDEEDict
@@ -222,13 +223,13 @@ class CamberSurface(Discretization):
             LE_points_csdl = self._geom.evaluate(self._LE_points_para)
             TE_points_csdl = self._geom.evaluate(self._TE_points_para)
             if self._chordwise_spacing == "linear":
-                chord_surface = csdl.linear_combination(TE_points_csdl, LE_points_csdl, self._num_chord_wise+1).reshape((self._num_chord_wise+1, self._num_spanwise+1, 3))
+                chord_surface = csdl.linear_combination(LE_points_csdl, TE_points_csdl, self._num_chord_wise+1).reshape((self._num_chord_wise+1, self._num_spanwise+1, 3))
             
             elif self._chordwise_spacing == "cosine":
                 chord_surface = cosine_spacing(
                     self._num_spanwise, 
                     None,
-                    csdl.linear_combination(TE_points_csdl, LE_points_csdl, self._num_chord_wise+1),
+                    csdl.linear_combination(LE_points_csdl, TE_points_csdl, self._num_chord_wise+1),
                     self._num_chord_wise
                 )
 
@@ -309,7 +310,7 @@ def make_vlm_surface(
     if num_spanwise % 2 != 0:
         raise Exception("Number of spanwise panels must be even.")
 
-    wing_geometry = wing_comp.geometry
+    wing_geometry: FunctionSet = wing_comp.geometry
 
     LE_left_point = wing_geometry.evaluate(wing_comp._LE_left_point).value
     LE_mid_point = wing_geometry.evaluate(wing_comp._LE_mid_point).value
@@ -347,6 +348,7 @@ def make_vlm_surface(
 
     LE_points_csdl = wing_geometry.evaluate(LE_points_para)
     TE_points_csdl = wing_geometry.evaluate(TE_points_para)
+    
 
     if spacing_chordwise == "linear":
         chord_surface = csdl.linear_combination(LE_points_csdl, TE_points_csdl, num_chordwise+1).reshape((num_chordwise+1, num_spanwise+1, 3))

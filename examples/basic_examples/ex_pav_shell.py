@@ -5,7 +5,7 @@ import numpy as np
 import lsdo_function_spaces as fs
 import lsdo_geo as lg
 
-# fs.num_workers = 1     # uncommont this if projections break
+fs.num_workers = 1     # uncommont this if projections break
 plot=False
 
 recorder = csdl.Recorder(inline=True)
@@ -63,8 +63,8 @@ def define_base_config(caddee: cd.CADDEE):
     wing_shell_discritization = cd.mesh.import_shell_mesh(
         'pav_wing_6rib_caddee_mesh_2374_quad.xdmf', 
         wing,
-        plot=plot,
-        rescale=[-1,1,-1]
+        plot=True,
+        rescale=[-1,1,-1],
     )
 
     pav_shell_mesh = cd.mesh.ShellMesh()
@@ -193,8 +193,8 @@ def construct_internal_geometry():
     # project (right) rib top/bottom points
     num_ribs = 6
     num_rib_pts = 20
-    f_spar_projection_points = np.array([root_25,root_25+0.1143*(tip_25-root_25),root_25+0.2115*(tip_25-root_25),root_25+0.4944*(tip_25-root_25),root_25+0.7772*(tip_25-root_25),tip_25])
-    r_spar_projection_points = np.array([root_75,root_75+0.1143*(tip_75-root_75),root_75+0.2115*(tip_75-root_75),root_75+0.4944*(tip_75-root_75),root_75+0.7772*(tip_75-root_75),tip_75])
+    f_spar_projection_points = np.array([root_25, root_25+0.1143*(tip_25-root_25), root_25+0.2115*(tip_25-root_25),root_25+0.4944*(tip_25-root_25),root_25+0.7772*(tip_25-root_25),tip_25])
+    r_spar_projection_points = np.array([root_75, root_75+0.1143*(tip_75-root_75), root_75+0.2115*(tip_75-root_75),root_75+0.4944*(tip_75-root_75),root_75+0.7772*(tip_75-root_75),tip_75])
 
     rib_projection_points = np.linspace(f_spar_projection_points, r_spar_projection_points, num_rib_pts)
 
@@ -249,7 +249,7 @@ def construct_internal_geometry():
     pav_geometry.functions[surf_index] = r_spar_right
     pav_geometry.function_names[surf_index] = "Wing_r_r_spar"
     surf_index += 1
-    # wing_geometry.plot(opacity=0.3)
+    wing_geometry.plot(opacity=0.3)
 
     # make ribs from rib points
     rib_function_space = fs.BSplineSpace(2, (5,1), (num_rib_pts, 2))
@@ -278,7 +278,7 @@ def construct_internal_geometry():
             pav_geometry.function_names[surf_index] = "Wing_rib_"+str(-i)
             surf_index += 1
         
-    # pav_geometry.plot(opacity=0.3)
+    pav_geometry.plot(opacity=0.3)
 
 
 construct_internal_geometry()

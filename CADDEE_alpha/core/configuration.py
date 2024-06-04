@@ -299,7 +299,7 @@ class Configuration:
         self,
         comp_1: Component,
         comp_2: Component,
-        connection_point: Union[csdl.Variable, np.ndarray, None],
+        connection_point: Union[csdl.Variable, np.ndarray, None]=None,
     ):
         csdl.check_parameter(comp_1, "comp_1", types=Component)
         csdl.check_parameter(comp_2, "comp_2", types=Component)
@@ -312,7 +312,7 @@ class Configuration:
         if comp_2.geometry is None:
             raise Exception(f"Comp {comp_2.name} does not have a geometry.")
         
-        # If connection point provided, check that it is shape (3, )
+        # If connection point provided, check that its shape is (3, )
         if connection_point is not None:
             try:
                 connection_point.reshape((3, ))
@@ -322,7 +322,14 @@ class Configuration:
             projection_1 = comp_1.geometry.project(connection_point)
             projection_2 = comp_2.geometry.project(connection_point)
 
-        self._geometric_connections.append((projection_1, projection_2, comp_1, comp_2))
+            self._geometric_connections.append((projection_1, projection_2, comp_1, comp_2))
+        
+        # Else choose the center points of the FFD block
+        else:
+            point_1 = np.array([0.5, 0.5, 0.5])
+            point_2 = np.array([0.5, 0.5, 0.5])
+
+            self._geometric_connections.append((point_1, point_2, comp_1, comp_2))
         
         return
 
@@ -371,14 +378,20 @@ class Configuration:
             projection_2 = connection[1]
             comp_1 = connection[2]
             comp_2 = connection[3]
-            # connection = csdl.norm(comp_1.geometry.evaluate(projection_1) - comp_2.geometry.evaluate(projection_2))
-            connection = comp_1.geometry.evaluate(projection_1) - comp_2.geometry.evaluate(projection_2)
+            if isinstance(projection_1, list):
+                connection = comp_1.geometry.evaluate(projection_1) - comp_2.geometry.evaluate(projection_2)
+            elif isinstance(projection_1, np.ndarray):
+                connection = comp_1._ffd_block.evaluate(projection_1) - comp_2._ffd_block.evaluate(projection_2)
+            else:
+                print(f"wrong type {type(projection_1)} for projection")
+                raise NotImplementedError
+            
             ffd_geometric_variables.add_geometric_variable(connection, connection.value)
 
         # Evalauate the parameterization solver
         parameterization_solver.evaluate(ffd_geometric_variables)
         
-        if plot:
+        if True:
             system_geometry.plot()
 
         # TODO: re-evaluate meshes
