@@ -35,7 +35,7 @@ def define_base_config(caddee : cd.CADDEE):
     fuselage = cd.aircraft.components.Fuselage(length=None, max_width=None, max_height=None, 
                                                cabin_depth=None, geometry=fuselage_geometry)
     
-    c_172_geometry.plot_meshes(fuselage.quantities.surface_mesh)
+    # c_172_geometry.plot_meshes(fuselage.quantities.surface_mesh)
 
     airframe.comps["fuselage"] = fuselage
 
@@ -132,7 +132,7 @@ def define_base_config(caddee : cd.CADDEE):
     base_config = cd.Configuration(system=aircraft)
 
     # Add geometric constraints to the fuselage
-    base_config.connect_component_geometries(wing, fuselage, np.array([-3., 0., -0.5]))
+    base_config.connect_component_geometries(wing, fuselage)
 
     # Set up the configuration geometry (i.e., run FFD)
     base_config.setup_geometry()

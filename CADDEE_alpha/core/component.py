@@ -93,10 +93,7 @@ class Component:
 
         if geometry is not None and isinstance(geometry, FunctionSet):
             self.quantities.surface_area = self._compute_surface_area(geometry=geometry)
-
-        # if isinstance(geometry, FunctionSet):
-        #     system_component_geometry = self.create_subgeometry(search_names=[""])
-        #     self.geometry = system_component_geometry
+            self._ffd_block = self._make_ffd_block(self.geometry)
 
     
     def create_subgeometry(self, search_names : List[str]) -> FunctionSet:
@@ -186,29 +183,6 @@ class Component:
  
         return geometry
 
-    # list of things that need to happen (for FFD)
-    # Figure out copies
-    # Ex wing:
-    # - Make ffd block
-    #   
-    # - Do the parameterization
-    #   - Instantiation of parameterization obejct 
-    #       - Make parameterization solver object
-    #       - Make ffd block
-    #       - Sectional parameterization
-    #       - B-spline parameterization of the sectional parameters
-    #       - define parameters in terms of geometry
-    #   
-    #   - Evaluation of parameterion object
-    #       - evaluate parameterization solver
-    #       - evaluate b-splines
-    #       - evaluate sectional parameterization
-    #       - evaluate ffd blcok 
-    #   - Assign coefficient
-    # - Evaluate actuations NOTE: actuations have to happen before the quantities are re-evaluated
-    # - Evaluate geometric quantities (for us, dependent on type of component)
-    #   - Extract the max dimensions from block (for projections to make meshes also span etc)
-    #   
     def _setup_geometry(self, parameterization_solver, system_geometry, plot : bool=False):
         raise NotImplementedError(f"'_setup_geometry' has not been implemented for component {type(self)}")
 

@@ -60,19 +60,20 @@ class Wing(Component):
     - quantities : dictionary for storing (solver) data (e.g., field data)
     """
     def __init__(self, 
-                 AR : Union[int, float, csdl.Variable], 
-                 S_ref : Union[int, float, csdl.Variable], 
-                 S_wet : Union[int, float, csdl.Variable] = None,
-                 span : Union[int, float, csdl.Variable, None] = None, 
-                 dihedral : Union[int, float, csdl.Variable, None] = None, 
-                 sweep : Union[int, float, csdl.Variable, None] = None, 
-                 incidence : Union[int, float, csdl.Variable, None] = None, 
-                 taper_ratio : Union[int, float, csdl.Variable, None] = None, 
-                 thickness_to_chord_ratio : Union[int, float, csdl.Variable, None] = None, 
-                 geometry : Union[lfs.FunctionSet, None]=None,
-                 optimize_wing_twist : bool=False,
-                 tight_fit_ffd: bool = True,
-                 **kwargs) -> None:
+        AR : Union[int, float, csdl.Variable], 
+        S_ref : Union[int, float, csdl.Variable], 
+        S_wet : Union[int, float, csdl.Variable] = None,
+        span : Union[int, float, csdl.Variable, None] = None, 
+        dihedral : Union[int, float, csdl.Variable, None] = None, 
+        sweep : Union[int, float, csdl.Variable, None] = None, 
+        incidence : Union[int, float, csdl.Variable, None] = None, 
+        taper_ratio : Union[int, float, csdl.Variable, None] = None, 
+        thickness_to_chord_ratio : Union[int, float, csdl.Variable, None] = None, 
+        geometry : Union[lfs.FunctionSet, None]=None,
+        optimize_wing_twist : bool=False,
+        tight_fit_ffd: bool = True,
+        **kwargs
+    ) -> None:
         super().__init__(geometry=geometry, kwargs=kwargs)
         
         # Do type checking 
