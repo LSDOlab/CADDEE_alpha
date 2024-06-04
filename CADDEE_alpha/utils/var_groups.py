@@ -29,6 +29,17 @@ class AtmosphericStates(csdl.VariableGroup):
     pressure : Union[float, int, csdl.Variable] = 101325
     dynamic_viscosity : Union[float, int, csdl.Variable] = 1.735e-5
 
+@dataclass
+class DragBuildUpQuantities:
+    characteristic_length: Union[csdl.Variable, float, int, None] = None
+    form_factor: Union[csdl.Variable, float, int, None] = None
+    interference_factor: Union[csdl.Variable, float, int, None] = 1.1
+    cf_laminar_fun = None
+    cf_turbulent_fun = None
+    percent_laminar : Union[csdl.Variable, float, int] = 20
+    percent_turbulent : Union[csdl.Variable, float, int] = 80
+    drag_area: Union[csdl.Variable, float, None] = None
+
 class MaterialProperties:
     def __init__(self, component, direction: str = 'centered'):
         """Initializes the MaterialProperties class.

@@ -64,6 +64,12 @@ class Fuselage(Component):
             S_wet=S_wet,
         )
 
+        # # compute form factor (according to Raymer)
+        # f = length / csdl.maximum(max_height, max_width)
+        # FF = 1 + 60 / f**3 + f / 400
+        # self.quantities.drag_parameters.form_factor = FF
+        # self.quantities.drag_parameters.characteristic_length = length
+
         if self.geometry is not None:
             # Check for appropriate geometry type
             if not isinstance(self.geometry, (FunctionSet)):
@@ -81,7 +87,6 @@ class Fuselage(Component):
 
                 self._top_point = geometry.project(self._ffd_block.evaluate(np.array([0.5, 0.5, 1.])))
                 self._bottom_point = geometry.project(self._ffd_block.evaluate(np.array([0.5, 0.5, 0.])))
-
 
 
     def _setup_ffd_block(self, ffd_block, parameterization_solver, plot : bool=False):

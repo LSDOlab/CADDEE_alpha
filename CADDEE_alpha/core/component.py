@@ -1,4 +1,4 @@
-from CADDEE_alpha.utils.var_groups import MassProperties, MaterialProperties
+from CADDEE_alpha.utils.var_groups import MassProperties, MaterialProperties, DragBuildUpQuantities
 from lsdo_geo import Geometry
 from lsdo_function_spaces import FunctionSet
 from CADDEE_alpha.utils.caddee_dict import CADDEEDict
@@ -15,20 +15,16 @@ from dataclasses import dataclass
 class ComponentQuantities:
     mass_properties : MassProperties = None
     material_properties : MaterialProperties = None
-    surface_mesh: List[csdl.Variable] = None
+    drag_parameters : DragBuildUpQuantities = None
     def __post_init__(self):
         self.mass_properties = MassProperties()
         if self.material_properties is None:
             self.material_properties = MaterialProperties(self)
         self.surface_mesh = []
         self.surface_area = None
-        self.characteristic_length = None
-        self.form_factor = None
-        self.interference_factor = 1.1
-        self.cf_laminar_fun = compute_cf_laminar
-        self.cf_turbulent_fun = compute_cf_turbulent
-        self.percent_laminar = 20
-        self.percent_turbulent = 80
+        self.drag_parameters = DragBuildUpQuantities()
+        self.drag_parameters.cf_laminar_fun = compute_cf_laminar
+        self.drag_parameters.cf_turbulent_fun = compute_cf_turbulent
 
 def compute_cf_laminar(Re):
     return 1.328 / Re**0.5
