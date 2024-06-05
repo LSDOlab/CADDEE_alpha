@@ -15,4 +15,5 @@ gitpython==3.1.31
 git+https://github.com/anugrahjo/sphinx-collections.git
 sphinxcontrib-bibtex==2.5.0
 astroid==2.15.5
+meshio
 

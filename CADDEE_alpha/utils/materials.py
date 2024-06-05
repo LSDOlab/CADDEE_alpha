@@ -171,6 +171,48 @@ class IsotropicMaterial(Material):
         self.strength = np.array([[Ft, Ft, Ft],[Fc, Fc, Fc],[F12, F12, F12]])
 
 class TransverseMaterial(Material):
+    def __init__(self, name:str=None, density:VariableLike=None, thickness:VariableLike=None,
+                EA:VariableLike=None, ET:VariableLike=None, vA:VariableLike=None, vT:VariableLike=None, GA:VariableLike=None,
+                F1t:VariableLike=None, F1c:VariableLike=None, F2t:VariableLike=None, F2c:VariableLike=None, F12:VariableLike=None, F23:VariableLike=None):
+        """Initialize a transverse material object.
+
+        Parameters
+        ----------
+        name : str, optional
+            The name of the material. Defaults to None.
+        density : VariableLike, optional
+            The density of the material. Defaults to None.
+        thickness : VariableLike, optional
+            The thickness of the material. Defaults to None.
+        EA : VariableLike, optional
+            Young's modulus in the axial direction. Defaults to None.
+        ET : VariableLike, optional
+            Young's modulus in the transverse direction. Defaults to None.
+        vA : VariableLike, optional
+            Poisson's ratio in the axial direction. Defaults to None.
+        vT : VariableLike, optional
+            Poisson's ratio in the transverse direction. Defaults to None.
+        GA : VariableLike, optional
+            Shear modulus in the axial direction. Defaults to None.
+        F1t : VariableLike, optional
+            Tensile strength in the 1 direction. Defaults to None.
+        F1c : VariableLike, optional
+            Compressive strength in the 1 direction. Defaults to None.
+        F2t : VariableLike, optional
+            Tensile strength in the 2 direction. Defaults to None.
+        F2c : VariableLike, optional
+            Compressive strength in the 2 direction. Defaults to None.
+        F12 : VariableLike, optional
+            Shear strength in the 1-2 plane. Defaults to None.
+        F23 : VariableLike, optional
+            Shear strength in the 2-3 plane. Defaults to None.
+        """
+        super().__init__(name=name, density=density, thickness=thickness)
+
+                 
+
+
+
     def set_compliance(self, EA:float, ET:float, vA:float, GA:float, vT:float=None, GT:float=None):
         """Set the compliance matrix for the material.
 
@@ -179,17 +221,17 @@ class TransverseMaterial(Material):
         Parameters
         ----------
         EA : float
-            Young's modulus in the A direction.
+            Young's modulus in the axial direction.
         ET : float
-            Young's modulus in the T direction.
+            Young's modulus in the transverse direction.
         vA : float
-            Poisson's ratio in the A direction.
+            Poisson's ratio in the axial direction.
         GA : float
-            Shear modulus in the A direction.
+            Shear modulus in the axial direction.
         vT : float, optional
-            Poisson's ratio in the T direction. Default is None.
+            Poisson's ratio in the transverse direction. Default is None.
         GT : float, optional
-            Shear modulus in the T direction. Default is None.
+            Shear modulus in the transverse direction. Default is None.
 
         Raises
         ------
