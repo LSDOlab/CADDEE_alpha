@@ -3,7 +3,7 @@ from typing import Union
 from dataclasses import dataclass
 import numpy as np
 import lsdo_function_spaces as fs
-from .materials import Material
+from caddee_materials import Material
 from csdl_alpha.utils.typing import VariableLike
 
 @dataclass
