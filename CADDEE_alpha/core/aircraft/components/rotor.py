@@ -4,7 +4,6 @@ import numpy as np
 from dataclasses import dataclass
 import csdl_alpha as csdl
 from typing import Union
-from lsdo_function_spaces import FunctionSet
 
 
 @dataclass
@@ -21,9 +20,11 @@ class Rotor(Component):
         csdl.check_parameter(radius, "radius", types=(float, int, csdl.Variable))
         super().__init__(geometry, **kwargs)
 
+        self._skip_ffd = False
+
         self._name = f"rotor_{self._instance_count}"
         self.parameters : RotorParameters = RotorParameters(
-            radius=radius
+            radius=radius,
         )
 
         # Make FFd block if geometry is not None
@@ -32,14 +33,17 @@ class Rotor(Component):
                 raise TypeError(f"wing geometry must be of type {FunctionSet}, received {type(self.geometry)}")
 
             else:
-                self._ffd_block = self._make_ffd_block(self.geometry)
-
                 # Do projections for corner points 
-                self._corner_point_1 = geometry.project(self._ffd_block.evaluate(np.array([0.5, 0.5, 0.])))
-                self._corner_point_2 = geometry.project( self._ffd_block.evaluate(np.array([0.5, 0.5, 1.])))
-                self._corner_point_3 = geometry.project(self._ffd_block.evaluate(np.array([0.5, 0., 0.5])))
-                self._corner_point_4 = geometry.project(self._ffd_block.evaluate(np.array([0.5, 1., 0.5])))
+                self._corner_point_1 = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 0.5, 0.])))
+                self._corner_point_2 = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 0.5, 1.])))
+                self._corner_point_3 = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 0., 0.5])))
+                self._corner_point_4 = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 1., 0.5])))
 
+    def _setup_ffd_block(self, ffd_block, parameterization_solver, plot: bool=False):
+        """Set up the rotor ffd_block"""
+        raise NotImplementedError
+        # TODO: extract the princiapl dimension first
+    
     def actuate(
             self, 
             x_tilt_angle: Union[float, int, csdl.Variable, None]=None, 
@@ -72,7 +76,7 @@ class Rotor(Component):
                 print("Update rotor mesh")
             except AttributeError:
                 raise Exception(f"Mesh {mesh_name} does not have an '_update' method, which is neded to" + \
-                                " re-evaluate the geometry/meshes after the geometry coefficients have been changes")
+                                " re-evaluate the geometry/meshes after the geometry coefficients have been changed")
 
 
 # option 1

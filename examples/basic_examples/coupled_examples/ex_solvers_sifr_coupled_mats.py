@@ -10,7 +10,7 @@ from ex_utils import plot_vlm
 
 
 # NOTE: for Windows, parallization does not work (need num_workers=1)
-fs.num_workers = 1
+# fs.num_workers = 1
 
 plot = False
 
@@ -33,7 +33,7 @@ def define_base_config(caddee : cd.CADDEE):
 
     # Fuselage
     fuselage_geometry = aircraft.create_subgeometry(search_names=["Fuselage"])
-    fuselage = cd.aircraft.components.Fuselage(length=8, max_width=0.9, max_height=0.8, 
+    fuselage = cd.aircraft.components.Fuselage(length=10, max_width=None, max_height=None, 
                                                cabin_depth=None, geometry=fuselage_geometry)
     
     # c_172_geometry.plot_meshes(fuselage.quantities.surface_mesh)
@@ -45,8 +45,10 @@ def define_base_config(caddee : cd.CADDEE):
                                                             "Wing, 0, 3",
                                                             "Wing, 1, 8",
                                                             "Wing, 1, 9"])
-    wing = cd.aircraft.components.Wing(AR=8.5, S_ref=19.5, sweep=np.deg2rad(10), dihedral=np.deg2rad(10), 
-                                       taper_ratio=0.75, geometry=wing_geometry, tight_fit_ffd=False)
+    wing = cd.aircraft.components.Wing(
+        AR=8.5, S_ref=19.5, sweep=np.deg2rad(0), dihedral=np.deg2rad(0), 
+        taper_ratio=0.75, geometry=wing_geometry, tight_fit_ffd=False
+    )
 
     # wing material info
     aluminum = cd.materials.IsotropicMaterial(name='aluminum', E=69E9, G=26E9, density=2700, nu=0.33)
@@ -54,7 +56,7 @@ def define_base_config(caddee : cd.CADDEE):
 
     # aluminum = cd.materials.import_material('materials/Al_6061-T6.xml')
     thickness_space = wing_geometry.create_parallel_space(fs.ConstantSpace(2))
-    thickness_var, thickness_function = thickness_space.initialize_function(1, value=0.1)
+    thickness_var, thickness_function = thickness_space.initialize_function(1, value=0.001)
     # could make the thickness var a design variable here
     wing.quantities.material_properties.set_material(aluminum, thickness_function)
 
@@ -83,11 +85,10 @@ def define_base_config(caddee : cd.CADDEE):
     wing_box_beam = cd.mesh.make_1d_box_beam(wing, num_beam_nodes, 0.5, plot=plot)
     beam_mesh.discretizations["wing_box_beam"] = wing_box_beam
     # manually set shear web thickness because we don't have internal structure geometry (for spars)
-    wing_box_beam.shear_web_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * 0.1)
+    wing_box_beam.shear_web_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * 0.001)
 
     # add wing to airframe
     airframe.comps["wing"] = wing
-
 
     # tail comp
     h_tail_geometry = aircraft.create_subgeometry(search_names=["Tail"])
@@ -130,7 +131,9 @@ def define_base_config(caddee : cd.CADDEE):
     base_config = cd.Configuration(system=aircraft)
 
     # Add geometric constraints to the fuselage
-    base_config.connect_component_geometries(wing, fuselage)
+    connection_point = wing_geometry.evaluate(wing._LE_mid_point)
+    base_config.connect_component_geometries(wing, fuselage, connection_point)
+    base_config.connect_component_geometries(rotor, fuselage, connection_point)
 
     # Set up the configuration geometry (i.e., run FFD)
     base_config.setup_geometry()
@@ -151,7 +154,7 @@ def define_conditions(caddee: cd.CADDEE):
         altitude=3e3,
         range=60e3,
         mach_number=np.array([0.2]),
-        pitch_angle=np.deg2rad(2),
+        pitch_angle=np.deg2rad(3),
     )
     cruise.configuration = base_config
     conditions["cruise"] = cruise
@@ -264,7 +267,7 @@ def define_analysis(caddee: cd.CADDEE):
     wing.quantities.displacement_function = displacement_function
 
     # solve implicit system
-    solver = csdl.nonlinear_solvers.GaussSeidel(max_iter=1)
+    solver = csdl.nonlinear_solvers.GaussSeidel(max_iter=5)
     disp_residual = displacement_function.stack_coefficients() - disp_coeff_implicit
     force_residual = force_function.stack_coefficients() - force_coeff_implicit
     solver.add_state(disp_coeff_implicit, disp_residual, state_update=disp_coeff_implicit + 0.1 * disp_residual)
@@ -297,6 +300,13 @@ def define_analysis(caddee: cd.CADDEE):
 
     print('cg: ', cg.value)
     print('deformed cg: ', dcg.value)
+
+    # displacement
+    beam_1_displacement = solution.get_displacement(beam_1)
+    print("beam displacement", beam_1_displacement.value)
+
+    
+
 
 
 define_base_config(caddee)

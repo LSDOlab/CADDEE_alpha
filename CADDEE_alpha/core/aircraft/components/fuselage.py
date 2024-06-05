@@ -15,8 +15,7 @@ class FuselageParameters:
     length : Union[float, int, csdl.Variable]
     max_width : Union[float, int, csdl.Variable]
     max_height : Union[float, int, csdl.Variable]
-    cabin_depth : Union[float, int, csdl.Variable]
-    S_wet : Union[float, int, csdl.Variable]
+    S_wet : Union[float, int, csdl.Variable, None]=None
 
 @dataclass
 class FuselageGeometricQuantities:
@@ -45,48 +44,62 @@ class Fuselage(Component):
     - comps : dictionary for children components
     - quantities : dictionary for storing (solver) data (e.g., field data)
     """
-    def __init__(self, 
-                 length : Union[int, float, csdl.Variable], 
-                 max_width : Union[int, float, csdl.Variable], 
-                 max_height : Union[int, float, csdl.Variable], 
-                 cabin_depth : Union[int, float, csdl.Variable], 
-                 S_wet : Union[int, float, csdl.Variable, None] = None,
-                 geometry : Union[FunctionSet, None] = None,
-                 **kwargs
-                 ) -> None:
+    def __init__(
+        self, 
+        length : Union[int, float, csdl.Variable],
+        max_width : Union[int, float, csdl.Variable, None], 
+        max_height : Union[int, float, csdl.Variable, None], 
+        geometry : Union[FunctionSet, None] = None,
+        **kwargs
+    ) -> None:
+        kwargs["do_not_remake_ffd_block"] = True
         super().__init__(geometry, **kwargs)
-        self._name = f"fuselag_{self._instance_count}"
+        
+        # Do type checking
+        csdl.check_parameter(length, "length", types=(int, float, csdl.Variable))
+        csdl.check_parameter(max_width, "max_width", types=(int, float, csdl.Variable), allow_none=True)
+        csdl.check_parameter(max_height, "max_height", types=(int, float, csdl.Variable), allow_none=True)
+        
+        self._name = f"fuselage_{self._instance_count}"
+
+        # Assign parameters
         self.parameters : FuselageParameters = FuselageParameters(
             length=length,
             max_height=max_height,
             max_width=max_width,
-            cabin_depth=cabin_depth,
-            S_wet=S_wet,
         )
 
-        # # compute form factor (according to Raymer)
-        # f = length / csdl.maximum(max_height, max_width)
-        # FF = 1 + 60 / f**3 + f / 400
-        # self.quantities.drag_parameters.form_factor = FF
-        # self.quantities.drag_parameters.characteristic_length = length
+        # compute form factor (according to Raymer) if parameters are provided
+        if all(arg is not None for arg in [length, max_height, max_width]):
+            if not isinstance(max_height, csdl.Variable):
+                max_height = csdl.Variable(shape=(1, ), value=max_height)
+            if not isinstance(max_width, csdl.Variable):
+                max_width = csdl.Variable(shape=(1, ), value=max_width)
+            f = length / csdl.maximum(max_height, max_width)
+            FF = 1 + 60 / f**3 + f / 400
+            self.quantities.drag_parameters.form_factor = FF
+            self.quantities.drag_parameters.characteristic_length = length
 
         if self.geometry is not None:
             # Check for appropriate geometry type
             if not isinstance(self.geometry, (FunctionSet)):
                 raise TypeError(f"wing gometry must be of type {FunctionSet}")
             else:
+                # Set the wetted area
+                self.parameters.S_wet = self.quantities.surface_area
+                
                 # Automatically make the FFD block upon instantiation 
                 self._ffd_block = self._make_ffd_block(self.geometry)
 
                 # Extract dimensions (height, width, length) from the FFD block
-                self._nose_point = geometry.project(self._ffd_block.evaluate(np.array([0., 0.5, 0.5])))
-                self._tail_point = geometry.project(self._ffd_block.evaluate(np.array([1., 0.5, 0.5])))
+                self._nose_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0., 0.5, 0.5])))
+                self._tail_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([1., 0.5, 0.5])))
 
-                self._left_point = geometry.project(self._ffd_block.evaluate(np.array([0.5, 0., 0.5])))
-                self._right_point = geometry.project(self._ffd_block.evaluate(np.array([0.5, 1., 0.5])))
+                self._left_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 0., 0.5])))
+                self._right_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 1., 0.5])))
 
-                self._top_point = geometry.project(self._ffd_block.evaluate(np.array([0.5, 0.5, 1.])))
-                self._bottom_point = geometry.project(self._ffd_block.evaluate(np.array([0.5, 0.5, 0.])))
+                self._top_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 0.5, 1.])))
+                self._bottom_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 0.5, 0.])))
 
 
     def _setup_ffd_block(self, ffd_block, parameterization_solver, plot : bool=False):
@@ -206,21 +219,21 @@ class Fuselage(Component):
             pass
         else:
             length_input = self.parameters.length
-            ffd_geometric_variables.add_geometric_variable(fuselage_geometric_qts.length, length_input)
+            ffd_geometric_variables.add_variable(fuselage_geometric_qts.length, length_input)
 
         # If user doesn't specify height, use initial geometry
         if self.parameters.max_height is None:
             pass
         else:
             height_input = self.parameters.max_height
-            ffd_geometric_variables.add_geometric_variable(fuselage_geometric_qts.height, height_input)
+            ffd_geometric_variables.add_variable(fuselage_geometric_qts.height, height_input)
 
         # If user doesn't specify width, use initial geometry
         if self.parameters.max_width is None:
             pass
         else:
             width_input = self.parameters.max_width
-            ffd_geometric_variables.add_geometric_variable(fuselage_geometric_qts.width, width_input)
+            ffd_geometric_variables.add_variable(fuselage_geometric_qts.width, width_input)
 
 
         return 

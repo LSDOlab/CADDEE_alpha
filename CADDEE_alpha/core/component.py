@@ -23,15 +23,6 @@ class ComponentQuantities:
         self.surface_mesh = []
         self.surface_area = None
         self.drag_parameters = DragBuildUpQuantities()
-        self.drag_parameters.cf_laminar_fun = compute_cf_laminar
-        self.drag_parameters.cf_turbulent_fun = compute_cf_turbulent
-
-def compute_cf_laminar(Re):
-    return 1.328 / Re**0.5
-
-def compute_cf_turbulent(Re, M):
-    Cf = 0.455 / (csdl.log(Re, 10)**2.58 * (1 + 0.144 * M**2)**0.65)
-    return Cf
 
 @dataclass
 class ComponentParameters:
@@ -66,6 +57,9 @@ class Component:
     # Boolean attribute to keep track of whether component is a copy
     _is_copy = False
 
+    # Private attrbute to allow certain components to be excluded from FFD    
+    _skip_ffd = False
+
     parent = None
 
     def __init__(self, geometry : Union[FunctionSet, None]=None, 
@@ -86,10 +80,13 @@ class Component:
         # Set any keyword arguments on parameters
         for key, value in kwargs.items():
             setattr(self.parameters, key, value)
-
+        
         if geometry is not None and isinstance(geometry, FunctionSet):
             self.quantities.surface_area = self._compute_surface_area(geometry=geometry)
-            self._ffd_block = self._make_ffd_block(self.geometry)
+            if "do_not_remake_ffd_block" in kwargs.keys():
+                pass
+            else:
+                self._ffd_block = self._make_ffd_block(self.geometry)
 
     
     def create_subgeometry(self, search_names : List[str]) -> FunctionSet:
@@ -110,7 +107,6 @@ class Component:
 
         return component_geometry
 
-
     def plot(self):
         """Plot a component's geometry."""
         if self.geometry is None:
@@ -120,7 +116,6 @@ class Component:
 
     def actuate(self):
         raise NotImplementedError(f"'actuate' has not been implemented for component of type {type(self)}")
-
 
     def _make_ffd_block(self, entities, 
                         num_coefficients : tuple=(2, 2, 2), 
@@ -146,41 +141,16 @@ class Component:
     
     def _setup_ffd_parameterization(self):
         raise NotImplementedError(f"'_setup_ffd_parameterization' has not been implemented for {type(self)}")
-        
-    def _update_coefficients_after_inner_optimization(self, parameterization_solver_states, geometry : FunctionSet, update_dict : dict, plot : bool=False):
-        """Re-evaluate and re-assign the geomtry coefficients after the inner optimization has run"""
-        ffd_block = update_dict[f'{self._name}_ffd_block']
-        component = update_dict[f'{self._name}_component']
-        ffd_sectional_parameterization = update_dict[f'{self._name}_ffd_sectional_parameterization']
-        coefficient_names = update_dict[f'{self._name}_coefficient_names']
-        b_splines = update_dict[f'{self._name}_b_splines']
-        section_parametric_coordinates = update_dict[f'{self._name}_section_parametric_coordinates']
-        sectional_parameter_names = update_dict[f'{self._name}_sectional_parameter_names']
-        sectional_parameters = {}
-        for i in range(len(coefficient_names)):
-            # Update B-spline coefficients
-            b_splines[i].coefficients = parameterization_solver_states[coefficient_names[i]]
- 
-            # Evaluate and store all B-splines
-            b_spline_evaluation = b_splines[i].evaluate(section_parametric_coordinates)
-            sectional_parameters[sectional_parameter_names[i]] = b_spline_evaluation
- 
-        # Evaluate all sections
-        ffd_block_coefficients = ffd_sectional_parameterization.evaluate(sectional_parameters, plot=plot)
- 
-        # Evaluate ffd block
-        component_coefficients = ffd_block.evaluate(ffd_block_coefficients, plot=plot)
- 
-        # Assign coefficients
-        if isinstance(self.geometry, FunctionSet):
-            geometry.assign_coefficients(coefficients=component_coefficients)
-        else:
-            geometry.assign_coefficients(coefficients=component_coefficients, b_spline_names=component.b_spline_names)
- 
-        return geometry
 
-    def _setup_geometry(self, parameterization_solver, system_geometry, plot : bool=False):
-        raise NotImplementedError(f"'_setup_geometry' has not been implemented for component {type(self)}")
+    def _setup_geometry(self, parameterization_solver, ffd_geometric_variables, plot=False):
+        # Add rigid body translation (without FFD)
+        rigid_body_translation = csdl.ImplicitVariable(shape=(3, ), value=0.)
+        action = 'l->ijkl'
+        shape = self._ffd_block.coefficients.shape
+        self._ffd_block.coefficients = self._ffd_block.coefficients + csdl.expand(rigid_body_translation, shape, action=action)
+
+        parameterization_solver.add_parameter(rigid_body_translation, cost=0.1)
+
 
     def _find_system_component(self, parent) -> FunctionSet:
         """Find the top-level system component by traversing the component hiearchy"""

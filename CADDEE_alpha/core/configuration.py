@@ -358,11 +358,14 @@ class Configuration:
         def setup_geometries(component: Component):
             # If component has a geometry, set up its geometry
             if component.geometry is not None:
-                try: # NOTE: might cause some issues because try/except might hide some errors that shouldn't be hidden
-                    component._setup_geometry(parameterization_solver, ffd_geometric_variables, plot=plot)
+                if component._skip_ffd is True:
+                    pass
+                else:
+                    try: # NOTE: might cause some issues because try/except might hide some errors that shouldn't be hidden
+                        component._setup_geometry(parameterization_solver, ffd_geometric_variables, plot=plot)
 
-                except NotImplementedError:
-                    warnings.warn(f"'_setup_geometry' has not been implemented for component {component._name} of {type(component)}")
+                    except NotImplementedError:
+                        warnings.warn(f"'_setup_geometry' has not been implemented for component {component._name} of {type(component)}")
             
             # If component has children, set up their geometries
             if component.comps:
@@ -386,7 +389,7 @@ class Configuration:
                 print(f"wrong type {type(projection_1)} for projection")
                 raise NotImplementedError
             
-            ffd_geometric_variables.add_geometric_variable(connection, connection.value)
+            ffd_geometric_variables.add_variable(connection, connection.value)
 
         # Evalauate the parameterization solver
         parameterization_solver.evaluate(ffd_geometric_variables)

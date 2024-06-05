@@ -21,14 +21,14 @@ class SimpleLiftModelInputs:
     wing_incidence : Union[float, int, csdl.Variable, None] = None
 
 
-class SimpleLiftModel(csdl.Model):
+class SimpleLiftModel:
     """Implements semi-empirical formula for 3D lift curve slope.
     
     We then compute the lift based on the angle of attack. 
     """
-    def initialize(self):
-        self.parameters.declare("num_nodes", default=1, types=int)
-
+    def __init__(self):
+        pass
+    
     def evaluate(self, inputs : SimpleLiftModelInputs):
         num_nodes = self.parameters["num_nodes"]
 

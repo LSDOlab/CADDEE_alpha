@@ -74,13 +74,13 @@ def import_geometry(
             geometry.rotate(
                 axis_origin=np.array([0., 0., 0]),
                 axis_vector=np.array([0., 0., 1]),
-                angles=180.,
+                angles=np.pi,
             )
 
             geometry.rotate(
                 axis_origin=np.array([0., 0., 0]),
                 axis_vector=np.array([1., 0., 0]),
-                angles=180.,
+                angles=np.pi,
             )
 
 
