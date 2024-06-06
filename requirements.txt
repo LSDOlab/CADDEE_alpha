@@ -16,4 +16,4 @@ git+https://github.com/anugrahjo/sphinx-collections.git
 sphinxcontrib-bibtex==2.5.0
 astroid==2.15.5
 meshio
-
+git+https://github.com/HgXe/caddee_materials.git
