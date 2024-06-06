@@ -47,8 +47,8 @@ class Fuselage(Component):
     def __init__(
         self, 
         length : Union[int, float, csdl.Variable],
-        max_width : Union[int, float, csdl.Variable, None], 
-        max_height : Union[int, float, csdl.Variable, None], 
+        max_width : Union[int, float, csdl.Variable, None] = None, 
+        max_height : Union[int, float, csdl.Variable, None] = None, 
         geometry : Union[FunctionSet, None] = None,
         **kwargs
     ) -> None:
@@ -174,14 +174,13 @@ class Fuselage(Component):
             shape = function.coefficients.shape
             function.coefficients = function.coefficients + csdl.expand(rigid_body_translation, shape, action='j->ij')
 
-        # Add B-spline coefficients to parameterization solver
-        parameterization_solver.add_parameter(length_stretch_b_spline.coefficients, cost=100)
-        parameterization_solver.add_parameter(height_stretch_b_spline.coefficients, cost=100)
-        parameterization_solver.add_parameter(width_stretch_b_spline.coefficients, cost=100)
+        # Add (B-spline) coefficients to parameterization solver
+        parameterization_solver.add_parameter(length_stretch_b_spline.coefficients)
+        parameterization_solver.add_parameter(height_stretch_b_spline.coefficients)
+        parameterization_solver.add_parameter(width_stretch_b_spline.coefficients)
         parameterization_solver.add_parameter(rigid_body_translation, cost=1000)
 
         return
-
 
     def _extract_geometric_quantities_from_ffd_block(self):
         """Extract the following quantities from the FFD block:

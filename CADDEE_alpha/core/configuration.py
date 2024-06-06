@@ -7,7 +7,7 @@ import csdl_alpha as csdl
 import warnings
 import copy
 from typing import Union
-
+import time
 
 class Configuration:
     """The configurations class"""
@@ -392,9 +392,13 @@ class Configuration:
             ffd_geometric_variables.add_variable(connection, connection.value)
 
         # Evalauate the parameterization solver
+        t1 = time.time()
         parameterization_solver.evaluate(ffd_geometric_variables)
-        
+        t2 = time.time()
+        print("time for inner optimization", t2-t1)
         if True:
-            system_geometry.plot()
+            pe = system_geometry.plot(show=True)
+            # component = self.system.comps["airframe"].comps["rotor_3"]
+            # component._ffd_block.plot(additional_plotting_elements=pe, opacity=0.3)
 
         # TODO: re-evaluate meshes
