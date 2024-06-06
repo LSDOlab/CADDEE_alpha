@@ -191,7 +191,7 @@ class MaterialProperties:
             material_stack = self.get_material_stack(ind)
             if len(material_stack) == 0:
                 if isinstance(self.thickness, fs.FunctionSet):
-                    evaluated_thickness = self.thickness.evaluate([parametric_coordinate])
+                    evaluated_thickness = self.thickness.evaluate(parametric_coordinates=[parametric_coordinate])
                 elif self.thickness is not None:
                     evaluated_thickness = self.thickness
                 else:

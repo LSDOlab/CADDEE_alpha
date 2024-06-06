@@ -3,6 +3,8 @@ from pathlib import Path
 import lsdo_geo as lg
 import numpy as np
 import lsdo_function_spaces as lfs
+import time
+import csdl_alpha as csdl
 
 
 _REPO_ROOT_FOLDER = Path(__file__).parents[0]
@@ -59,7 +61,6 @@ def import_geometry(
         if not os.path.isfile(file_path / file_name):
             raise Exception(f"Unknown file path or file. File path: {file_path}/{file_name}")
 
-
         geometry = lg.import_geometry(TEST_GEOMETRY_FOLDER / file_name, parallelize=False, scale=scale)
 
         if refit:
@@ -69,19 +70,10 @@ def import_geometry(
                 grid_resolution=refit_resolution,
             )
 
-        # if rotate_to_body_fixed_frame:
         if rotate_to_body_fixed_frame:
-            geometry.rotate(
-                axis_origin=np.array([0., 0., 0]),
-                axis_vector=np.array([0., 0., 1]),
-                angles=np.pi,
-            )
-
-            geometry.rotate(
-                axis_origin=np.array([0., 0., 0]),
-                axis_vector=np.array([1., 0., 0]),
-                angles=np.pi,
-            )
-
+            for function in geometry.functions.values():
+                coeffs = function.coefficients
+                function.coefficients = function.coefficients.set(csdl.slice[:, :, 0], value=coeffs[:, :, 0] * -1)
+                function.coefficients = function.coefficients.set(csdl.slice[:, :, 2], value=coeffs[:, :, 2] * -1)
 
         return geometry

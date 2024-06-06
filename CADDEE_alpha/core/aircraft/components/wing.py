@@ -9,6 +9,7 @@ import csdl_alpha as csdl
 import numpy as np
 from dataclasses import dataclass
 import lsdo_geo as lg
+import time
 
 
 @dataclass
@@ -68,8 +69,8 @@ class Wing(Component):
         AR : Union[int, float, csdl.Variable, None], 
         S_ref : Union[int, float, csdl.Variable, None],
         span : Union[int, float, csdl.Variable, None] = None, 
-        dihedral : Union[int, float, csdl.Variable] = 0, 
-        sweep : Union[int, float, csdl.Variable] = 0, 
+        dihedral : Union[int, float, csdl.Variable, None] = None, 
+        sweep : Union[int, float, csdl.Variable, None] = None, 
         taper_ratio : Union[int, float, csdl.Variable, None] = None,
         incidence : Union[int, float, csdl.Variable] = 0, 
         root_twist_delta : Union[int, float, csdl.Variable] = 0,
@@ -85,8 +86,8 @@ class Wing(Component):
         csdl.check_parameter(AR, "AR", types=(int, float, csdl.Variable), allow_none=True)
         csdl.check_parameter(S_ref, "S_ref", types=(int, float, csdl.Variable), allow_none=True)
         csdl.check_parameter(span, "span", types=(int, float, csdl.Variable), allow_none=True)
-        csdl.check_parameter(dihedral, "dihedral", types=(int, float, csdl.Variable))
-        csdl.check_parameter(sweep, "sweep", types=(int, float, csdl.Variable))
+        csdl.check_parameter(dihedral, "dihedral", types=(int, float, csdl.Variable), allow_none=True)
+        csdl.check_parameter(sweep, "sweep", types=(int, float, csdl.Variable), allow_none=True)
         csdl.check_parameter(incidence, "incidence", types=(int, float, csdl.Variable))
         csdl.check_parameter(taper_ratio, "taper_ratio", types=(int, float, csdl.Variable), allow_none=True)
         csdl.check_parameter(root_twist_delta, "root_twist_delta", types=(int, float, csdl.Variable))
@@ -162,22 +163,32 @@ class Wing(Component):
             if not isinstance(self.geometry, (lfs.FunctionSet)):
                 raise TypeError(f"wing gometry must be of type {lfs.FunctionSet}")
             else:
+                t1 = time.time()
                 # Set the wetted area
                 self.parameters.S_wet = self.quantities.surface_area
-    
-                # Automatically make the FFD block upon instantiation 
-                self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=tight_fit_ffd)
-                # self._ffd_block.plot()
+                t2 = time.time()
+                print("time for copmuting wetted area", t2-t1)
 
+                t3 = time.time()
+                # Make the FFD block upon instantiation
+                ffd_block = self._make_ffd_block(self.geometry, tight_fit=tight_fit_ffd, degree=(1, 2, 1), num_coefficients=(2, 2, 2))
+                t4 = time.time()
+                print("time for making ffd_block", t4-t3)
+
+                t5 = time.time()
                 # Compute the corner points of the wing 
-                self._LE_left_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([1., 0., 0.62])), extrema=True)
-                self._LE_mid_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([1., 0.5, 0.62])), extrema=True)
-                self._LE_right_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([1., 1.0, 0.62])), extrema=True)
+                self._LE_left_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([1., 0., 0.62])), plot=False, extrema=True)
+                self._LE_mid_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([1., 0.5, 0.62])), plot=False, extrema=True)
+                self._LE_right_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([1., 1.0, 0.62])), plot=False, extrema=True)
 
-                self._TE_left_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0., 0., 0.5])), extrema=True)
-                self._TE_mid_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0., 0.5, 0.5])), extrema=True)
-                self._TE_right_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0., 1.0, 0.5])), extrema=True)
+                self._TE_left_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 0., 0.5])), plot=False, extrema=True)
+                self._TE_mid_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 0.5, 0.5])),  plot=False,extrema=True)
+                self._TE_right_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 1.0, 0.5])), plot=False, extrema=True)
+                t6 = time.time()
 
+                self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=False)
+
+                print("time for computing corner points", t6-t5)
 
     def actuate(self, angle : Union[float, int, csdl.Variable], axis_location : float=0.25):
         """Actuate (i.e., rotate) the wing about an axis location at or behind the leading edge.
@@ -359,7 +370,7 @@ class Wing(Component):
         parameterization_solver.add_parameter(span_stretch_b_spline.coefficients)
         parameterization_solver.add_parameter(sweep_translation_b_spline.coefficients)
         parameterization_solver.add_parameter(dihedral_translation_b_spline.coefficients)
-        parameterization_solver.add_parameter(rigid_body_translation, cost=0.1)
+        parameterization_solver.add_parameter(rigid_body_translation, cost=10)
 
         return 
 
@@ -481,25 +492,25 @@ class Wing(Component):
         else:
             raise NotImplementedError
 
-        if self.parameters.sweep is not None:
-            sweep_input = self.parameters.sweep
-        else:
-            sweep_input = csdl.Variable(shape=(1, ), value=0.)
-
-        if self.parameters.dihedral is not None:
-            dihedral_input = self.parameters.dihedral
-        else:
-            dihedral_input = csdl.Variable(shape=(1, ), value=0.)
-
         # Set constraints: user input - geometric qty equivalent
         ffd_geometric_variables.add_variable(wing_geom_qts.span, span_input)
         ffd_geometric_variables.add_variable(wing_geom_qts.center_chord, root_chord_input)
         ffd_geometric_variables.add_variable(wing_geom_qts.left_tip_chord, tip_chord_left_input)
         ffd_geometric_variables.add_variable(wing_geom_qts.right_tip_chord, tip_chord_right_input)
-        ffd_geometric_variables.add_variable(wing_geom_qts.sweep_angle_left, sweep_input)
-        ffd_geometric_variables.add_variable(wing_geom_qts.sweep_angle_right, sweep_input)
-        ffd_geometric_variables.add_variable(wing_geom_qts.dihedral_angle_left, dihedral_input)
-        ffd_geometric_variables.add_variable(wing_geom_qts.dihedral_angle_right, dihedral_input)
+
+        if self.parameters.sweep is not None:
+            sweep_input = self.parameters.sweep
+            ffd_geometric_variables.add_variable(wing_geom_qts.sweep_angle_left, sweep_input)
+            ffd_geometric_variables.add_variable(wing_geom_qts.sweep_angle_right, sweep_input)
+
+        if self.parameters.dihedral is not None:
+            dihedral_input = self.parameters.dihedral
+            ffd_geometric_variables.add_variable(wing_geom_qts.dihedral_angle_left, dihedral_input)
+            ffd_geometric_variables.add_variable(wing_geom_qts.dihedral_angle_right, dihedral_input)
+
+        # print(wing_geom_qts.center_chord.value, root_chord_input.value)
+        # print(wing_geom_qts.left_tip_chord.value, tip_chord_left_input.value)
+        # print(wing_geom_qts.right_tip_chord.value, tip_chord_right_input.value)
 
         return
 

@@ -1,4 +1,4 @@
-# NOTE: file is WIP
+# NOTE: file is WIP breaks in line 92!
 import CADDEE_alpha as cd
 import csdl_alpha as csdl
 import aframe as af
@@ -10,7 +10,7 @@ from ex_utils import plot_vlm
 
 
 # NOTE: for Windows, parallization does not work (need num_workers=1)
-# fs.num_workers = 1
+fs.num_workers = 1
 
 plot = False
 
@@ -46,7 +46,7 @@ def define_base_config(caddee : cd.CADDEE):
                                                             "Wing, 1, 8",
                                                             "Wing, 1, 9"])
     wing = cd.aircraft.components.Wing(
-        AR=8.5, S_ref=19.5, sweep=np.deg2rad(0), dihedral=np.deg2rad(0), 
+        AR=10.5, S_ref=19.5, sweep=np.deg2rad(0), dihedral=np.deg2rad(0), 
         taper_ratio=0.75, geometry=wing_geometry, tight_fit_ffd=False
     )
 
@@ -69,6 +69,12 @@ def define_base_config(caddee : cd.CADDEE):
 
     displacement_space = fs.BSplineSpace(2, (1,1), (3,3))
     wing.quantities.displacement_space = wing_geometry.create_parallel_space(displacement_space)
+
+    # # make ribs and spars
+    # wing.construct_ribs_and_spars(
+    #     c_172_geometry, num_ribs=10,
+    # )
+    # c_172_geometry.plot(opacity=0.3)
 
     # wing camber surface
     vlm_mesh = cd.mesh.VLMMesh()
@@ -137,7 +143,7 @@ def define_base_config(caddee : cd.CADDEE):
 
     # Set up the configuration geometry (i.e., run FFD)
     base_config.setup_geometry()
-    
+
     caddee.base_configuration = base_config
 
     # assign meshes to mesh container

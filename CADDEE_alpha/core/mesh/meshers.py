@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from CADDEE_alpha.utils.caddee_dict import CADDEEDict
 from CADDEE_alpha.utils.mesh_utils import import_mesh
 import lsdo_function_spaces as fs
+from scipy.interpolate import interp1d
 
 
 def cosine_spacing(num_pts, spanwise_points=None, chord_surface=None, num_chordwise=None, flip=False):
@@ -256,6 +257,8 @@ def make_vlm_surface(
     ignore_camber: bool = False, 
     plot: bool = False,
     grid_search_density: int = 10,
+    LE_interp : Union[str, None] = None,
+    TE_interp : Union[str, None] = None,
 ) -> CamberSurface:
     """Make a VLM camber surface mesh for wing-like components. This method is NOT 
     intended for vertically oriented lifting surfaces like a vertical tail.
@@ -303,6 +306,8 @@ def make_vlm_surface(
     csdl.check_parameter(plot, "plot", types=bool)
     csdl.check_parameter(grid_search_density, "grid_search_density", types=int)
     csdl.check_parameter(ignore_camber, "ignore_camber", types=bool)
+    csdl.check_parameter(LE_interp, "LE_interp", values=("ellipse", None))
+    csdl.check_parameter(TE_interp, "TE_interp", values=("ellipse", None))
 
     if wing_comp.geometry is None:
         raise Exception("Cannot generate mesh for component with geoemetry=None")
@@ -323,13 +328,63 @@ def make_vlm_surface(
     if spacing_spanwise == "linear":
         num_spanwise_half = int(num_spanwise / 2)
         LE_points_1 = np.linspace(LE_left_point, LE_mid_point, num_spanwise_half + 1)
-        
         LE_points_2 = np.linspace(LE_mid_point, LE_right_point, num_spanwise_half + 1)
-        LE_points = np.vstack((LE_points_1, LE_points_2[1:, :]))
+        
+        # Check whether spanwise points should projected based on ellipse
+        if LE_interp is not None:
+            array_to_project = np.zeros((num_spanwise + 1, 3))
+            y = np.array([LE_left_point[1], LE_mid_point[1], LE_right_point[1]])
+            z = np.array([LE_left_point[2], LE_mid_point[2], LE_right_point[2]])
+            fz = interp1d(y, z, kind="linear")
+
+            # Set up equation for an ellipse
+            h = LE_left_point[0]
+            b = 2 * (h - LE_mid_point[0]) # Semi-minor axis
+            a = LE_right_point[1] # semi-major axis
+            
+            interp_y_1 = np.linspace(y[0], y[1], num_spanwise_half+1)
+            interp_y_2 = np.linspace(y[1], y[2], num_spanwise_half+1)
+
+            array_to_project[0:num_spanwise_half+1, 0] = (b**2 * (1 - interp_y_1**2/a**2))**0.5 + h
+            array_to_project[0:num_spanwise_half+1, 1] = interp_y_1
+            array_to_project[0:num_spanwise_half+1, 2] = fz(interp_y_1)
+
+            array_to_project[num_spanwise_half:, 0] = (b**2 * (1 - interp_y_2**2/a**2))**0.5 + h
+            array_to_project[num_spanwise_half:, 1] = interp_y_2
+            array_to_project[num_spanwise_half:, 2] = fz(interp_y_2)
+
+            LE_points = array_to_project
+        else:
+            LE_points = np.vstack((LE_points_1, LE_points_2[1:, :]))
 
         TE_points_1 = np.linspace(TE_left_point, TE_mid_point, num_spanwise_half + 1)
         TE_points_2 = np.linspace(TE_mid_point, TE_right_point, num_spanwise_half + 1)
-        TE_points = np.vstack((TE_points_1, TE_points_2[1:, :]))
+        # Check whether spanwise points should projected based on ellipse
+        if TE_interp is not None:
+            array_to_project = np.zeros((num_spanwise + 1, 3))
+            y = np.array([TE_left_point[1], TE_mid_point[1], TE_right_point[1]])
+            z = np.array([TE_left_point[2], TE_mid_point[2], TE_right_point[2]])
+            fz = interp1d(y, z, kind="linear")
+
+            # Set up equation for an ellipse
+            h = TE_left_point[0]
+            b = 2 * (h - TE_mid_point[0]) # Semi-minor axis
+            a = TE_right_point[1] # semi-major axis
+
+            interp_y_1 = np.linspace(y[0], y[1], num_spanwise_half+1)
+            interp_y_2 = np.linspace(y[1], y[2], num_spanwise_half+1)
+
+            array_to_project[0:num_spanwise_half+1, 0] = -(b**2 * (1 - interp_y_1**2/a**2))**0.5 + h
+            array_to_project[0:num_spanwise_half+1, 1] = interp_y_1
+            array_to_project[0:num_spanwise_half+1, 2] = fz(interp_y_1)
+
+            array_to_project[num_spanwise_half:, 0] = -(b**2 * (1 - interp_y_2**2/a**2))**0.5 + h
+            array_to_project[num_spanwise_half:, 1] = interp_y_2
+            array_to_project[num_spanwise_half:, 2] = fz(interp_y_2)
+            
+            TE_points = array_to_project
+        else:
+            TE_points = np.vstack((TE_points_1, TE_points_2[1:, :]))
     
     elif spacing_spanwise == "cosine":
         num_spanwise_half = int(num_spanwise / 2)
@@ -794,7 +849,7 @@ class ShellDiscretization(Discretization):
         return self
         
 def import_shell_mesh(file_name:str, 
-                      component:'Component',
+                      component,
                       plot=False,
                       rescale=[1,1,1],
                       grid_search_n = 1):

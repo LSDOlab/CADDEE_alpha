@@ -9,6 +9,7 @@ from lsdo_geo.core.parameterization.free_form_deformation_functions import const
 import lsdo_function_spaces as lfs
 import csdl_alpha as csdl
 from dataclasses import dataclass
+import time
 
 
 @dataclass
@@ -86,8 +87,10 @@ class Component:
             if "do_not_remake_ffd_block" in kwargs.keys():
                 pass
             else:
+                t1 = time.time()
                 self._ffd_block = self._make_ffd_block(self.geometry)
-
+                t2 = time.time()
+                print("time for making ffd block", t2-t1)
     
     def create_subgeometry(self, search_names : List[str]) -> FunctionSet:
         """Create a sub-geometry by providing the search names of the e.g., OpenVSP component.
