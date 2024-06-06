@@ -105,6 +105,7 @@ class Wing(Component):
                 raise NotImplementedError("incidence has not yet been implemented")
 
         self._name = f"wing_{self._instance_count}"
+        self._tight_fit_ffd = tight_fit_ffd
         
         # Assign parameters
         self.parameters : WingParameters =  WingParameters(
@@ -564,9 +565,6 @@ class Wing(Component):
             The function space to be used for the ribs. Defaults to a linear BSplineSpace.
         """
 
-        # TODO: reconstruct wing with ribs and spars (eg, reconstruct the ffd block?)
-        #       right now it just adds the ribs and spars to the geometry object, not the wing component (self)
-
         # TODO: add interpolation for spars (between ribs)
         # TODO: add surface panel creation for water-tightness
         # TODO: add export for meshing
@@ -633,10 +631,14 @@ class Wing(Component):
             right_spar_coeffs = spar_coeffs @ coeff_flip
             right_spar = lfs.Function(spar_function_space, right_spar_coeffs)
             geometry.functions[surf_index] = spar
+            self.geometry.functions[surf_index] = spar
             geometry.function_names[surf_index] = "Wing_l_spar_"+str(i)
+            self.geometry.function_names[surf_index] = "Wing_l_spar_"+str(i)
             surf_index += 1
             geometry.functions[surf_index] = right_spar
+            self.geometry.functions[surf_index] = right_spar
             geometry.function_names[surf_index] = "Wing_r_spar_"+str(i)
+            self.geometry.function_names[surf_index] = "Wing_r_spar_"+str(i)
             surf_index += 1
 
         for i in range(num_ribs):
@@ -647,12 +649,18 @@ class Wing(Component):
             rib_coeffs = rib_function_space.fit(fitting_values, fitting_coords)
             rib = lfs.Function(rib_function_space, rib_coeffs)
             geometry.functions[surf_index] = rib
+            self.geometry.functions[surf_index] = rib
             geometry.function_names[surf_index] = "Wing_rib_"+str(i)
+            self.geometry.function_names[surf_index] = "Wing_rib_"+str(i)
             surf_index += 1
             if i > 0:
                 right_rib_coeffs = rib_coeffs @ coeff_flip
                 right_rib = lfs.Function(rib_function_space, right_rib_coeffs)
                 geometry.functions[surf_index] = right_rib
+                self.geometry.functions[surf_index] = right_rib
                 geometry.function_names[surf_index] = "Wing_rib_"+str(-i)
+                self.geometry.function_names[surf_index] = "Wing_rib_"+str(-i)
                 surf_index += 1
+
+        self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=self._tight_fit_ffd)
          

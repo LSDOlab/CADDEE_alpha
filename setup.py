@@ -50,7 +50,8 @@ setup(
         'setuptools',
         'wheel',
         'twine',
-        'meshio'
+        'meshio',
+        'caddee_materials @ git+https://github.com/HgXe/caddee_materials.git',
     ],
     classifiers=[
         'Programming Language :: Python',
