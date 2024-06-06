@@ -427,20 +427,36 @@ class OneDBoxBeam(Discretization):
     bottom_skin_thickness: csdl.Variable = None
 
     _geom = None
+    _spar_geom = None
+    _front_spar_geom = None
+    _rear_spar_geom = None
+
+    _material_properties = None
+
     _LE_points_parametric = None
     _TE_points_parametric = None
     _norm_node_center = None
     _norm_beam_width = None
     _node_top_parametric = None
     _node_bottom_parametric = None
+    _fore_points_parametric = None
+    _aft_points_parametric = None
+    _top_grid_parametric = None
+    _bottom_grid_parametric = None
+    _front_grid_parametric = None
+    _rear_grid_parametric = None
 
 
     def _update(self):
         LE_points_csdl = self._geom.evaluate(self._LE_points_parametric).reshape((self.num_beam_nodes, 3))
         TE_points_csdl = self._geom.evaluate(self._TE_points_parametric).reshape((self.num_beam_nodes, 3))
 
-        beam_width_raw = csdl.norm((LE_points_csdl - TE_points_csdl) * self._norm_beam_width, axes=(1, ))
-        beam_width_nodal = make_mesh_symmetric(beam_width_raw, self.num_beam_nodes, spanwise_index=None)
+        if self._spar_geom is not None:
+            beam_width_nodal = (self._geom.evaluate(self._fore_points_parametric)[:,0] 
+                                - self._geom.evaluate(self._aft_points_parametric)[:,0])
+        else:
+            beam_width_raw = csdl.norm((LE_points_csdl - TE_points_csdl) * self._norm_beam_width, axes=(1, ))
+            beam_width_nodal = make_mesh_symmetric(beam_width_raw, self.num_beam_nodes, spanwise_index=None)
         self.beam_width = (beam_width_nodal[0:-1] + beam_width_nodal[1:]) / 2
 
         node_top = self._geom.evaluate(self._node_top_parametric).reshape((self.num_beam_nodes, 3))
@@ -451,6 +467,17 @@ class OneDBoxBeam(Discretization):
         beam_height_raw = csdl.norm((node_top - node_bottom), axes=(1, ))
         beam_height_nodal = make_mesh_symmetric(beam_height_raw, self.num_beam_nodes, spanwise_index=None)
         self.beam_height = (beam_height_nodal[0:-1] + beam_height_nodal[1:]) / 2
+
+        top_thickness_grid = self._material_properties.evaluate_thickness(self._top_grid_parametric)
+        bottom_thickness_grid = self._material_properties.evaluate_thickness(self._bottom_grid_parametric)
+        self.top_skin_thickness = csdl.average(top_thickness_grid.reshape((self.num_beam_nodes-1, -1)), axes=(1,))
+        self.bottom_skin_thickness = csdl.average(bottom_thickness_grid.reshape((self.num_beam_nodes-1, -1)), axes=(1,))
+
+        front_thickness_grid = self._material_properties.evaluate_thickness(self._front_grid_parametric)
+        rear_thickness_grid = self._material_properties.evaluate_thickness(self._rear_grid_parametric)
+        front_thickness = csdl.average(front_thickness_grid.reshape((self.num_beam_nodes-1, -1)), axes=(1,))
+        rear_thickness = csdl.average(rear_thickness_grid.reshape((self.num_beam_nodes-1, -1)), axes=(1,))
+        self.shear_web_thickness = (front_thickness + rear_thickness) / 2
 
 
 class OneDBoxBeamDict(DiscretizationsDict):
@@ -469,6 +496,7 @@ def make_1d_box_beam(
     spacing: str = "linear",
     plot: bool = False,
     grid_search_density: int = 10,
+    project_spars = False,
 ) -> OneDBoxBeam:
     """Create a 1-D box beam mesh for a wing-like component. It is NOT intended
     to work for creating beam-mesh of fuselage-like or vertical tail like components.
@@ -499,6 +527,9 @@ def make_1d_box_beam(
     grid_search_density : int, optional
         parameter to refine the quality of projections (note that the higher this parameter 
         the longer the projections will take; 
+
+    project_spars : bool, optional
+        project onto the spars to get the beam width and shear web thickness, by default False
 
     Returns
     -------
@@ -577,6 +608,20 @@ def make_1d_box_beam(
     beam_width_nodal = make_mesh_symmetric(beam_width_raw, num_beam_nodes, spanwise_index=None)
     beam_width = (beam_width_nodal[0:-1] + beam_width_nodal[1:]) / 2
 
+    if project_spars:
+        # use the spars to get the beam width
+        fore_projection_points = beam_nodes_raw.value.copy()
+        fore_projection_points[:, 0] = fore_projection_points[:, 0] + beam_width_nodal.value/2
+        aft_projection_points = beam_nodes_raw.value.copy()
+        aft_projection_points[:, 0] = aft_projection_points[:, 0] - beam_width_nodal.value/2
+
+        direction = np.array([1., 0., 0.])
+        spar_geometery = wing_geometry.declare_component(function_search_names=["spar"])
+        fore_points_parametric = spar_geometery.project(fore_projection_points, plot=plot, direction=direction, grid_search_density_parameter=grid_search_density)
+        aft_points_parametric = spar_geometery.project(aft_projection_points, plot=plot, direction=-direction, grid_search_density_parameter=grid_search_density)
+        beam_width_nodal = wing_geometry.evaluate(fore_points_parametric)[:,0] - wing_geometry.evaluate(aft_points_parametric)[:,0]
+        beam_width = (beam_width_nodal[0:-1] + beam_width_nodal[1:]) / 2
+
     offset = np.array([0., 0., 2])
     node_top_parametric = wing_geometry.project(beam_nodes_raw.value + offset, direction=np.array([0., 0., -1]),  plot=plot)
     node_bottom_parametric = wing_geometry.project(beam_nodes_raw.value - offset, direction=np.array([0., 0., 1]), plot=plot)
@@ -605,14 +650,36 @@ def make_1d_box_beam(
     node_grid = node_grid.reshape(-1,3)
     top_grid = wing_geometry.project(node_grid + offset, direction=np.array([0., 0., -1]), plot=plot)
     bottom_grid = wing_geometry.project(node_grid - offset, direction=np.array([0., 0., 1]), plot=plot)
-    top_thickness_grid = material_properties.evaluate_thickness(top_grid).reshape((num_beam_nodes-1, num_chordwise*num_spanwise, 1))
-    bottom_thickness_grid = material_properties.evaluate_thickness(bottom_grid).reshape((num_beam_nodes-1, num_chordwise*num_spanwise, 1))
+    top_thickness_grid = material_properties.evaluate_thickness(top_grid).reshape((num_beam_nodes-1, -1))
+    bottom_thickness_grid = material_properties.evaluate_thickness(bottom_grid).reshape((num_beam_nodes-1, -1))
 
-    top_thickness = csdl.Variable(shape=(num_beam_nodes-1,), value=0.)
-    bottom_thickness = csdl.Variable(shape=(num_beam_nodes-1,), value=0.)
-    for i in csdl.frange(num_beam_nodes-1):
-        top_thickness = top_thickness.set(csdl.slice[i], csdl.average(top_thickness_grid[i,:,:]))
-        bottom_thickness = bottom_thickness.set(csdl.slice[i], csdl.average(bottom_thickness_grid[i,:,:]))
+    # NOTE: not 100% sure this is right so if there's an issue with the beam thickness, this is the first place to check
+    top_thickness = csdl.average(top_thickness_grid, axes=(1,))
+    bottom_thickness = csdl.average(bottom_thickness_grid, axes=(1,))
+
+    # Compute the spar thickness if the spars are projected
+    if project_spars:
+        offset = np.array([offset[2], 0., 0.])
+        num_spanwise = 10
+        num_heightwise = 5
+        beam_thickness_offset = np.zeros((num_beam_nodes-1, 3))
+        beam_thickness_offset[:, 2] = beam_height.value
+        node_grid = np.zeros((num_beam_nodes-1, num_heightwise*num_spanwise, 3))
+        for i in range(num_beam_nodes-1):
+            spanwise = np.linspace(beam_nodes.value[i,:], beam_nodes.value[i+1,:], num_spanwise)
+            grid = np.linspace(spanwise+beam_thickness_offset[i]/2, spanwise-beam_thickness_offset[i]/2, num_heightwise).reshape(-1,3)
+            node_grid[i,:,:] = grid
+        node_grid = node_grid.reshape(-1,3)
+        # NOTE: only really works well for 2 spars, but then so does the rest of the code
+        f_spar_geometry = spar_geometery.declare_component(function_search_names=["0"])
+        r_spar_geometry = spar_geometery.declare_component(function_search_names=["1"])
+        front_grid = f_spar_geometry.project(node_grid + offset, direction=np.array([-1., 0., 0.]), plot=plot)
+        rear_grid = r_spar_geometry.project(node_grid - offset, direction=np.array([1., 0., 0.]), plot=plot)
+        front_thickness_grid = material_properties.evaluate_thickness(front_grid).reshape((num_beam_nodes-1, -1))
+        rear_thickness_grid = material_properties.evaluate_thickness(rear_grid).reshape((num_beam_nodes-1, -1))
+        front_thickness = csdl.average(front_thickness_grid, axes=(1,))
+        rear_thickness = csdl.average(rear_thickness_grid, axes=(1,))
+        shear_web_thickness = (front_thickness + rear_thickness) / 2
 
     beam_mesh = OneDBoxBeam(
         nodal_coordinates=beam_nodes,
@@ -621,17 +688,29 @@ def make_1d_box_beam(
         num_beam_nodes=num_beam_nodes,
         top_skin_thickness=top_thickness,
         bottom_skin_thickness=bottom_thickness,
+        shear_web_thickness=shear_web_thickness if project_spars else None,
     )
 
     wing_comp._discretizations[f"{wing_comp._name}_1d_beam_mesh"] = beam_mesh
 
     beam_mesh._geom = wing_geometry
+    beam_mesh._material_properties = material_properties
     beam_mesh._LE_points_parametric = LE_points_parametric
     beam_mesh._TE_points_parametric = TE_points_parametric
     beam_mesh._norm_beam_width = norm_beam_width
     beam_mesh._norm_node_center = norm_node_center
     beam_mesh._node_top_parametric = node_top_parametric
     beam_mesh._node_bottom_parametric = node_bottom_parametric
+    beam_mesh._top_grid_parametric = top_grid
+    beam_mesh._bottom_grid_parametric = bottom_grid
+    if project_spars:
+        beam_mesh._spar_geom = spar_geometery
+        beam_mesh._front_spar_geom = f_spar_geometry
+        beam_mesh._rear_spar_geom = r_spar_geometry
+        beam_mesh._fore_points_parametric = fore_points_parametric
+        beam_mesh._aft_points_parametric = aft_points_parametric
+        beam_mesh._front_grid_parametric = front_grid
+        beam_mesh._rear_grid_parametric = rear_grid
 
     return beam_mesh
 
