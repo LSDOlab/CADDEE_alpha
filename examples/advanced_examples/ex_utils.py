@@ -1,3 +1,4 @@
+'''Example utils plotting'''
 import matplotlib.pyplot as plt
 import csdl_alpha as csdl
 import numpy as np

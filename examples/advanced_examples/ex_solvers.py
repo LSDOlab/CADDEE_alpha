@@ -1,3 +1,4 @@
+'''Example with solvers'''
 import CADDEE_alpha as cd
 import csdl_alpha as csdl
 import aframe as af

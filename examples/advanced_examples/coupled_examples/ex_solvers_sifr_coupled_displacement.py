@@ -1,3 +1,4 @@
+'''Example coupled sifr displacement'''
 import CADDEE_alpha as cd
 import csdl_alpha as csdl
 import aframe as af

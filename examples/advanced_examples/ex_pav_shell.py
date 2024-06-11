@@ -1,3 +1,4 @@
+'''Example pav with shell'''
 import CADDEE_alpha as cd
 import csdl_alpha as csdl
 from VortexAD.core.vlm.vlm_solver import vlm_solver

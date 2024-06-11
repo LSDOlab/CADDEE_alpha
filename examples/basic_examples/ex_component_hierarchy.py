@@ -1,4 +1,4 @@
-"""Building a component hierarchy"""
+'''Example Building a component hierarchy'''
 # Imports
 import CADDEE_alpha as cd
 import csdl_alpha as csdl

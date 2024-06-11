@@ -1,3 +1,4 @@
+'''Example lift plus cruise'''
 import CADDEE_alpha as cd
 import csdl_alpha as csdl
 import numpy as np

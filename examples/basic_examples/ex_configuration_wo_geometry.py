@@ -1,3 +1,4 @@
+'''Example config w/o geometry'''
 from CADDEE_alpha.core.caddee import CADDEE
 from CADDEE_alpha.core.configuration import Configuration
 from CADDEE_alpha.core.component import Component
