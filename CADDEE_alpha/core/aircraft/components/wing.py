@@ -175,6 +175,7 @@ class Wing(Component):
                 ffd_block = self._make_ffd_block(self.geometry, tight_fit=tight_fit_ffd, degree=(1, 2, 1), num_coefficients=(2, 2, 2))
                 t4 = time.time()
                 print("time for making ffd_block", t4-t3)
+                # ffd_block.plot()
 
                 t5 = time.time()
                 # Compute the corner points of the wing 
@@ -531,14 +532,21 @@ class Wing(Component):
         
         return 
         
-    def construct_ribs_and_spars(self, geometry:lg.Geometry, 
-                             num_ribs:int=None, spar_locations:np.ndarray=None, 
-                             rib_locations:np.ndarray=None, surf_index:int=1000, 
-                             offset:np.ndarray=np.array([0., 0., .23]), 
-                             num_rib_pts:int=20, plot_projections:bool=False,
-                             spar_function_space:lfs.FunctionSpace=None,
-                             rib_function_space:lfs.FunctionSpace=None,
-                             export_wing_box:bool=False):
+    def construct_ribs_and_spars(
+            self, 
+            geometry:lg.Geometry, 
+            num_ribs:int=None, 
+            spar_locations:np.ndarray=None, 
+            rib_locations:np.ndarray=None,
+            LE_TE_interpolation=None,
+            surf_index:int=1000,
+            offset:np.ndarray=np.array([0., 0., .23]), 
+            num_rib_pts:int=20, 
+            plot_projections:bool=False,
+            spar_function_space:lfs.FunctionSpace=None,
+            rib_function_space:lfs.FunctionSpace=None,
+            export_wing_box:bool=False,
+        ):
         """
         Construct ribs and spars for the given wing geometry.
 
@@ -552,6 +560,8 @@ class Wing(Component):
             The locations of the spars along the wing span. If not provided, default values of [0.25, 0.75] will be used.
         rib_locations : np.ndarray, optional
             The locations of the ribs along the wing span. If not provided, evenly spaced values between 0 and 1 will be used.
+        LE_TE_interpolation : str, optional
+            The method of interpolating the leading and trailing edge; This might be useful for swept and curved wing geometries. Default is None
         surf_index : int, optional
             The starting index for the surface functions in the geometry object. Default value is 1000.
         offset : np.ndarray, optional
@@ -567,7 +577,21 @@ class Wing(Component):
         export_wing_box : bool, optional
             If true, a water-tight wing box geometry will be exported to a .igs file. Default value is False.
         """
+        csdl.check_parameter(num_ribs, "num_ribs", types=int)
+        csdl.check_parameter(spar_locations, "spar_locations", types=np.ndarray, allow_none=True)
+        csdl.check_parameter(rib_locations, "rib_locations", types=np.ndarray, allow_none=True)
+        csdl.check_parameter(LE_TE_interpolation, "LE_TE_interpolation", values=("ellipse", None))
+        csdl.check_parameter(surf_index, "surf_index", types=int)
 
+        # Check if if spar and rib locations are between 0 and 1
+        if spar_locations is not None:
+            if not np.all((spar_locations > 0) & (spar_locations < 1)):
+                raise ValueError("all spar locations must be between 0 and 1 (excluding the endpoints)")
+        
+        if rib_locations is not None:
+            if not np.all((rib_locations >= 0) & (rib_locations <= 1)):
+                raise ValueError("all rib locations must be between 0 and 1 (including the endpoints)")
+        
         # TODO: add interpolation for spars (between ribs)
         # TODO: add surface panel creation for water-tightness
         # TODO: add export for meshing
@@ -585,6 +609,8 @@ class Wing(Component):
         if num_ribs is None:
             num_ribs = rib_locations.shape[0]
         num_spars = spar_locations.shape[0]
+        if num_spars == 1:
+            raise Exception("Cannot have single spar. Provide at least two normalized spar locations.")
         if spar_function_space is None:
             spar_function_space = lfs.BSplineSpace(2, 1, (num_ribs, 2))
         if rib_function_space is None:
@@ -609,7 +635,53 @@ class Wing(Component):
         for i in range(num_spars):
             for j in range(num_ribs):
                 spar_projection_points[i,j] = root_tip_pts[i,0] * (1-rib_locations[j]) + root_tip_pts[i,1] * rib_locations[j]
+        
+        if LE_TE_interpolation is not None:
+            from scipy.interpolate import interp1d
+            LE_TE_points = np.zeros((2, num_ribs, 3))
+            interp_y = spar_projection_points[0, :, 1] 
             
+            for i in range(2):
+                if i == 0:
+                    left_point = self.geometry.evaluate(self._LE_left_point).value
+                    mid_point = self.geometry.evaluate(self._LE_mid_point).value
+                    right_point = self.geometry.evaluate(self._LE_right_point).value
+                else:
+                    left_point = self.geometry.evaluate(self._TE_left_point).value
+                    mid_point = self.geometry.evaluate(self._TE_mid_point).value
+                    right_point = self.geometry.evaluate(self._TE_right_point).value
+
+                array_to_project = np.zeros((num_ribs, 3))
+                y = np.array([left_point[1], mid_point[1], right_point[1]])
+                z = np.array([left_point[2], mid_point[2], right_point[2]])
+                fz = interp1d(y, z, kind="linear")
+
+                # Set up equation for an ellipse
+                h = left_point[0]
+                b = 2 * (h - mid_point[0]) # Semi-minor axis
+                a = right_point[1] # semi-major axis
+                if i == 0:
+                    array_to_project[:, 0] = (b**2 * (1 - interp_y**2/a**2))**0.5 + h
+                else:
+                    array_to_project[:, 0] = -(b**2 * (1 - interp_y**2/a**2))**0.5 + h
+                array_to_project[:, 1] = interp_y
+                array_to_project[:, 2] = fz(interp_y)
+
+                LE_TE_points[i, :, :] = array_to_project
+
+            LE_TE_points_eval = self.geometry.evaluate(self.geometry.project(LE_TE_points, plot=plot_projections)).reshape((2, num_ribs, 3)).value
+
+            root_tip_pts = np.zeros((num_spars, num_ribs, 3))
+            for i in range(num_spars):
+                root_tip_pts[i, :, 0] = (1-spar_locations[i]) * LE_TE_points_eval[0, :, 0] + spar_locations[i] * LE_TE_points_eval[-1, :, 0]
+                root_tip_pts[i, :, 1] = (LE_TE_points_eval[0, :, 1] + LE_TE_points_eval[-1, :, 1]) / 2 # Take the average between LE and TE for y
+                root_tip_pts[i, :, 2] = (LE_TE_points_eval[0, :, 2] + LE_TE_points_eval[-1, :, 2]) / 2 # Take the average between LE and TE for z
+
+            root_tip_pts[:, :, 1] = np.mean(root_tip_pts[:, :, 1], axis=0)
+
+            spar_projection_points = root_tip_pts
+
+
         # make projection points for ribs
         # TODO: vectorize across ribs?
         rib_projection_points = np.zeros((num_ribs, num_rib_pts*(num_spars-1)+1, 3))
@@ -725,5 +797,5 @@ class Wing(Component):
             wing_box_geometry.export_iges("wing_box.igs")
 
 
-        self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=self._tight_fit_ffd)
+        self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=False)
          
