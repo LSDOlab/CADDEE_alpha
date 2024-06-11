@@ -308,33 +308,11 @@ def define_mass_properties(caddee: cd.CADDEE):
     systems.quantities.mass_properties.cg_vector = systems_cg
 
     # Assemble system mass properties
-    base_config.assemble_system_mass_properties()
-
-    system = base_config.system
-    # print("initial mass", system.quantities.mass_properties.mass.value)
-    # print("initial cg vector", system.quantities.mass_properties.cg_vector.value)
-    # print("initial inertia", system.quantities.mass_properties.inertia_tensor.value)
+    base_config.assemble_system_mass_properties(update_copies=True)
 
 
 def define_analysis(caddee: cd.CADDEE):
     conditions = caddee.conditions
-
-    hover = conditions["hover"]
-    hover_config = hover.configuration
-    hover_config.assemble_system_mass_properties()
-    aircraft_in_hover = hover_config.system
-    print("hover mass", aircraft_in_hover.quantities.mass_properties.mass.value)
-    print("hover cg", aircraft_in_hover.quantities.mass_properties.cg_vector.value)
-    
-
-    cruise = conditions["cruise"]
-    cruise_config = cruise.configuration
-    cruise_config.assemble_system_mass_properties()
-    aircraft_in_cruise = cruise_config.system
-    print("cruise mass", aircraft_in_cruise.quantities.mass_properties.mass.value)
-    print("cruise cg", aircraft_in_cruise.quantities.mass_properties.cg_vector.value)
-
-    exit()
 
     # # hover
     # hover = conditions["hover"]
