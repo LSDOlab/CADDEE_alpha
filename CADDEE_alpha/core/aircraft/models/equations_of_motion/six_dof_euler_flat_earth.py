@@ -118,7 +118,6 @@ class SixDofEulerFlatEarthModel:
         mp_matrix = mp_matrix.set(csdl.slice[5, 4], Iyz)
         mp_matrix = mp_matrix.set(csdl.slice[5, 5], Izz)
 
-
         lambda_x = Fx + m * (r * v - q * w - xcgdot - 2 * q * zcgdot
                             + 2 * r * ycgdot + Rbcx * (q ** 2 + r ** 2)
                             - Rbcy * p * q - Rbcz * p * r)
@@ -189,13 +188,17 @@ class SixDofEulerFlatEarthModel:
         state = csdl.ImplicitVariable(shape=(6, self.num_nodes), value=0.)
         residual = mp_matrix @ state - rhs.T()
 
+        accel = csdl.solve_linear(mp_matrix, rhs.T())
+        print("accelerations", accel.value)
+
         # Using a newton solver to solve linear system instead of looping
         # over num_nodes
-        solver = csdl.nonlinear_solvers.Newton(tolerance=1e-12)
-        solver.add_state(state, residual)
-        solver.run()
+        # solver = csdl.nonlinear_solvers.Newton(tolerance=1e-12)
+        # solver.add_state(state, residual)
+        # solver.run()
 
-        lin_and_ang_accel = state.T()
+        lin_and_ang_accel = accel.T()
+        # lin_and_ang_accel = state.T()
 
         lin_and_ang_accel_output = LinAngAccel(
             du_dt=lin_and_ang_accel[:, 0],
@@ -212,13 +215,12 @@ class SixDofEulerFlatEarthModel:
 
         return lin_and_ang_accel_output
 
-
         
 
 if __name__ == "__main__":
     recorder = csdl.Recorder(inline=True)
     recorder.start()
-    num_nodes = 5
+    num_nodes = 1
     total_forces= csdl.Variable(shape=(num_nodes, 3), value=100.) 
     total_moments= csdl.Variable(shape=(num_nodes, 3), value=20)
     ac_states= AircaftStates(
@@ -246,10 +248,20 @@ if __name__ == "__main__":
     ))
 
     eom_model = SixDofEulerFlatEarthModel(num_nodes=num_nodes)
-    eom_model.evaluate(
+    accel = eom_model.evaluate(
         total_forces=total_forces,
         total_moments=total_moments,
         ac_states=ac_states,
         ac_mass_properties=ac_mass_properties,
     )
+
+    print(accel.accel_norm.value)
+    print(accel.du_dt.value)
+    print(accel.dv_dt.value)
+    print(accel.dw_dt.value)
+    print(accel.dp_dt.value)
+    print(accel.dq_dt.value)
+    print(accel.dr_dt.value)
+
+
 

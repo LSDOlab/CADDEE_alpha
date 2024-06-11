@@ -5,7 +5,6 @@ import csdl_alpha as csdl
 from typing import Union
 import numpy as np
 
-
 # _REPO_ROOT_FOLDER = Path(__file__).parents[0]
 
 # with open(_REPO_ROOT_FOLDER / "regression_parameters_empennage.pickle", "rb") as handle:
@@ -340,6 +339,26 @@ def compute_wing_mps(
     MassProperties
         instance of MassProperties data class
     """
+    csdl.check_parameter(wing_area, "wing_area", types=(csdl.Variable, float, int))
+    csdl.check_parameter(wing_AR, "wing_AR", types=(csdl.Variable, float, int))
+    csdl.check_parameter(fuselage_length, "fuselage_length", types=(csdl.Variable, float, int))
+    csdl.check_parameter(battery_mass, "battery_mass", types=(csdl.Variable, float, int))
+    csdl.check_parameter(cruise_speed, "cruise_speed", types=(csdl.Variable, float, int))
+
+    if not isinstance(wing_area, csdl.Variable):
+        wing_area = csdl.Variable(shape=(1, ), value=wing_area)
+
+    if not isinstance(wing_AR, csdl.Variable):
+        wing_AR = csdl.Variable(shape=(1, ), value=wing_AR)
+
+    if not isinstance(fuselage_length, csdl.Variable):
+        fuselage_length = csdl.Variable(shape=(1, ), value=fuselage_length)
+
+    if not isinstance(battery_mass, csdl.Variable):
+        battery_mass = csdl.Variable(shape=(1, ), value=battery_mass)
+
+    if not isinstance(cruise_speed, csdl.Variable):
+        cruise_speed = csdl.Variable(shape=(1, ), value=cruise_speed)
 
     cg_vec = csdl.Variable(shape=(3, ), value=0.)
     i_mat = csdl.Variable(shape=(3, 3), value=0.)
@@ -440,6 +459,8 @@ def compute_fuselage_mps(
     )
 
     return wing_mps
+
+__all__ = [compute_boom_mps, compute_empennage_mps, compute_fuselage_mps, compute_wing_mps]
 
 def evaluate_regression(wing_area, wing_AR, fuselage_length, battery_mass, cruise_speed, coeffs):
     qty = coeffs[0] * wing_area + coeffs[1] * wing_AR + coeffs[2] * fuselage_length \

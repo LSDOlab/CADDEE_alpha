@@ -6,7 +6,7 @@ from CADDEE_alpha.core.aircraft.components.wing import Wing
 from CADDEE_alpha.core.aircraft.components.fuselage import Fuselage
 from CADDEE_alpha.core.aircraft.conditions.aircraft_condition import CruiseCondition, ClimbCondition
 from CADDEE_alpha.core.aircraft.models.weights.weights_solver import WeightsSolverModel
-from CADDEE_alpha.core.aircraft.models.weights.general_aviation import *
+from CADDEE_alpha.core.aircraft.models.weights.general_aviation.general_aviation import *
 from CADDEE_alpha.utils.units import Units
 import numpy as np
 import csdl_alpha as csdl

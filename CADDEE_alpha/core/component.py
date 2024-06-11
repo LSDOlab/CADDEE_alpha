@@ -12,18 +12,69 @@ from dataclasses import dataclass
 import time
 
 
-@dataclass
 class ComponentQuantities:
-    mass_properties : MassProperties = None
-    material_properties : MaterialProperties = None
-    drag_parameters : DragBuildUpQuantities = None
-    def __post_init__(self):
-        self.mass_properties = MassProperties()
-        if self.material_properties is None:
-            self.material_properties = MaterialProperties(self)
+    def __init__(
+        self, 
+        mass_properties: MassProperties = None,
+        material_properties: MaterialProperties = None,
+        drag_parameters: DragBuildUpQuantities = None
+    ) -> None:
+        
+        self._mass_properties = mass_properties
+        self._material_properties = material_properties
+        self._drag_parameters = drag_parameters
+    
         self.surface_mesh = []
         self.surface_area = None
-        self.drag_parameters = DragBuildUpQuantities()
+
+        if mass_properties is None:
+            self.mass_properties = MassProperties()
+
+        if material_properties is None:
+            self.material_properties = MaterialProperties(self)
+
+        if drag_parameters is None:
+            self.drag_parameters =  DragBuildUpQuantities()
+        
+
+    @property
+    def mass_properties(self):
+        return self._mass_properties
+    
+    @mass_properties.setter
+    def mass_properties(self, value):
+        if not isinstance(value, MassProperties):
+            raise ValueError(f"'mass_properties' must be of type {MassProperties}, received {value}")
+        
+        self._mass_properties = value
+
+    @property
+    def material_properties(self):
+        return self._material_properties
+    
+    @material_properties.setter
+    def material_properties(self, value):
+        if not isinstance(value, MaterialProperties):
+            raise ValueError(f"'material_properties' must be of type {MassProperties}, received {type(value)}")
+        self._material_properties = value
+
+    @property
+    def drag_parameters(self):
+        return self._drag_parameters
+    
+    @drag_parameters.setter
+    def drag_parameters(self, value):
+        if not isinstance(value, DragBuildUpQuantities):
+            raise ValueError(f"'drag_parameters' must be of type {DragBuildUpQuantities}, received {type(value)}")
+        self._drag_parameters = value
+
+    # def __post_init__(self):
+    #     self.mass_properties = MassProperties()
+    #     if self.material_properties is None:
+    #         self.material_properties = MaterialProperties(self)
+    #     self.surface_mesh = []
+    #     self.surface_area = None
+    #     self.drag_parameters = DragBuildUpQuantities()
 
 @dataclass
 class ComponentParameters:
@@ -74,7 +125,7 @@ class Component:
 
         # set class attributes
         self.geometry : Union[FunctionSet, Geometry, None] = geometry
-        self.comps : ComponentDict = ComponentDict(types=Component)
+        self.comps : ComponentDict = ComponentDict(parent=self)
         self.quantities : ComponentQuantities = ComponentQuantities()
         self.parameters : ComponentParameters = ComponentParameters()
 
@@ -209,6 +260,37 @@ class Component:
         return surface_area
 
 
-class ComponentDict(CADDEEDict):
+class ComponentDict(dict):
+    def __init__(self, parent: Component, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        csdl.check_parameter(parent, "parent", types=(Component))
+        self.parent = parent
+    
     def __getitem__(self, key) -> Component:
-        return super().__getitem__(key)
+        # Check if key exists
+        if key not in self:
+            raise KeyError(f"The component '{key}' does not exist. Existing components: {list(self.keys())}")
+        else:
+            return super().__getitem__(key)
+    
+    def __setitem__(self, key, value : Component, allow_overwrite=False):
+        # Check type
+        if not isinstance(value, Component):
+            raise TypeError(f"Components must be of type(s) {Component}; received {type(value)}")
+        
+        # Check if key is already specified
+        elif key in self:
+            if allow_overwrite is False:
+                raise Exception(f"Component {key} has already been set and cannot be re-set.")
+            else:
+                super().__setitem__(key, value)
+                value.parent = self.parent
+
+        # Set item otherwise
+        else:
+            super().__setitem__(key, value)
+            value.parent = self.parent
+
+
+
+        

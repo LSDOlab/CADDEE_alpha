@@ -236,7 +236,7 @@ class Wing(Component):
                 self._discretizations[discretization_name] = discretization
             except AttributeError:
                 raise Exception(f"The discretization {discretization_name} does not have an '_update' method, which is neded to" + \
-                                " re-evaluate the geometry/meshes after the geometry coefficients have been changes")
+                                " re-evaluate the geometry/meshes after the geometry coefficients have been changed")
 
     def _make_ffd_block(self, 
             entities : List[lfs.Function], 

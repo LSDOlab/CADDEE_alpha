@@ -190,7 +190,7 @@ fuselage.comps["payload"] = payload
 
 # set the base configuration
 c172_base_config = Configuration(c172)
-caddee.configurations["base"] = c172_base_config
+caddee.base_configuration = c172_base_config
 ```
 
 ### UML class diagram

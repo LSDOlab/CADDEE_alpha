@@ -11,6 +11,6 @@ examples page.
 ```{toctree}
 :maxdepth: 1
 
-../_temp/examples/advanced_examples/ex_3quartic_opt_modopt
-../_temp/examples/advanced_examples/ex_5modularity_NewtonLagrange
+<!-- ../_temp/examples/advanced_examples/ex_3quartic_opt_modopt
+../_temp/examples/advanced_examples/ex_5modularity_NewtonLagrange -->
 ```

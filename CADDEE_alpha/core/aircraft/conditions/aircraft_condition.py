@@ -7,7 +7,7 @@ import csdl_alpha as csdl
 from dataclasses import dataclass, asdict, fields
 import numpy as np
 import warnings
-import time as time_it
+from CADDEE_alpha.core.mesh.meshers import CamberSurface
 
 
 @dataclass
@@ -273,6 +273,66 @@ class AircraftCondition(Condition):
                 # get mesh coordinates
                 initial_nodal_coordinates = discretization.nodal_coordinates
 
+                # Compute spanwise Reynolds number
+                if isinstance(discretization, CamberSurface):
+                    # Compute spanwise chord length
+                    LE_nodes = initial_nodal_coordinates[0, :, :]
+                    TE_nodes = initial_nodal_coordinates[-1, :, :]
+                    chord_length = csdl.norm(LE_nodes - TE_nodes, axes=(1, ))
+                    
+                    if discretization._has_been_expanded:
+                        chord_length_exp = chord_length
+
+                    else:
+                        chord_length_exp = csdl.expand(chord_length, (self._num_nodes, ) + chord_length.shape, 'j->ij')
+                    
+                    # Compute Reynolds number
+                    V_inf = (u**2 + v**2 + w**2) ** 0.5
+                    rho = self.quantities.atmos_states.density
+                    mu = self.quantities.atmos_states.dynamic_viscosity
+                    a = self.quantities.atmos_states.speed_of_sound
+                    if self._num_nodes > 1:
+                        V_inf = csdl.expand(V_inf, chord_length_exp.shape, 'i->ij')
+                        rho = csdl.expand(rho, chord_length_exp.shape, 'i->ij')
+                        mu = csdl.expand(mu, chord_length_exp.shape, 'i->ij')
+                        a = csdl.expand(a, chord_length_exp.shape, 'i->ij')
+
+                    Re = rho * chord_length_exp * V_inf / mu
+                    discretization.reynolds_number = Re
+
+                    if discretization.embedded_airfoil_model is not None:
+                        airfoil_model = discretization.embedded_airfoil_model
+                        alpha_implicit = csdl.ImplicitVariable(shape=Re.shape, value=0.)
+                        # Compute Mach number
+                        Ma = V_inf / a
+                        if Ma.shape == (self._num_nodes, ):
+                            Ma_exp = csdl.expand(Ma, Re.shape, action='i->ij')
+                        elif Ma.shape == Re.shape:
+                            Ma_exp = Ma
+                        else:
+                            raise NotImplementedError("Shape mis-match between Ma and other airfoil model inputs. Unlikely to be a user-error.")
+
+                        Cl, _ = airfoil_model.evaluate(alpha_implicit, Re, Ma_exp)
+
+                        # 
+                        solver = csdl.nonlinear_solvers.bracketed_search.BracketedSearch(elementwise_states=True)
+                        solver.add_state(alpha_implicit, Cl, bracket=(-np.deg2rad(8), np.deg2rad(8)))
+                        solver.run()
+                        
+                        alpha = alpha_implicit
+                        discretization.alpha_ML_mid_panel = (alpha[:, 0:-1] + alpha[:, 1:])/2
+
+                        rotation_tensor = csdl.Variable(shape=alpha.shape + (3, 3), value=0.)
+                        rotation_tensor = rotation_tensor.set(csdl.slice[:, :, 0, 0], csdl.cos(alpha))
+                        rotation_tensor = rotation_tensor.set(csdl.slice[:, :, 0, 2], -csdl.sin(alpha))
+                        rotation_tensor = rotation_tensor.set(csdl.slice[:, :, 1, 1], 1)
+                        rotation_tensor = rotation_tensor.set(csdl.slice[:, :, 2, 0], csdl.sin(alpha))
+                        rotation_tensor = rotation_tensor.set(csdl.slice[:, :, 2, 2], csdl.cos(alpha))
+
+                    else:
+                        rotation_tensor = None
+                        discretization.alpha_ML_mid_panel = None
+
                 if discretization._has_been_expanded:
                     shape_exp = discretization.nodal_coordinates.shape
 
@@ -301,7 +361,11 @@ class AircraftCondition(Condition):
                     nodal_velocities = V_vec_exp
 
                 # Set the nodal_velocities in the mesh data class instance
-                discretization.nodal_velocities = nodal_velocities
+                # rotation_tensor = None
+                if rotation_tensor is None:
+                    discretization.nodal_velocities = nodal_velocities
+                else:
+                    discretization.nodal_velocities = csdl.einsum(rotation_tensor, nodal_velocities, action='iklm,ijkl->ijkm')
 
 
     def assemble_forces_and_moments(self, 
@@ -435,7 +499,6 @@ class AircraftCondition(Condition):
                 phi, theta, psi, total_moments
             )
 
-
         # Otherwise also compute inertial moments
         else:
             # Compute moment arm
@@ -461,8 +524,7 @@ class AircraftCondition(Condition):
                 phi, theta, psi, total_moments
             )
 
-
-        return total_forces_body_fixed, total_moments_body_fixed
+        return total_forces_body_fixed, total_moments_body_fixed, inertial_forces, inertial_moments
 
 
 def convert_shape_to_action_string(old_shape, new_shape, type_: str):
@@ -859,19 +921,20 @@ if __name__ == "__main__":
     cruise = CruiseCondition(
         mach_number=0.2,
         altitude=3e3,
-        pitch_angle=np.deg2rad(0.5),
+        pitch_angle=np.deg2rad(5),
         range=5e5,
     )
 
-    print(cruise.parameters.__annotations__)
-    print(asdict(cruise.parameters))
-    print(getattr(cruise.parameters, "mach_number"))
-    exit()
 
-    print("Cruise parameters:         ", cruise.parameters.altitude.value)
-    print("Cruise parameters:         ", cruise.parameters.time.value)
-    print("Cruise aircraft states:    ", cruise.quantities.ac_states.u.value)
-    print("Cruise atmospheric states: ", cruise.quantities.atmos_states.density.value)
+    print("Cruise altitude: ", cruise.parameters.altitude.value)
+    print("Cruise time:     ", cruise.parameters.time.value)
+    print("Cruise u:        ", cruise.quantities.ac_states.u.value)
+    print("Cruise w:        ", cruise.quantities.ac_states.w.value)
+    print("Cruise rho:      ", cruise.quantities.atmos_states.density.value)
+    print("Cruise mu:       ", cruise.quantities.atmos_states.dynamic_viscosity.value)
+    print("Cruise pressure: ", cruise.quantities.atmos_states.pressure.value)
+    print("Cruise a:        ", cruise.quantities.atmos_states.speed_of_sound.value)
+    print("Cruise temp:     ", cruise.quantities.atmos_states.temperature.value)
     # print(cruise.ac_states)
 
     # test_tensor = csdl.Variable(shape=(2, 4, 5, 3), value=np.random.randn(2, 4, 5, 3))

@@ -15,13 +15,18 @@ def plot_vlm(vlm_outputs):
         shape = panel_forces.shape
         norm_span = np.linspace(-1, 1, shape[0])
 
-        axs[0].plot(norm_span, panel_forces[:, 0].value)
+        surface_areas = vlm_outputs.surface_panel_areas[i]
+        area = np.sum(surface_areas.value[0, :, :], axis=0)
+        print("surface area", np.sum(area))
+        rho = 1.22506547
+        V = 61.24764871
+        axs[0].plot(norm_span, -panel_forces[:, 0].value/0.5/rho/V**2 /area)
         axs[0].set_xlabel("norm span")
         axs[0].set_ylabel("Fx")
         axs[1].plot(norm_span, panel_forces[:, 1].value)
         axs[1].set_xlabel("norm span")
         axs[1].set_ylabel("Fy")
-        axs[2].plot(norm_span, panel_forces[:, 2].value)
+        axs[2].plot(norm_span, -panel_forces[:, 2].value/0.5/rho/V**2 /area)
         axs[2].set_xlabel("norm span")
         axs[2].set_ylabel("Fz")
 

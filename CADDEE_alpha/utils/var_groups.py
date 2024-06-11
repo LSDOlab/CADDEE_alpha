@@ -240,61 +240,80 @@ class MaterialProperties:
             out.append(evaluated_stack)
         return out        
 
-@dataclass
 class MassProperties:
-    mass :  Union[float, int, csdl.Variable, None] = None 
-    cg_vector : Union[np.ndarray, csdl.Variable, None] = None
-    inertia_tensor : Union[np.ndarray, csdl.Variable, None] = None
+    def __init__(
+        self,
+        mass :  Union[float, int, csdl.Variable, None] = None,
+        cg_vector : Union[np.ndarray, csdl.Variable, None] = None,
+        inertia_tensor : Union[np.ndarray, csdl.Variable, None] = None,
+    ):
+        self._mass = mass
+        self._cg_vector = cg_vector
+        self._inertia_tensor = inertia_tensor
 
-    # mass: Union[float, int, csdl.Variable, None] = None
-    # cg_vector: Union[np.ndarray, csdl.Variable, None] = None
-    # inertia_tensor: Union[np.ndarray, csdl.Variable, None] = None
+        self.mass = self._mass
+        self.cg_vector = self._cg_vector
+        self.inertia_tensor = self._inertia_tensor
 
-    # @property
-    # def mass(self):
-    #     return self._mass
 
-    # @mass.setter
-    # def mass(self, value):
-    #     if not isinstance(value, (float, int, csdl.Variable, type(None))):
-    #         raise TypeError("Mass must be a float, int, csdl.Variable, or None")
-    #     if isinstance(value, csdl.Variable):
-    #         if value.shape != (1, ):
-    #             if value.shape == (1, 1):
-    #                 value.reshape(1, )
-    #             else:
-    #                 raise ValueError(f"Shape of mass csdl Variable can only be (1, ), received {value.shape}")
-    #     self._mass = value
+    @property
+    def mass(self):
+        return self._mass
+    
+    @mass.setter
+    def mass(self, value):
+        if not isinstance(value, (csdl.Variable, float, int, type(None))):
+            raise ValueError(f"mass must be of type csdl.Variable, float or int, None; received {type(value)}")
+        if isinstance(value, csdl.Variable):
+            try:
+                value = value.reshape((1, ))
+            except:
+                raise ValueError(f"'mass' must be a scaler. Received variable of shape {value.shape}")
+        
+        self._mass = value
 
-    # @property
-    # def cg_vector(self):
-    #     return self._cg_vector
+    @ property
+    def cg_vector(self):
+        return self._cg_vector
+    
+    @cg_vector.setter
+    def cg_vector(self, value):
+        if not isinstance(value, (csdl.Variable, np.ndarray, type(None))):
+            raise ValueError(f"cg_vector must be of type csdl.Variable, np.ndarray, or None; received {type(value)}")
+        if isinstance(value, csdl.Variable):
+            try:
+                value = value.reshape((3, ))
+            except:
+                raise ValueError(f"'cg_vecor' must be a vector of size 3. Received variable of shape {value.shape}")
+        
+        self._cg_vector = value
 
-    # @cg_vector.setter
-    # def cg_vector(self, value):
-    #     if not isinstance(value, (np.ndarray, csdl.Variable, type(None))):
-    #         raise TypeError("CG vector must be a numpy array, csdl.Variable, or None")
-    #     if value is not None and value.ndim != 1:
-    #         raise ValueError("CG vector must be a 1-dimensional numpy array")
-    #     self._cg_vector = value
+    @property
+    def inertia_tensor(self):
+        return self._inertia_tensor
+    
+    @inertia_tensor.setter
+    def inertia_tensor(self, value):
+        if not isinstance(value, (csdl.Variable, np.ndarray, type(None))):
+            raise ValueError(f"inertia_tensor must be of type csdl.Variable, np.ndarray, or None; received {type(value)}")
+        if isinstance(value, csdl.Variable):
+            try:
+                value = value.reshape((3, 3))
+            except:
+                raise ValueError(f"'inertia_tensor' must be a matrix of size (3, 3). Received variable of shape {value.shape}")
+        
+        self._inertia_tensor = value
 
-    # @property
-    # def inertia_tensor(self):
-    #     return self._inertia_tensor
-
-    # @inertia_tensor.setter
-    # def inertia_tensor(self, value):
-    #     if not isinstance(value, (np.ndarray, csdl.Variable, type(None))):
-    #         raise TypeError("Inertia tensor must be a numpy array, csdl.Variable, or None")
-    #     if value is not None and value.ndim != 2:
-    #         raise ValueError("Inertia tensor must be a 2-dimensional numpy array")
-    #     self._inertia_tensor = value
 
 
 if __name__ == "__main__":
     mps = MassProperties()
     
-    
+    print(mps.__dict__)
+
+    mps.mass = 1# np.array([1, 2, 3])
+    print(getattr(mps, "mass"))
+
     # try:
     #     mps.mass = np.zeros((3, ))
     # except:

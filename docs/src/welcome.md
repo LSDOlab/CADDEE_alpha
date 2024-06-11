@@ -44,9 +44,9 @@ The Comprehensive Analysis high-Dimensional Design Environment for Engineering s
 src/getting_started
 src/background
 src/concepts
-src/tutorials
-src/custom_1
-src/custom_2
+<!-- src/tutorials -->
+<!-- src/custom_1
+src/custom_2 -->
 src/examples
 src/api
 ```

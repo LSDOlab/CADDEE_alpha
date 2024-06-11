@@ -17,7 +17,7 @@
 # -- Project information -----------------------------------------------------
 
 project = 'CADDEE_alpha'
-copyright = '2023, Marius'
+copyright = '2023, LSDO Lab'
 author = 'Marius'
 version = '0.1'
 # release = 0.1.0rtc
@@ -143,7 +143,8 @@ def py2md(config):
             elif double_start < single_start:
                 title, desc = split_first_string_between_quotes(no_line_breaks, '"')
             else:
-                raise SyntaxError('Docstring for title and description is not declared correctly')
+                pass
+                # raise SyntaxError('Docstring for title and description is not declared correctly')
 
         with open(ex[:-3]+'.md', 'w') as g:
             g.write('# ' + title + '\n')

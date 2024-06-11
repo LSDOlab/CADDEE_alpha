@@ -34,11 +34,11 @@ class CADDEE:
     @base_configuration.setter
     def base_configuration(self, value):
         if not isinstance(value, Configuration):
-            raise TypeError(f"'base_configuration' must be of type {Configuration}")
+            raise TypeError(f"'base_configuration' must be of type {Configuration}; received {type(value)}")
         self._base_configuration = value
 
     @property
-    def conditions(self):
+    def conditions(self) -> ConditionsDict:
         return self._conditions
     
     @conditions.setter

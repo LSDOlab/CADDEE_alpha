@@ -42,16 +42,19 @@ def perform_local_to_body_transformation(
 
     # check the euler angles all have the same shape
     if isinstance(phi, (int, float)):
+        phi = csdl.Variable(shape=(1, ), value=phi)
         phi_shape = (1, )
     else:
         phi_shape = phi.shape
 
     if isinstance(theta, (int, float)):
+        theta = csdl.Variable(shape=(1, ), value=theta)
         theta_shape = (1, )
     else:
         theta_shape = theta.shape
     
     if isinstance(psi, (int, float)):
+        psi = csdl.Variable(shape=(1, ), value=psi)
         psi_shape = (1, )
     else:
         psi_shape = psi.shape

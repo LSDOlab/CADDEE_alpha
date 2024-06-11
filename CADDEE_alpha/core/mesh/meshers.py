@@ -67,7 +67,8 @@ def make_mesh_symmetric(quantity, num_spanwise, spanwise_index=0):
             spanwise_mean_z = (quantity[:, index, 2] + quantity[:, symmetric_index, 2]) / 2
             
             # in the y-direction, take mean of the absolute values
-            spanwise_mean_y = ((quantity[:, index, 1]**2)**0.5 + (quantity[:, symmetric_index, 1]**2)**0.5) / 2
+            spanwise_mean_y = (((quantity[:, index, 1]+1e-5)**2)**0.5 + ((quantity[:, symmetric_index, 1]+1e-5)**2)**0.5) / 2
+            # spanwise_mean_y = (csdl.absolute(quantity[:, index, 1]) + csdl.absolute(quantity[:, symmetric_index, 1])) / 2
 
         # Populate the csdl variable with the symmetric entries
         if index == symmetric_index:
@@ -204,6 +205,8 @@ class CamberSurface(Discretization):
     _TE_points_para = None
     _chordwise_spacing = None
 
+    embedded_airfoil_model = None
+
     def _update(self):
         if self._upper_wireframe_para is not None and self._lower_wireframe_para is not None:
             # Re-evaluate the geometry after coefficients have changed
@@ -223,6 +226,11 @@ class CamberSurface(Discretization):
         else:
             LE_points_csdl = self._geom.evaluate(self._LE_points_para)
             TE_points_csdl = self._geom.evaluate(self._TE_points_para)
+            
+            y_mean_spanwise = (LE_points_csdl[:, 1] + TE_points_csdl[:, 1])/ 2 
+            LE_points_csdl = LE_points_csdl.set(csdl.slice[:, 1], y_mean_spanwise)
+            TE_points_csdl = TE_points_csdl.set(csdl.slice[:, 1], y_mean_spanwise)
+            
             if self._chordwise_spacing == "linear":
                 chord_surface = csdl.linear_combination(LE_points_csdl, TE_points_csdl, self._num_chord_wise+1).reshape((self._num_chord_wise+1, self._num_spanwise+1, 3))
             
@@ -388,13 +396,70 @@ def make_vlm_surface(
     
     elif spacing_spanwise == "cosine":
         num_spanwise_half = int(num_spanwise / 2)
-        LE_points_1 = cosine_spacing(num_spanwise_half + 1, np.linspace(LE_mid_point, LE_left_point, num_spanwise_half + 1))
-        LE_points_2 = cosine_spacing(num_spanwise_half + 1, np.linspace(LE_mid_point, LE_right_point, num_spanwise_half + 1), flip=True)
-        LE_points = np.vstack((LE_points_1, LE_points_2[1:, :]))
+        if LE_interp is not None:
+            array_to_project = np.zeros((num_spanwise + 1, 3))
+            y = np.array([LE_left_point[1], LE_mid_point[1], LE_right_point[1]])
+            z = np.array([LE_left_point[2], LE_mid_point[2], LE_right_point[2]])
+            fz = interp1d(y, z, kind="linear")
 
-        TE_points_1 = cosine_spacing(num_spanwise_half + 1, np.linspace(TE_mid_point, TE_left_point, num_spanwise_half + 1))
-        TE_points_2 = cosine_spacing(num_spanwise_half + 1, np.linspace(TE_mid_point, TE_right_point, num_spanwise_half + 1), flip=True)
-        TE_points = np.vstack((TE_points_1, TE_points_2[1:, :]))
+            # Set up equation for an ellipse
+            h = LE_left_point[0]
+            b = 2 * (h - LE_mid_point[0]) # Semi-minor axis
+            a = LE_right_point[1] # semi-major axis
+            
+            i_vec = np.arange(0, num_spanwise_half+1)
+            half_cos = np.linspace(0, 1, len(i_vec))**2
+            # half_cos = 1 - np.cos(i_vec * np.pi / (2 * num_spanwise_half))
+
+            interp_y_1 = y[0] - (y[0] - y[1]) * half_cos
+            interp_y_2 = np.flip(y[2] - (y[2] - y[1]) * half_cos)
+
+            array_to_project[0:num_spanwise_half+1, 0] = (b**2 * (1 - interp_y_1**2/a**2))**0.5 + h
+            array_to_project[0:num_spanwise_half+1, 1] = interp_y_1
+            array_to_project[0:num_spanwise_half+1, 2] = fz(interp_y_1)
+
+            array_to_project[num_spanwise_half:, 0] = (b**2 * (1 - interp_y_2**2/a**2))**0.5 + h
+            array_to_project[num_spanwise_half:, 1] = interp_y_2
+            array_to_project[num_spanwise_half:, 2] = fz(interp_y_2)
+
+            LE_points = array_to_project
+        else:
+            LE_points_1 = cosine_spacing(num_spanwise_half + 1, np.linspace(LE_mid_point, LE_left_point, num_spanwise_half + 1))
+            LE_points_2 = cosine_spacing(num_spanwise_half + 1, np.linspace(LE_mid_point, LE_right_point, num_spanwise_half + 1), flip=True)
+            LE_points = np.vstack((LE_points_1, LE_points_2[1:, :]))
+
+        if TE_interp is not None:
+            array_to_project = np.zeros((num_spanwise + 1, 3))
+            y = np.array([TE_left_point[1], TE_mid_point[1], TE_right_point[1]])
+            z = np.array([TE_left_point[2], TE_mid_point[2], TE_right_point[2]])
+            fz = interp1d(y, z, kind="linear")
+
+            # Set up equation for an ellipse
+            h = TE_left_point[0]
+            b = 2 * (h - TE_mid_point[0]) # Semi-minor axis
+            a = TE_right_point[1] # semi-major axis
+            
+            i_vec = np.arange(0, num_spanwise_half+1)
+            half_cos = np.linspace(0, 1, len(i_vec))**2
+            # half_cos = 1 - np.cos(i_vec * np.pi / (2 * num_spanwise_half))
+
+            interp_y_1 = y[0] - (y[0] - y[1]) * half_cos
+            interp_y_2 = np.flip(y[2] - (y[2] - y[1]) * half_cos)
+
+            array_to_project[0:num_spanwise_half+1, 0] = -(b**2 * (1 - interp_y_1**2/a**2))**0.5 + h
+            array_to_project[0:num_spanwise_half+1, 1] = interp_y_1
+            array_to_project[0:num_spanwise_half+1, 2] = fz(interp_y_1)
+
+            array_to_project[num_spanwise_half:, 0] = -(b**2 * (1 - interp_y_2**2/a**2))**0.5 + h
+            array_to_project[num_spanwise_half:, 1] = interp_y_2
+            array_to_project[num_spanwise_half:, 2] = fz(interp_y_2)
+
+            TE_points = array_to_project
+
+        else:
+            TE_points_1 = cosine_spacing(num_spanwise_half + 1, np.linspace(TE_mid_point, TE_left_point, num_spanwise_half + 1))
+            TE_points_2 = cosine_spacing(num_spanwise_half + 1, np.linspace(TE_mid_point, TE_right_point, num_spanwise_half + 1), flip=True)
+            TE_points = np.vstack((TE_points_1, TE_points_2[1:, :]))
     else:
         raise NotImplementedError
 
@@ -404,6 +469,9 @@ def make_vlm_surface(
     LE_points_csdl = wing_geometry.evaluate(LE_points_para)
     TE_points_csdl = wing_geometry.evaluate(TE_points_para)
     
+    y_mean_spanwise = (LE_points_csdl[:, 1] + TE_points_csdl[:, 1])/ 2 
+    LE_points_csdl = LE_points_csdl.set(csdl.slice[:, 1], y_mean_spanwise)
+    TE_points_csdl = TE_points_csdl.set(csdl.slice[:, 1], y_mean_spanwise)
 
     if spacing_chordwise == "linear":
         chord_surface = csdl.linear_combination(LE_points_csdl, TE_points_csdl, num_chordwise+1).reshape((num_chordwise+1, num_spanwise+1, 3))
