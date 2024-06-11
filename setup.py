@@ -52,6 +52,7 @@ setup(
         'twine',
         'meshio',
         'caddee_materials @ git+https://github.com/HgXe/caddee_materials.git',
+        'csdl_alpha @ git+https://github.com/LSDOlab/CSDL_alpha.git',
     ],
     classifiers=[
         'Programming Language :: Python',
