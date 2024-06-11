@@ -183,7 +183,7 @@ class Wing(Component):
                 self._LE_right_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([1., 1.0, 0.62])), plot=False, extrema=True)
 
                 self._TE_left_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 0., 0.5])), plot=False, extrema=True)
-                self._TE_mid_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 0.5, 0.5])),  plot=False,extrema=True)
+                self._TE_mid_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 0.5, 0.5])),  plot=False, extrema=True)
                 self._TE_right_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 1.0, 0.5])), plot=False, extrema=True)
                 t6 = time.time()
 
@@ -537,7 +537,8 @@ class Wing(Component):
                              offset:np.ndarray=np.array([0., 0., .23]), 
                              num_rib_pts:int=20, plot_projections:bool=False,
                              spar_function_space:lfs.FunctionSpace=None,
-                             rib_function_space:lfs.FunctionSpace=None):
+                             rib_function_space:lfs.FunctionSpace=None,
+                             export_wing_box:bool=False):
         """
         Construct ribs and spars for the given wing geometry.
 
@@ -563,6 +564,8 @@ class Wing(Component):
             The function space to be used for the spars. Defaults to a linear BSplineSpace.
         rib_function_space : fs.FunctionSpace, optional
             The function space to be used for the ribs. Defaults to a linear BSplineSpace.
+        export_wing_box : bool, optional
+            If true, a water-tight wing box geometry will be exported to a .igs file. Default value is False.
         """
 
         # TODO: add interpolation for spars (between ribs)
@@ -571,6 +574,9 @@ class Wing(Component):
         # TODO: add option to extend ribs to the root and tip
         
         wing = self
+        if export_wing_box:
+            wing_box_geometry = lg.Geometry(functions=[])
+            wing_box_surf_index = 0
 
         if spar_locations is None:
             spar_locations = np.array([0.25, 0.75])
@@ -641,6 +647,9 @@ class Wing(Component):
             self.geometry.function_names[surf_index] = "Wing_r_spar_"+str(i)
             surf_index += 1
 
+
+
+        # create ribs
         for i in range(num_ribs):
             parameteric_points = ribs_top_array[i].tolist() + ribs_bottom_array[i].tolist()
             fitting_values = wing.geometry.evaluate(parameteric_points).value
@@ -653,6 +662,9 @@ class Wing(Component):
             geometry.function_names[surf_index] = "Wing_rib_"+str(i)
             self.geometry.function_names[surf_index] = "Wing_rib_"+str(i)
             surf_index += 1
+            if export_wing_box:
+                wing_box_geometry.functions[wing_box_surf_index] = rib
+                wing_box_surf_index += 1
             if i > 0:
                 right_rib_coeffs = rib_coeffs @ coeff_flip
                 right_rib = lfs.Function(rib_function_space, right_rib_coeffs)
@@ -661,6 +673,57 @@ class Wing(Component):
                 geometry.function_names[surf_index] = "Wing_rib_"+str(-i)
                 self.geometry.function_names[surf_index] = "Wing_rib_"+str(-i)
                 surf_index += 1
+                if export_wing_box:
+                    wing_box_geometry.functions[wing_box_surf_index] = right_rib
+                    wing_box_surf_index += 1
+
+                    # create surface panels
+                    top_parametric_points = ribs_top_array[i-1].tolist() + ribs_top_array[i].tolist()
+                    bottom_parametric_points = ribs_bottom_array[i-1].tolist() + ribs_bottom_array[i].tolist()
+                    top_fitting_values = wing.geometry.evaluate(top_parametric_points).value
+                    bottom_fitting_values = wing.geometry.evaluate(bottom_parametric_points).value
+                    fitting_coords = np.array([[u, 0] for u in u_coords] + [[u, 1] for u in u_coords])
+                    top_panel_coeffs = rib_function_space.fit(top_fitting_values, fitting_coords)
+                    top_panel = lfs.Function(rib_function_space, top_panel_coeffs)
+                    bottom_panel_coeffs = rib_function_space.fit(bottom_fitting_values, fitting_coords)
+                    bottom_panel = lfs.Function(rib_function_space, bottom_panel_coeffs)
+                    right_top_panel_coeffs = top_panel_coeffs @ coeff_flip
+                    right_top_panel = lfs.Function(rib_function_space, right_top_panel_coeffs)
+                    right_bottom_panel_coeffs = bottom_panel_coeffs @ coeff_flip
+                    right_bottom_panel = lfs.Function(rib_function_space, right_bottom_panel_coeffs)
+                    wing_box_geometry.functions[wing_box_surf_index] = top_panel
+                    wing_box_surf_index += 1
+                    wing_box_geometry.functions[wing_box_surf_index] = bottom_panel
+                    wing_box_surf_index += 1
+                    wing_box_geometry.functions[wing_box_surf_index] = right_top_panel
+                    wing_box_surf_index += 1
+                    wing_box_geometry.functions[wing_box_surf_index] = right_bottom_panel
+                    wing_box_surf_index += 1
+
+                    # create spar segments
+                    spar_segment_function_space = lfs.BSplineSpace(2, 1, (2, 2))
+                    for j in range(num_spars):
+                        top_parametric_points = [ribs_top_array[i-1,j*num_rib_pts], ribs_top_array[i,j*num_rib_pts]]
+                        bottom_parametric_points = [ribs_bottom_array[i-1,j*num_rib_pts], ribs_bottom_array[i,j*num_rib_pts]]
+                        fitting_values = wing.geometry.evaluate(top_parametric_points+bottom_parametric_points).value
+
+
+                        fitting_coords = np.array([[0., 0.], [1., 0.], [0., 1.], [1., 1.]])
+                        spar_coeffs = spar_segment_function_space.fit(fitting_values, fitting_coords)
+                        spar_panel = lfs.Function(spar_segment_function_space, spar_coeffs)
+                        right_spar_panel_coeffs = spar_coeffs @ coeff_flip
+                        right_spar_panel = lfs.Function(spar_segment_function_space, right_spar_panel_coeffs)
+
+                        wing_box_geometry.functions[wing_box_surf_index] = spar_panel
+                        wing_box_surf_index += 1
+                        wing_box_geometry.functions[wing_box_surf_index] = right_spar_panel
+                        wing_box_surf_index += 1
+
+
+        if export_wing_box:
+            wing_box_geometry.plot(opacity=0.3)
+            wing_box_geometry.export_iges("wing_box.igs")
+
 
         self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=self._tight_fit_ffd)
          

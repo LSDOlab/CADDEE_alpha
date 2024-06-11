@@ -64,7 +64,7 @@ class MaterialProperties:
         self.thickness = None
         self.component = component
         self.direction = direction
-        self.material_stack = [] # (material, surface_indices, bounding_function, thickness, orientation)
+        self.material_stack = [] # {material, surface_indices, bounding_function, thickness, orientation}
         # TODO: think about using a dict for things like orientation and thickness
 
     def set_material(self, material:Material, thickness:Union[VariableLike, fs.FunctionSet]):
@@ -123,9 +123,17 @@ class MaterialProperties:
                     raise ValueError("surface_indices must match bounding function functions")
 
         if insert_index is None or insert_index >= len(self.material_stack):
-            self.material_stack.append((material, surface_indices, bounding_function, thickness, orientation))
+            self.material_stack.append({'material':material, 
+                                        'surface_indices':surface_indices, 
+                                        'bounding_function':bounding_function, 
+                                        'thickness':thickness, 
+                                        'orientation':orientation})
         else:
-            self.material_stack.insert(insert_index, (material, surface_indices, bounding_function, thickness, orientation))
+            self.material_stack.insert(insert_index, {'material':material, 
+                                                      'surface_indices':surface_indices, 
+                                                      'bounding_function':bounding_function, 
+                                                      'thickness':thickness, 
+                                                      'orientation':orientation})
         
     def remove_material(self, index):
         """Removes a material from the material stack.
@@ -164,12 +172,16 @@ class MaterialProperties:
         -------
         list
             Material stack for the given surface index.
-            List of tuples containing (material, bounding_function, thickness, orientation)
+            Dictionary containing ('material', 'bounding_function', 'thickness', 'orientation')
         """
         material_stack = []
-        for material, surface_indices, bounding_function, thickness, orientation in self.material_stack:
+        for material_info in self.material_stack:
+            surface_indices = material_info['surface_indices']
             if surface_index in surface_indices:
-                material_stack.append((material, bounding_function, thickness, orientation))
+                material_stack.append({'material':material_info['material'], 
+                                       'bounding_function':material_info['bounding_function'], 
+                                       'thickness':material_info['thickness'], 
+                                       'orientation':material_info['orientation']})
         return material_stack 
     
     def evaluate_thickness(self, parametric_coordinates):
@@ -198,7 +210,9 @@ class MaterialProperties:
                     evaluated_thickness = 0
             else:
                 evaluated_thickness = 0
-                for material, bounding_function, thickness, orientation in material_stack:
+                for material_info in material_stack:
+                    thickness = material_info['thickness']
+                    bounding_function = material_info['bounding_function']
                     if isinstance(thickness, fs.FunctionSet):
                         thickness = thickness.evaluate([parametric_coordinate])
                     if isinstance(bounding_function, fs.FunctionSet):
@@ -219,15 +233,20 @@ class MaterialProperties:
         Returns
         -------
         list
-            List of list of tuples containing the evaluated material properties.
-            (material, thickness, orientation)
+            List of list of dicts containing the evaluated material properties.
+            {'material', 'thickness', 'orientation'}
         """
+        # TODO: addd computation of normal vectors somewhere
         out = []
         for parametric_coordinate in parametric_coordinates:
             ind = parametric_coordinate[0]
             material_stack = self.get_material_stack(ind)
             evaluated_stack = []
-            for material, bounding_function, thickness, orientation in material_stack:
+            for material_info in material_stack:
+                material = material_info['material']
+                thickness = material_info['thickness']
+                bounding_function = material_info['bounding_function']
+                orientation = material_info['orientation']
                 if isinstance(thickness, fs.FunctionSet):
                     thickness = thickness.evaluate(parametric_coordinate)
                 if isinstance(orientation, fs.FunctionSet):
@@ -236,7 +255,9 @@ class MaterialProperties:
                     bounding_function = bounding_function.evaluate(parametric_coordinate)
                     thickness = thickness * bounding_function
 
-                evaluated_stack.append((material, thickness, orientation))
+                evaluated_stack.append({'material':material,
+                                        'thickness':thickness, 
+                                        'orientation':orientation})
             out.append(evaluated_stack)
         return out        
 

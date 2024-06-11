@@ -49,6 +49,7 @@ def define_base_config(caddee : cd.CADDEE):
         AR=10.5, S_ref=19.5, sweep=np.deg2rad(0), dihedral=np.deg2rad(0), 
         taper_ratio=0.75, geometry=wing_geometry, tight_fit_ffd=False
     )
+    wing.construct_ribs_and_spars(aircraft.geometry, num_ribs=8)
 
     # wing material info
     aluminum = cd.materials.IsotropicMaterial(name='aluminum', E=69E9, G=26E9, density=2700, nu=0.33)
@@ -88,10 +89,8 @@ def define_base_config(caddee : cd.CADDEE):
     # wing box beam
     beam_mesh = cd.mesh.BeamMesh()
     num_beam_nodes = 15
-    wing_box_beam = cd.mesh.make_1d_box_beam(wing, num_beam_nodes, 0.5, plot=plot)
+    wing_box_beam = cd.mesh.make_1d_box_beam(wing, num_beam_nodes, 0.5, plot=plot, project_spars=True)
     beam_mesh.discretizations["wing_box_beam"] = wing_box_beam
-    # manually set shear web thickness because we don't have internal structure geometry (for spars)
-    wing_box_beam.shear_web_thickness = csdl.Variable(value=np.ones(num_beam_nodes - 1) * 0.001)
 
     # add wing to airframe
     airframe.comps["wing"] = wing
@@ -242,17 +241,14 @@ def define_analysis(caddee: cd.CADDEE):
     # print('vlm wing force', vlm_outputs.surface_force[0].value)
 
     # beam analysis
-    material = wing.quantities.material_properties.material
-    E, nu, G = material.from_compliance()
-    rho = material.density
-    beam_material = af.Material(name='aluminum', E=E, G=G, rho=rho, v=nu)
     beam_cs = af.CSBox(
         height=wing_box_beam.beam_height, 
         width=wing_box_beam.beam_width, 
         ttop=ttop, tbot=tbot, tweb=tweb
     )
 
-    beam_1 = af.Beam(name='beam_1', mesh=beam_nodes, material=beam_material, cs=beam_cs)
+    beam_1 = af.Beam(name='beam_1', mesh=beam_nodes, 
+                     material=wing.quantities.material_properties.material, cs=beam_cs)
     beam_1.add_boundary_condition(node=7, dof=[1, 1, 1, 1, 1, 1])
     beam_loads = csdl.Variable(shape=(num_beam_nodes, 6), value=0.)
     beam_loads = beam_loads.set(csdl.slice[:, 0:3], beam_nodal_forces)
