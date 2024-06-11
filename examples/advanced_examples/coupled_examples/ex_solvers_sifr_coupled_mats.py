@@ -1,3 +1,4 @@
+'''Example coupled sifr materials'''
 # NOTE: file is WIP breaks in line 92!
 import CADDEE_alpha as cd
 import csdl_alpha as csdl
