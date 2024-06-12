@@ -168,7 +168,7 @@ class Wing(Component):
                 # Set the wetted area
                 self.parameters.S_wet = self.quantities.surface_area
                 t2 = time.time()
-                print("time for copmuting wetted area", t2-t1)
+                # print("time for copmuting wetted area", t2-t1)
 
                 t3 = time.time()
                 # Make the FFD block upon instantiation
@@ -190,7 +190,7 @@ class Wing(Component):
 
                 self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=False)
 
-                print("time for computing corner points", t6-t5)
+                # print("time for computing corner points", t6-t5)
 
     def actuate(self, angle : Union[float, int, csdl.Variable], axis_location : float=0.25):
         """Actuate (i.e., rotate) the wing about an axis location at or behind the leading edge.
@@ -419,6 +419,7 @@ class Wing(Component):
 
         dihedral_angle_left = csdl.arcsin(qc_spanwise_left[2] / csdl.norm(qc_spanwise_left))
         dihedral_angle_right = csdl.arcsin(qc_spanwise_right[2] / csdl.norm(qc_spanwise_right))
+
 
         wing_geometric_qts = WingGeometricQuantities(
             span=csdl.norm(span),

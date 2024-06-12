@@ -506,9 +506,8 @@ class Configuration:
         parameterization_solver.evaluate(ffd_geometric_variables)
         t2 = time.time()
         print("time for inner optimization", t2-t1)
-        if True:
-            pe = system_geometry.plot(show=True)
-            # component = self.system.comps["airframe"].comps["rotor_3"]
-            # component._ffd_block.plot(additional_plotting_elements=pe, opacity=0.3)
+        
+        if plot:
+            system_geometry.plot(show=True)
 
         # TODO: re-evaluate meshes

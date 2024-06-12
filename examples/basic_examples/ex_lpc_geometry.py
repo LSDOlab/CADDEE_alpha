@@ -37,11 +37,10 @@ def define_base_config(caddee : cd.CADDEE):
         num_ribs=9,
         LE_TE_interpolation="ellipse",
         plot_projections=False, 
-        export_wing_box=False
+        export_wing_box=True
     )
-    # wing.construct_ribs_and_spars(lpc_geom, num_ribs=9, plot_projections=False, export_wing_box=True)
     wing.geometry.plot(opacity=0.3)
-    # wing.geometry.export_iges("lpc_wing_geometry.igs")
+    wing.geometry.export_iges("lpc_wing_geometry.igs")
     
     airframe.comps["wing"] = wing
 
