@@ -141,6 +141,7 @@ class Component:
                 t1 = time.time()
                 self._ffd_block = self._make_ffd_block(self.geometry)
                 t2 = time.time()
+                
                 print("time for making ffd block", t2-t1)
     
     def create_subgeometry(self, search_names : List[str]) -> FunctionSet:

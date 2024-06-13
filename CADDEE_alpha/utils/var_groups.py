@@ -29,10 +29,11 @@ class AtmosphericStates(csdl.VariableGroup):
     pressure : Union[float, int, csdl.Variable] = 101325
     dynamic_viscosity : Union[float, int, csdl.Variable] = 1.735e-5
 
-
+@staticmethod
 def compute_cf_laminar(Re):
     return 1.328 / Re**0.5
 
+@staticmethod
 def compute_cf_turbulent(Re, M):
     Cf = 0.455 / (csdl.log(Re, 10)**2.58 * (1 + 0.144 * M**2)**0.65)
     return Cf
@@ -44,8 +45,8 @@ class DragBuildUpQuantities:
     interference_factor: Union[csdl.Variable, float, int, None] = 1.1
     cf_laminar_fun = compute_cf_laminar
     cf_turbulent_fun = compute_cf_turbulent
-    percent_laminar : Union[csdl.Variable, float, int] = 20
-    percent_turbulent : Union[csdl.Variable, float, int] = 80
+    percent_laminar : Union[csdl.Variable, float, int] = 10
+    percent_turbulent : Union[csdl.Variable, float, int] = 90
     drag_area: Union[csdl.Variable, float, None] = None
 
 class MaterialProperties:

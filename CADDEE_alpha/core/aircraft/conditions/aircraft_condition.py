@@ -475,13 +475,16 @@ class AircraftCondition(Condition):
         # If there are no inertial loads, total forces = aero-propulsive forces
         if ignore_inertial_loads:
 
-            total_forces_body_fixed = perform_local_to_body_transformation(
-                phi, theta, psi, total_forces
-            )
+            # total_forces_body_fixed = perform_local_to_body_transformation(
+            #     phi, theta, psi, total_forces
+            # )
 
-            total_moments_body_fixed = perform_local_to_body_transformation(
-                phi, theta, psi, total_moments
-            )
+            # total_moments_body_fixed = perform_local_to_body_transformation(
+            #     phi, theta, psi, total_moments
+            # )
+
+            total_forces_body_fixed = total_forces
+            total_moments_body_fixed = total_moments
 
         # If we only have mass (and no cg), only add inertial forces
         elif ignore_inertial_moments:
@@ -489,15 +492,22 @@ class AircraftCondition(Condition):
             inertial_forces = inertial_forces.set(
                 csdl.slice[:, 2], mass * g
             )
-            total_forces = total_forces + inertial_forces
-
-            total_forces_body_fixed = perform_local_to_body_transformation(
-                phi, theta, psi, total_forces
+            inertial_forces_body_fixed = perform_local_to_body_transformation(
+                phi, theta, psi, inertial_forces
             )
+            
+            total_forces = total_forces + inertial_forces_body_fixed
 
-            total_moments_body_fixed = perform_local_to_body_transformation(
-                phi, theta, psi, total_moments
-            )
+            total_forces_body_fixed = total_forces
+            total_moments_body_fixed = total_moments
+
+            # total_forces_body_fixed = perform_local_to_body_transformation(
+            #     phi, theta, psi, total_forces
+            # )
+
+            # total_moments_body_fixed = perform_local_to_body_transformation(
+            #     phi, theta, psi, total_moments
+            # )
 
         # Otherwise also compute inertial moments
         else:
@@ -506,25 +516,37 @@ class AircraftCondition(Condition):
             ref_point_ex = csdl.expand(ref_point, (num_nodes, 3), 'i->ji')
             r_exp = cg_exp - ref_point_ex
 
+            r_exp_body_fixed = perform_local_to_body_transformation(
+                phi, theta, psi, r_exp
+            )
+
             inertial_forces = csdl.Variable(shape=(num_nodes, 3), value=3)
             inertial_forces = inertial_forces.set(
                 csdl.slice[:, 2], mass * g
             )
 
-            inertial_moments = csdl.cross(r_exp, inertial_forces, axis=1)
-
-            total_forces = total_forces + inertial_forces
-            total_moments = total_moments + inertial_moments
-
-            total_forces_body_fixed = perform_local_to_body_transformation(
-                phi, theta, psi, total_forces
+            inertial_forces_body_fixed = perform_local_to_body_transformation(
+                phi, theta, psi, inertial_forces
             )
 
-            total_moments_body_fixed = perform_local_to_body_transformation(
-                phi, theta, psi, total_moments
-            )
+            inertial_moments_body_fixed = csdl.cross(r_exp_body_fixed, inertial_forces_body_fixed, axis=1)
 
-        return total_forces_body_fixed, total_moments_body_fixed, inertial_forces, inertial_moments
+            total_forces = total_forces + inertial_forces_body_fixed
+            total_moments = total_moments + inertial_moments_body_fixed
+
+            total_forces_body_fixed = total_forces
+            total_moments_body_fixed = total_moments
+
+            # total_forces_body_fixed = perform_local_to_body_transformation(
+            #     phi, theta, psi, total_forces
+            # )
+
+            # total_moments_body_fixed = perform_local_to_body_transformation(
+            #     phi, theta, psi, total_moments
+            # )
+        
+
+        return total_forces_body_fixed, total_moments_body_fixed
 
 
 def convert_shape_to_action_string(old_shape, new_shape, type_: str):
@@ -885,7 +907,7 @@ class HoverCondition(AircraftCondition):
         hover_parameters = self.parameters
         
         # All aircraft states except z will be zero
-        u = v = w = p = q = r = phi = theta = psi = x = y = 0.
+        u = v = w = p = q = r = phi = theta = psi = x = y = csdl.Variable(shape=(self._num_nodes, ), value=0.)
         z = hover_parameters.altitude
 
         # Evaluate atmospheric states

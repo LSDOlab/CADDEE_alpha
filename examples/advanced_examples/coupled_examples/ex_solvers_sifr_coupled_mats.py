@@ -11,7 +11,7 @@ from ex_utils import plot_vlm
 
 
 # NOTE: for Windows, parallization does not work (need num_workers=1)
-fs.num_workers = 1
+# fs.num_workers = 1
 
 plot = False
 
@@ -201,7 +201,7 @@ def define_analysis(caddee: cd.CADDEE):
     camber_surface_nodal_velocities = [wing_camber_surface.nodal_velocities, tail_camber_surface.nodal_velocities]
 
     # run vlm solver
-    vlm_outputs = vlm_solver(camber_surface_coordinates, camber_surface_nodal_velocities)
+    vlm_outputs = vlm_solver(camber_surface_coordinates, camber_surface_nodal_velocities, alpha_ML=[None, None])
     plot_vlm(vlm_outputs)
 
     # VLM forces to oml (sifr)
