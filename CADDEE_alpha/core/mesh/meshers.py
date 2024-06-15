@@ -972,7 +972,7 @@ def make_rotor_mesh(
         cartesian_coordinates = np.zeros((num_radial, num_azimuthal, 3))
         for i in range(num_radial):
             for j in range(num_azimuthal):
-                cartesian_coordinates[i, j, :] = p.value + radius_vec[i].value * (np.cos(thetha_vec[j]) * v1.value \
+                cartesian_coordinates[i, j, :] = p.value + radius_vec.value[i] * (np.cos(thetha_vec[j]) * v1.value \
                                                     + np.sin(thetha_vec[j]) * v2.value)
         
         disk_mesh_parametric = rotor_geometry.project(cartesian_coordinates, plot=plot)

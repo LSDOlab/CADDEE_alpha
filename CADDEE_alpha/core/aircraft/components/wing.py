@@ -618,10 +618,10 @@ class Wing(Component):
             rib_function_space = lfs.BSplineSpace(2, 1, (num_rib_pts*(num_spars-1)+1, 2))
 
         # gather important points (right only)
-        root_te = wing.geometry.evaluate(wing._TE_mid_point).value
-        root_le = wing.geometry.evaluate(wing._LE_mid_point).value
-        r_tip_te = wing.geometry.evaluate(wing._TE_right_point).value
-        r_tip_le = wing.geometry.evaluate(wing._LE_right_point).value
+        root_te = wing.geometry.evaluate(wing._TE_mid_point, non_csdl=True)
+        root_le = wing.geometry.evaluate(wing._LE_mid_point, non_csdl=True)
+        r_tip_te = wing.geometry.evaluate(wing._TE_right_point, non_csdl=True)
+        r_tip_le = wing.geometry.evaluate(wing._LE_right_point, non_csdl=True)
 
         # get spar start/end points (root and tip)
         root_tip_pts = np.zeros((num_spars, 2, 3))
@@ -644,13 +644,13 @@ class Wing(Component):
             
             for i in range(2):
                 if i == 0:
-                    left_point = self.geometry.evaluate(self._LE_left_point).value
-                    mid_point = self.geometry.evaluate(self._LE_mid_point).value
-                    right_point = self.geometry.evaluate(self._LE_right_point).value
+                    left_point = self.geometry.evaluate(self._LE_left_point, non_csdl=True)
+                    mid_point = self.geometry.evaluate(self._LE_mid_point, non_csdl=True)
+                    right_point = self.geometry.evaluate(self._LE_right_point, non_csdl=True)
                 else:
-                    left_point = self.geometry.evaluate(self._TE_left_point).value
-                    mid_point = self.geometry.evaluate(self._TE_mid_point).value
-                    right_point = self.geometry.evaluate(self._TE_right_point).value
+                    left_point = self.geometry.evaluate(self._TE_left_point, non_csdl=True)
+                    mid_point = self.geometry.evaluate(self._TE_mid_point, non_csdl=True)
+                    right_point = self.geometry.evaluate(self._TE_right_point, non_csdl=True)
 
                 array_to_project = np.zeros((num_ribs, 3))
                 y = np.array([left_point[1], mid_point[1], right_point[1]])
@@ -670,7 +670,7 @@ class Wing(Component):
 
                 LE_TE_points[i, :, :] = array_to_project
 
-            LE_TE_points_eval = self.geometry.evaluate(self.geometry.project(LE_TE_points, plot=plot_projections)).reshape((2, num_ribs, 3)).value
+            LE_TE_points_eval = self.geometry.evaluate(self.geometry.project(LE_TE_points, plot=plot_projections), non_csdl=True).reshape((2, num_ribs, 3))
 
             root_tip_pts = np.zeros((num_spars, num_ribs, 3))
             for i in range(num_spars):
@@ -702,7 +702,7 @@ class Wing(Component):
         coeff_flip[1,1] = -1
         for i in range(num_spars):
             parametric_points = ribs_top_array[:,i*num_rib_pts].tolist() + ribs_bottom_array[:,i*num_rib_pts].tolist()
-            fitting_values = wing.geometry.evaluate(parametric_points).value    # TODO: .value or no .value? - at least convert to the coefficients thing
+            fitting_values = wing.geometry.evaluate(parametric_points, non_csdl=True)    # TODO: .value or no .value? - at least convert to the coefficients thing
             u_coords = np.linspace(0, 1, num_ribs)
             fitting_coords = np.array([[u, 0] for u in u_coords] + [[u, 1] for u in u_coords])
             spar_coeffs = spar_function_space.fit(fitting_values, fitting_coords)
@@ -725,7 +725,7 @@ class Wing(Component):
         # create ribs
         for i in range(num_ribs):
             parameteric_points = ribs_top_array[i].tolist() + ribs_bottom_array[i].tolist()
-            fitting_values = wing.geometry.evaluate(parameteric_points).value
+            fitting_values = wing.geometry.evaluate(parameteric_points, non_csdl=True)
             u_coords = np.linspace(0, 1, ribs_top_array.shape[1])
             fitting_coords = np.array([[u, 0] for u in u_coords] + [[u, 1] for u in u_coords])
             rib_coeffs = rib_function_space.fit(fitting_values, fitting_coords)
@@ -753,8 +753,8 @@ class Wing(Component):
                     # create surface panels
                     top_parametric_points = ribs_top_array[i-1].tolist() + ribs_top_array[i].tolist()
                     bottom_parametric_points = ribs_bottom_array[i-1].tolist() + ribs_bottom_array[i].tolist()
-                    top_fitting_values = wing.geometry.evaluate(top_parametric_points).value
-                    bottom_fitting_values = wing.geometry.evaluate(bottom_parametric_points).value
+                    top_fitting_values = wing.geometry.evaluate(top_parametric_points, non_csdl=True)
+                    bottom_fitting_values = wing.geometry.evaluate(bottom_parametric_points, non_csdl=True)
                     fitting_coords = np.array([[u, 0] for u in u_coords] + [[u, 1] for u in u_coords])
                     top_panel_coeffs = rib_function_space.fit(top_fitting_values, fitting_coords)
                     top_panel = lfs.Function(rib_function_space, top_panel_coeffs)
@@ -778,7 +778,7 @@ class Wing(Component):
                     for j in range(num_spars):
                         top_parametric_points = [ribs_top_array[i-1,j*num_rib_pts], ribs_top_array[i,j*num_rib_pts]]
                         bottom_parametric_points = [ribs_bottom_array[i-1,j*num_rib_pts], ribs_bottom_array[i,j*num_rib_pts]]
-                        fitting_values = wing.geometry.evaluate(top_parametric_points+bottom_parametric_points).value
+                        fitting_values = wing.geometry.evaluate(top_parametric_points+bottom_parametric_points, non_csdl=True)
 
 
                         fitting_coords = np.array([[0., 0.], [1., 0.], [0., 1.], [1., 1.]])
