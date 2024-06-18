@@ -191,6 +191,9 @@ class Wing(Component):
                 self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=False)
 
                 # print("time for computing corner points", t6-t5)
+            # internal geometry projection info
+            self._dependent_geometry_points = [] # {'parametric_points', 'function_space', 'fitting_coords', 'mirror'}
+            self._base_geometry = self.geometry.copy()
 
     def actuate(self, angle : Union[float, int, csdl.Variable], axis_location : float=0.25):
         """Actuate (i.e., rotate) the wing about an axis location at or behind the leading edge.
@@ -357,8 +360,21 @@ class Wing(Component):
 
         ffd_coefficients = ffd_block_sectional_parameterization.evaluate(sectional_parameters, plot=False) 
 
-        # set the coefficients
+        # set the base coefficients
         geometry_coefficients = ffd_block.evaluate_ffd(ffd_coefficients, plot=False)
+        self._base_geometry.set_coefficients(geometry_coefficients)
+        
+        # re-fit the dependent geometry points
+        coeff_flip = np.eye(3)
+        coeff_flip[1,1] = -1
+        for item in self._dependent_geometry_points:
+            fitting_points = self._base_geometry.evaluate(item['parametric_points'])
+            coefficients = item['function_space'].fit(fitting_points, item['fitting_coords'])
+            geometry_coefficients.append(coefficients)
+            if item['mirror']:
+                geometry_coefficients.append(coefficients @ coeff_flip)
+
+        # set full geometry coefficients
         self.geometry.set_coefficients(geometry_coefficients)
 
         # Add rigid body translation (without FFD)
@@ -578,7 +594,7 @@ class Wing(Component):
         export_wing_box : bool, optional
             If true, a water-tight wing box geometry will be exported to a .igs file. Default value is False.
         """
-        csdl.check_parameter(num_ribs, "num_ribs", types=int)
+        csdl.check_parameter(num_ribs, "num_ribs", types=int, allow_none=True)
         csdl.check_parameter(spar_locations, "spar_locations", types=np.ndarray, allow_none=True)
         csdl.check_parameter(rib_locations, "rib_locations", types=np.ndarray, allow_none=True)
         csdl.check_parameter(LE_TE_interpolation, "LE_TE_interpolation", values=("ellipse", None))
@@ -702,9 +718,13 @@ class Wing(Component):
         coeff_flip[1,1] = -1
         for i in range(num_spars):
             parametric_points = ribs_top_array[:,i*num_rib_pts].tolist() + ribs_bottom_array[:,i*num_rib_pts].tolist()
-            fitting_values = wing.geometry.evaluate(parametric_points, non_csdl=True)    # TODO: .value or no .value? - at least convert to the coefficients thing
+            fitting_values = wing.geometry.evaluate(parametric_points)                                                  # Place 1
             u_coords = np.linspace(0, 1, num_ribs)
             fitting_coords = np.array([[u, 0] for u in u_coords] + [[u, 1] for u in u_coords])
+            self._dependent_geometry_points.append({'parametric_points':parametric_points, 
+                                                    'fitting_coords':fitting_coords,
+                                                    'function_space':spar_function_space,
+                                                    'mirror':True})    
             spar_coeffs = spar_function_space.fit(fitting_values, fitting_coords)
             spar = lfs.Function(spar_function_space, spar_coeffs)
             right_spar_coeffs = spar_coeffs @ coeff_flip
@@ -725,9 +745,13 @@ class Wing(Component):
         # create ribs
         for i in range(num_ribs):
             parameteric_points = ribs_top_array[i].tolist() + ribs_bottom_array[i].tolist()
-            fitting_values = wing.geometry.evaluate(parameteric_points, non_csdl=True)
+            fitting_values = wing.geometry.evaluate(parameteric_points)                                                 # Place 2
             u_coords = np.linspace(0, 1, ribs_top_array.shape[1])
             fitting_coords = np.array([[u, 0] for u in u_coords] + [[u, 1] for u in u_coords])
+            self._dependent_geometry_points.append({'parametric_points':parameteric_points, 
+                                                    'fitting_coords':fitting_coords,
+                                                    'function_space':rib_function_space,
+                                                    'mirror':False})    
             rib_coeffs = rib_function_space.fit(fitting_values, fitting_coords)
             rib = lfs.Function(rib_function_space, rib_coeffs)
             geometry.functions[surf_index] = rib
@@ -739,6 +763,7 @@ class Wing(Component):
                 wing_box_geometry.functions[wing_box_surf_index] = rib
                 wing_box_surf_index += 1
             if i > 0:
+                self._dependent_geometry_points[-1]['mirror'] = True
                 right_rib_coeffs = rib_coeffs @ coeff_flip
                 right_rib = lfs.Function(rib_function_space, right_rib_coeffs)
                 geometry.functions[surf_index] = right_rib
@@ -798,5 +823,5 @@ class Wing(Component):
             wing_box_geometry.export_iges("wing_box.igs")
 
 
-        self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=False)
+        # self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=False)
          
