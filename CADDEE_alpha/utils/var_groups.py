@@ -198,6 +198,14 @@ class MaterialProperties:
         list
             List of thicknesses evaluated at the given parametric coordinates.
         """
+        # bypass slow loop if thickness is not none
+        if self.thickness is not None:
+            if isinstance(self.thickness, fs.FunctionSet):
+                return self.thickness.evaluate(parametric_coordinates)
+            else:
+                return np.ones(len(parametric_coordinates)) * self.thickness
+
+        # TODO: improve this somehow idk.
         out = csdl.Variable(shape=(len(parametric_coordinates),), value=0)
         for i, parametric_coordinate in enumerate(parametric_coordinates):
             ind = parametric_coordinate[0]

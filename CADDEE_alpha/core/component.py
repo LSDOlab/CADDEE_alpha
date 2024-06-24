@@ -165,8 +165,8 @@ class Component:
         else:
             system_component = self._find_system_component(self)
             system_geometry = system_component.geometry
-            component_geometry = system_geometry.declare_component(name=self._name, function_search_names=search_names, ignore_names=ignore_names)
-        
+            component_geometry =  system_geometry.declare_component(name=self._name, function_search_names=search_names, ignore_names=ignore_names)
+
         return component_geometry
 
     def plot(self):
