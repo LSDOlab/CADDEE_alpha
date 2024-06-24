@@ -92,8 +92,11 @@ class Fuselage(Component):
                 self._ffd_block = self._make_ffd_block(self.geometry)
 
                 # Extract dimensions (height, width, length) from the FFD block
-                self._nose_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0., 0.5, 0.5])))
-                self._tail_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([1., 0.5, 0.5])))
+                self._nose_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([1., 0.5, 0.5])))
+                self._tail_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0., 0.5, 0.5])))
+
+                self.nose_point = geometry.evaluate(self._nose_point)
+                self.tail_point = geometry.evaluate(self._tail_point)
 
                 self._left_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 0., 0.5])))
                 self._right_point = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 1., 0.5])))

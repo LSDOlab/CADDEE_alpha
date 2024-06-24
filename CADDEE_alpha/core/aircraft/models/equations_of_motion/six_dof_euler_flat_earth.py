@@ -189,7 +189,6 @@ class SixDofEulerFlatEarthModel:
         residual = mp_matrix @ state - rhs.T()
 
         accel = csdl.solve_linear(mp_matrix, rhs.T())
-        print("accelerations", accel.value)
 
         # Using a newton solver to solve linear system instead of looping
         # over num_nodes

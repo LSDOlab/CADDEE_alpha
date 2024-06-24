@@ -62,10 +62,7 @@ class Rotor(Component):
 
                 # Get smallest dimenstion
                 smllst_dim = np.where(block_dim == np.min(block_dim))[0][0]
-                if smllst_dim == 0:
-                    self._pr_dim = smllst_dim
-                else:
-                    self._pr_dim = 0
+                self._pr_dim = smllst_dim
                 
                 if smllst_dim == 0:
                     self._corner_point_1 = geometry.project(self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 0.5, 0.])))
@@ -180,29 +177,23 @@ class Rotor(Component):
 
         sectional_paramaters = VolumeSectionalParameterizationInputs()
         if self._pr_dim == 0:
-            sectional_paramaters.add_sectional_translation(axis=0, translation=principal_sectional_parameters)
             sectional_paramaters.add_sectional_stretch(axis=1, stretch=non_principal_1_sectional_parameters)
             sectional_paramaters.add_sectional_stretch(axis=2, stretch=non_principal_2_sectional_parameters)
 
+        
+        elif self._pr_dim == 1:
+            sectional_paramaters.add_sectional_stretch(axis=0, stretch=non_principal_1_sectional_parameters)
+            sectional_paramaters.add_sectional_stretch(axis=2, stretch=non_principal_2_sectional_parameters)
+        
         else:
-            raise NotImplementedError
-        
-        # if self._pr_dim == 1:
-        #     sectional_paramaters.add_sectional_translation(axis=1, translation=principal_sectional_parameters)
-        #     sectional_paramaters.add_sectional_stretch(axis=0, stretch=non_principal_1_sectional_parameters)
-        #     sectional_paramaters.add_sectional_stretch(axis=2, stretch=non_principal_2_sectional_parameters)
-        
-        # if self._pr_dim == 2:
-        #     sectional_paramaters.add_sectional_translation(axis=0, translation=principal_sectional_parameters)
-        #     sectional_paramaters.add_sectional_stretch(axis=1, stretch=non_principal_1_sectional_parameters)
-        #     sectional_paramaters.add_sectional_stretch(axis=2, stretch=non_principal_2_sectional_parameters)
+            sectional_paramaters.add_sectional_stretch(axis=0, stretch=non_principal_1_sectional_parameters)
+            sectional_paramaters.add_sectional_stretch(axis=1, stretch=non_principal_2_sectional_parameters)
 
         ffd_coefficients = ffd_block_sectional_parameterization.evaluate(sectional_paramaters, plot=plot)
         
 
         # set the coefficient in the geometry
         geometry_coefficients = ffd_block.evaluate_ffd(ffd_coefficients, plot=False)
-
         self.geometry.set_coefficients(geometry_coefficients)
 
         # Add rigid body translation (without FFD)
@@ -211,8 +202,8 @@ class Rotor(Component):
             shape = function.coefficients.shape
             function.coefficients = function.coefficients + csdl.expand(rigid_body_translation, shape, action='j->ij')
 
+
         # Add (B-spline) coefficients to parameterization solver
-        parameterization_solver.add_parameter(principal_b_spline.coefficients)
         parameterization_solver.add_parameter(non_principal_1_b_spline.coefficients)
         parameterization_solver.add_parameter(non_principal_2_b_spline.coefficients)
         parameterization_solver.add_parameter(rigid_body_translation)
