@@ -205,7 +205,13 @@ class CamberSurface(Discretization):
     _TE_points_para = None
     _chordwise_spacing = None
 
-    embedded_airfoil_model = None
+    embedded_airfoil_model_Cl = None
+    embedded_airfoil_model_Cd = None
+    embedded_airfoil_model_Cp = None
+    embedded_airfoil_model_alpha_stall = None
+    reynolds_number = None
+    alpha_ML_mid_panel = None
+    mid_panel_chord_length = None
 
     def _update(self):
         if self._upper_wireframe_para is not None and self._lower_wireframe_para is not None:
@@ -262,6 +268,7 @@ def make_vlm_surface(
     num_chordwise: int, 
     spacing_spanwise: str = 'linear',
     spacing_chordwise: str = 'linear',
+    chord_wise_points_for_airfoil = None,
     ignore_camber: bool = False, 
     plot: bool = False,
     grid_search_density: int = 10,
@@ -473,6 +480,9 @@ def make_vlm_surface(
     LE_points_csdl = LE_points_csdl.set(csdl.slice[:, 1], y_mean_spanwise)
     TE_points_csdl = TE_points_csdl.set(csdl.slice[:, 1], y_mean_spanwise)
 
+    
+
+
     if spacing_chordwise == "linear":
         chord_surface = csdl.linear_combination(LE_points_csdl, TE_points_csdl, num_chordwise+1).reshape((num_chordwise+1, num_spanwise+1, 3))
     
@@ -501,7 +511,7 @@ def make_vlm_surface(
 
     else:
         vertical_offset_1 = csdl.expand(
-            csdl.Variable(shape=(3, ), value=np.array([0., 0., 0.5])),
+            csdl.Variable(shape=(3, ), value=np.array([0., 0., 0.25])),
             chord_surface.shape, action='k->ijk'
         )
 
@@ -534,6 +544,65 @@ def make_vlm_surface(
         vlm_mesh._upper_wireframe_para = upper_surace_wireframe_para
         vlm_mesh._num_chord_wise = num_chordwise
         vlm_mesh._num_spanwise = num_spanwise
+
+    if chord_wise_points_for_airfoil is not None:
+        LE_points_csdl_mid_panel = (LE_points_csdl[0:-1, :] + LE_points_csdl[1:, :]) / 2
+        TE_points_csdl_mid_panel = (TE_points_csdl[0:-1, :] + TE_points_csdl[1:, :]) / 2
+
+        LE_points_csdl_mid_panel = LE_points_csdl_mid_panel.set(csdl.slice[:, 0], LE_points_csdl_mid_panel[:, 0] + 0.1)
+        TE_points_csdl_mid_panel = TE_points_csdl_mid_panel.set(csdl.slice[:, 0], TE_points_csdl_mid_panel[:, 0] - 0.1)
+
+        LE_points_re_projected = wing_geometry.evaluate(wing_geometry.project(LE_points_csdl_mid_panel, grid_search_density_parameter=grid_search_density, plot=plot))
+        TE_points_re_projected = wing_geometry.evaluate(wing_geometry.project(TE_points_csdl_mid_panel, grid_search_density_parameter=grid_search_density, plot=plot))
+        
+        num_chordwise = len(chord_wise_points_for_airfoil)
+        # chord_surface = csdl.linear_combination(LE_points_csdl_mid_panel, TE_points_csdl_mid_panel, num_chordwise)
+        chord_surface = csdl.linear_combination(LE_points_re_projected, TE_points_re_projected, num_chordwise)
+
+        x_interp = csdl.Variable(shape=(num_chordwise, ), value=chord_wise_points_for_airfoil)
+        x_interp_exp = csdl.expand(x_interp, (num_chordwise, num_spanwise), action="i->ij")
+        # LE_exp_x = csdl.expand(LE_points_csdl_mid_panel[:, 0], (num_chordwise, num_spanwise), action="j->ij")
+        # TE_exp_x = csdl.expand(TE_points_csdl_mid_panel[:, 0], (num_chordwise, num_spanwise), action="j->ij")
+
+        LE_exp_x = csdl.expand(LE_points_re_projected[:, 0], (num_chordwise, num_spanwise), action="j->ij")
+        TE_exp_x = csdl.expand(TE_points_re_projected[:, 0], (num_chordwise, num_spanwise), action="j->ij")
+
+        skewed_chord_surface_x = LE_exp_x + (TE_exp_x - LE_exp_x) * x_interp_exp
+
+
+        chord_surface = chord_surface.set(
+            csdl.slice[:, :, 0],
+            skewed_chord_surface_x,
+        )
+
+        vertical_offset_1 = csdl.expand(
+            csdl.Variable(shape=(3, ), value=np.array([0., 0., 0.25])),
+            chord_surface.shape, action='k->ijk'
+        )
+
+        airfoil_upper_para = wing_geometry.project(
+            chord_surface - vertical_offset_1, 
+            direction=np.array([0., 0., 1.]), 
+            plot=plot, 
+            grid_search_density_parameter=grid_search_density
+        )
+
+        airfoil_lower_para = wing_geometry.project(
+            chord_surface + vertical_offset_1, 
+            direction=np.array([0., 0., -1]), 
+            plot=plot, 
+            grid_search_density_parameter=grid_search_density,
+        )
+
+        vlm_mesh._airfoil_upper_para = airfoil_upper_para
+        vlm_mesh._airfoil_lower_para = airfoil_lower_para
+
+        vlm_mesh.airfoil_nodes_upper = wing_geometry.evaluate(airfoil_upper_para)
+        vlm_mesh.airfoil_nodes_lower = wing_geometry.evaluate(airfoil_lower_para)
+
+
+
+
 
     wing_comp._discretizations[f"{wing_comp._name}_vlm_camber_mesh"] = vlm_mesh
 

@@ -8,17 +8,18 @@ from BladeAD.core.airfoil.ml_airfoil_models.NACA_4412.naca_4412_model import NAC
 from BladeAD.utils.parameterization import BsplineParameterization
 from BladeAD.core.BEM.bem_model import BEMModel
 from BladeAD.utils.var_groups import RotorAnalysisInputs
-
-
+from lsdo_airfoil.core.three_d_airfoil_aero_model import ThreeDAirfoilMLModelMaker
+import lsdo_function_spaces as lfs
+import matplotlib.pyplot as plt
 
 recorder = csdl.Recorder(inline=True, expand_ops=True)
 recorder.start()
 
 caddee = cd.CADDEE()
 
-make_meshes = True
-run_ffd = False
-run_optimization = True
+make_meshes = False
+run_ffd = True
+run_optimization = False
 
 # Import L+C .stp file and convert control points to meters
 lpc_geom = cd.import_geometry("LPC_final_custom_blades.stp", scale=cd.Units.length.foot_to_m)
@@ -28,24 +29,57 @@ def define_base_config(caddee : cd.CADDEE):
     
     # system component & airframe
     aircraft = cd.aircraft.components.Aircraft(geometry=lpc_geom)
+
+    # Make (base) configuration object
+    base_config = cd.Configuration(system=aircraft)
+
+    # Airframe container object
     airframe = aircraft.comps["airframe"] = cd.Component()
 
     # ::::::::::::::::::::::::::: Make components :::::::::::::::::::::::::::
-    # Fuselage
+    # ---------- Fuselage ----------
     fuselage_geometry = aircraft.create_subgeometry(search_names=["Fuselage"])
-    fuselage = cd.aircraft.components.Fuselage(length=9.144, 
+    fuselage = cd.aircraft.components.Fuselage(length=12, #9.144, 
                                                max_height=1.688,
                                                max_width=1.557,
                                                geometry=fuselage_geometry)
     airframe.comps["fuselage"] = fuselage
 
-    # Main wing
-    wing_geometry = aircraft.create_subgeometry(search_names=["Wing_1"])
-    wing = cd.aircraft.components.Wing(AR=12.12, S_ref=19.6, taper_ratio=0.2,
-                                       geometry=wing_geometry, tight_fit_ffd=True)
+    # ---------- Main wing ----------
+    # ignore_names = ['72', '73', '90', '91', '92', '93', '110', '111'] # rib-like surfaces
+    wing_geometry = aircraft.create_subgeometry(search_names=["Wing_1"])#, ignore_names=ignore_names)
+    wing = cd.aircraft.components.Wing(AR=20.12, S_ref=19.6, taper_ratio=0.2,
+                                       geometry=wing_geometry,thickness_to_chord=0.17,
+                                        thickness_to_chord_loc=0.4, tight_fit_ffd=True)
+    
+    # Make ribs and spars
+    wing.construct_ribs_and_spars(aircraft.geometry, num_ribs=8)
+
+    # Wing material
+    aluminum = cd.materials.IsotropicMaterial(name='aluminum', E=69E9, G=26E9, density=2700, nu=0.33)
+    
+    # Aerodynamic parameters for drag build up
+    wing.quantities.drag_parameters.percent_laminar = 70
+    wing.quantities.drag_parameters.percent_turbulent = 30
+    
+    # Function spaces
+    # Thickness
+    thickness_space = wing_geometry.create_parallel_space(lfs.ConstantSpace(2))
+    thickness_var, thickness_function = thickness_space.initialize_function(1, value=0.001)
+    wing.quantities.material_properties.set_material(aluminum, thickness_function)
+
+    # Pressure space
+    pressure_function_space = lfs.IDWFunctionSpace(num_parametric_dimensions=2, order=6, grid_size=(240, 40), conserve=False)
+    indexed_pressue_function_space = wing.geometry.create_parallel_space(pressure_function_space)
+    wing.quantities.pressure_space = indexed_pressue_function_space
+
+    # Component hierarchy
     airframe.comps["wing"] = wing
 
-    # Empennage
+    # Connect wing to fuselage at the quarter chord
+    base_config.connect_component_geometries(fuselage, wing, 0.75 * wing.LE_center + 0.25 * wing.TE_center)
+
+    # ---------- Empennage ----------
     empennage = cd.Component()
     airframe.comps["empennage"] = empennage
 
@@ -54,13 +88,20 @@ def define_base_config(caddee : cd.CADDEE):
     h_tail = cd.aircraft.components.Wing(AR=4.3, S_ref=3.7, 
                                          taper_ratio=0.6, geometry=h_tail_geometry)
     empennage.comps["h_tail"] = h_tail
+    
+    # Connect h-tail to fuselage
+    base_config.connect_component_geometries(fuselage, h_tail, h_tail.TE_center)
 
     # Vertical tail
     v_tail_geometry = aircraft.create_subgeometry(search_names=["Tail_2"])
-    v_tail = cd.aircraft.components.Wing(AR=1.17, S_ref=2.54, geometry=v_tail_geometry)
+    # v_tail = cd.Component(AR=1.17, S_ref=2.54, taper_ratio=0.272, geometry=v_tail_geometry, orientation="vertical")
+    v_tail = cd.aircraft.components.Wing(AR=1.17, S_ref=2.54, taper_ratio=0.272, geometry=v_tail_geometry, orientation="vertical")
     empennage.comps["v_tail"] = v_tail
 
-    # motor group
+    # Connect vtail to fuselage
+    base_config.connect_component_geometries(fuselage, v_tail, v_tail.TE_root)
+
+    # ----------motor group ----------
     power_density = 5000
     motors = cd.Component()
     airframe.comps["motors"] = motors
@@ -70,7 +111,7 @@ def define_base_config(caddee : cd.CADDEE):
         motor = cd.Component(power_density=power_density)
         motors.comps[f"motor_{i}"] = motor
 
-    # Parent component for all rotors
+    # ---------- Parent component for all rotors ----------
     rotors = cd.Component()
     airframe.comps["rotors"] = rotors
     rotors.quantities.drag_parameters.drag_area = 0.111484
@@ -81,6 +122,9 @@ def define_base_config(caddee : cd.CADDEE):
     )
     pusher_prop = cd.aircraft.components.Rotor(radius=2.74/2, geometry=pusher_prop_geometry)
     rotors.comps["pusher_prop"] = pusher_prop
+
+    # Connect pusher prop to fuselage
+    base_config.connect_component_geometries(fuselage, pusher_prop, connection_point=fuselage.tail_point)
 
     # Lift rotors / motors
     lift_rotors = []
@@ -104,37 +148,63 @@ def define_base_config(caddee : cd.CADDEE):
         boom.quantities.drag_parameters.form_factor = 1.1
         booms.comps[f"boom_{i+1}"] = boom
 
-    # battery
-    battery = cd.Component(energy_density=380)
-    airframe.comps["battery"] = battery
+        # Connect booms to wing and rotors to fuselage
+        rotor = rotors.comps[f"rotor_{i+1}"]
+        base_config.connect_component_geometries(rotor, boom)
+        base_config.connect_component_geometries(boom, wing, connection_point=boom.ffd_block_face_1)
 
-    # payload
-    payload = cd.Component()
-    airframe.comps["payload"] = payload
+    # # battery
+    # battery = cd.Component(energy_density=380)
+    # airframe.comps["battery"] = battery
 
-    # systems
-    systems = cd.Component()
-    airframe.comps["systems"] = systems
+    # # payload
+    # payload = cd.Component()
+    # airframe.comps["payload"] = payload
+
+    # # systems
+    # systems = cd.Component()
+    # airframe.comps["systems"] = systems
 
     # ::::::::::::::::::::::::::: Make meshes :::::::::::::::::::::::::::
     if make_meshes:
     # wing + tail
+        # Add an airfoil model that shifts the lift curve slope by alpha at Cl0
+        nasa_langley_airfoil_maker = ThreeDAirfoilMLModelMaker(
+            airfoil_name="ls417",
+                aoa_range=np.linspace(-12, 16, 50), 
+                reynolds_range=[1e5, 2e5, 5e5, 1e6, 2e6, 4e6, 7e6, 10e6], 
+                mach_range=[0., 0.2, 0.3, 0.4, 0.5, 0.6],
+        )
+        Cl_model = nasa_langley_airfoil_maker.get_airfoil_model(quantities=["Cl"])
+        Cd_model = nasa_langley_airfoil_maker.get_airfoil_model(quantities=["Cd"])
+        Cp_model = nasa_langley_airfoil_maker.get_airfoil_model(quantities=["Cp"])
+        alpha_stall_model = nasa_langley_airfoil_maker.get_airfoil_model(quantities=["alpha_Cl_min_max"])
+
         vlm_mesh = cd.mesh.VLMMesh()
         wing_chord_surface = cd.mesh.make_vlm_surface(
             wing, 40, 1, LE_interp="ellipse", TE_interp="ellipse", 
-            spacing_spanwise="linear", ignore_camber=True, plot=False,
+            spacing_spanwise="cosine", ignore_camber=True, plot=False,
+            chord_wise_points_for_airfoil=nasa_langley_airfoil_maker.x_interp,
         )
-        # Add an airfoil model that shifts the lift curve slope by alpha at Cl0
-        wing_chord_surface.embedded_airfoil_model = NACA4412MLAirfoilModel()
-        vlm_mesh.discretizations["wing_chord_surface"] = wing_chord_surface
         
+        wing_chord_surface.embedded_airfoil_model_Cl = Cl_model
+        wing_chord_surface.embedded_airfoil_model_Cd = Cd_model
+        wing_chord_surface.embedded_airfoil_model_Cp = Cp_model
+        wing_chord_surface.embedded_airfoil_model_alpha_stall = alpha_stall_model
+        vlm_mesh.discretizations["wing_chord_surface"] = wing_chord_surface
+
         tail_surface = cd.mesh.make_vlm_surface(
             h_tail, 10, 1, ignore_camber=True
         )
         vlm_mesh.discretizations["tail_chord_surface"] = tail_surface
 
-        # lpc_geom.plot_meshes([wing_chord_surface.nodal_coordinates, tail_surface.nodal_coordinates])
+        # Beam nodal mesh
+        beam_mesh = cd.mesh.BeamMesh()
+        num_beam_nodes = 21
+        wing_box_beam = cd.mesh.make_1d_box_beam(wing, num_beam_nodes, norm_node_center=0.5, norm_beam_width=0.5, project_spars=True, plot=True)
+        beam_mesh.discretizations["wing_box_beam"] = wing_box_beam
 
+        lpc_geom.plot_meshes([wing_box_beam.nodal_coordinates])
         # rotors
         num_radial = 30
         num_cp = 4
@@ -161,10 +231,10 @@ def define_base_config(caddee : cd.CADDEE):
             rotor_mesh.twist_profile = blade_parameterization.evaluate_radial_profile(twist_cps)
             rotor_meshes.discretizations[f"rotor_{i+1}_mesh"] = rotor_mesh
 
-    # Make base configuration    
-    base_config = cd.Configuration(system=aircraft)
+    # Run inner optimization if specified
     if run_ffd:
-        base_config.setup_geometry()
+        base_config.setup_geometry(plot=True)
+        exit()
     caddee.base_configuration = base_config
 
     # Store meshes
@@ -172,6 +242,8 @@ def define_base_config(caddee : cd.CADDEE):
         mesh_container = base_config.mesh_container
         mesh_container["vlm_mesh"] = vlm_mesh
         mesh_container["rotor_meshes"] = rotor_meshes
+
+    return nasa_langley_airfoil_maker.x_interp
 
 
 def define_conditions(caddee: cd.CADDEE):
@@ -187,6 +259,7 @@ def define_conditions(caddee: cd.CADDEE):
     conditions["hover"] = hover
 
     # Cruise
+    # pitch_angle = csdl.Variable(shape=(1, ), value=np.deg2rad(0))
     pitch_angle = csdl.Variable(shape=(1, ), value=np.deg2rad(2.69268269))
     pitch_angle.set_as_design_variable(upper=np.deg2rad(10), lower=np.deg2rad(-10), scaler=10)
     cruise = cd.aircraft.conditions.CruiseCondition(
@@ -197,6 +270,49 @@ def define_conditions(caddee: cd.CADDEE):
     )
     cruise.configuration = base_config.copy()
     conditions["cruise"] = cruise
+
+
+    # +3g 
+    pitch_angle = csdl.Variable(shape=(1, ), value=np.deg2rad(7))
+    pitch_angle.set_as_design_variable(upper=np.deg2rad(15), lower=5)
+    flight_path_angle = csdl.Variable(shape=(1, ), value=np.deg2rad(5))
+    plus_3g = cd.aircraft.conditions.ClimbCondition(
+        initial_altitude=1000, 
+        final_altitude=2000,
+        pitch_angle=pitch_angle,
+        fligth_path_angle=flight_path_angle,
+        mach_number=0.23,
+    )
+    plus_3g.configuration = base_config.copy()
+    conditions["plus_3g"] = plus_3g
+
+
+    # -1g 
+    pitch_angle = csdl.Variable(shape=(1, ), value=np.deg2rad(-5))
+    pitch_angle.set_as_design_variable(upper=np.deg2rad(0), lower=np.deg2rad(-15))
+    flight_path_angle = csdl.Variable(shape=(1, ), value=np.deg2rad(-4))
+    minus_1g = cd.aircraft.conditions.ClimbCondition(
+        initial_altitude=2000, 
+        final_altitude=1000,
+        pitch_angle=pitch_angle,
+        fligth_path_angle=flight_path_angle,
+        mach_number=0.23,
+    )
+    minus_1g.configuration = base_config.copy()
+    conditions["minus_1g"] = minus_1g
+
+
+    # quasi-steady transition
+    transition_mach_numbers = np.array([0.0002941, 0.06489461, 0.11471427, 0.13740796, 0.14708026, 0.15408429, 0.15983874, 0.16485417, 0.16937793, 0.17354959])
+    transition_pitch_angles = np.array([-0.0134037, -0.04973228, 0.16195989, 0.10779469, 0.04, 0.06704556, 0.05598293, 0.04712265, 0.03981101, 0.03369678])
+    transition_ranges = np.array([0.72, 158., 280., 336., 360., 377., 391., 403., 414., 424.])
+
+    qst = cd.aircraft.conditions.CruiseCondition(
+        altitude=300.,
+        pitch_angle=transition_pitch_angles,
+        mach_number=transition_mach_numbers,
+        range=transition_ranges,
+    )
 
     return 
 
@@ -324,7 +440,7 @@ def define_mass_properties(caddee: cd.CADDEE):
     base_config.assemble_system_mass_properties(update_copies=True)
 
 
-def define_analysis(caddee: cd.CADDEE):
+def define_analysis(caddee: cd.CADDEE, x_interp):
     conditions = caddee.conditions
 
     # ::::::::::::::::::::::::::: Hover :::::::::::::::::::::::::::
@@ -401,15 +517,64 @@ def define_analysis(caddee: cd.CADDEE):
     vlm_mesh = mesh_container["vlm_mesh"]
     wing_lattice = vlm_mesh.discretizations["wing_chord_surface"]
     tail_lattice = vlm_mesh.discretizations["tail_chord_surface"]
+    airfoil_upper_nodes = wing_lattice._airfoil_upper_para
+    airfoil_lower_nodes = wing_lattice._airfoil_lower_para
+    pressure_indexed_space : lfs.FunctionSetSpace = wing.quantities.pressure_space
 
     # run vlm solver
     lattice_coordinates = [wing_lattice.nodal_coordinates, tail_lattice.nodal_coordinates]
     lattice_nodal_velocitiies = [wing_lattice.nodal_velocities, tail_lattice.nodal_velocities]
     alpha_ml_list = [wing_lattice.alpha_ML_mid_panel, tail_lattice.alpha_ML_mid_panel]
-    vlm_outputs = vlm_solver(lattice_coordinates, lattice_nodal_velocitiies, alpha_ML=alpha_ml_list)
+    # airfoil_Cd_models = [wing_lattice.embedded_airfoil_model_Cd, tail_lattice.embedded_airfoil_model_Cd]
+    airfoil_Cl_models = [wing_lattice.embedded_airfoil_model_Cl, tail_lattice.embedded_airfoil_model_Cl]
+    airfoil_Cp_models = [wing_lattice.embedded_airfoil_model_Cp, tail_lattice.embedded_airfoil_model_Cp]
+    airfoil_alpha_stall_models = [wing_lattice.embedded_airfoil_model_alpha_stall, tail_lattice.embedded_airfoil_model_alpha_stall]
+    reynolds_numbers = [wing_lattice.reynolds_number, tail_lattice.reynolds_number]
+    chord_length_mid_panel = [wing_lattice.mid_panel_chord_length, tail_lattice.mid_panel_chord_length]
+    vlm_outputs = vlm_solver(
+        lattice_coordinates, 
+        lattice_nodal_velocitiies, 
+        alpha_ML=alpha_ml_list,
+        airfoil_Cd_models=[None, None],#=airfoil_Cd_models,
+        airfoil_Cl_models=airfoil_Cl_models,
+        airfoil_Cp_models=airfoil_Cp_models,
+        airfoil_alpha_stall_models=airfoil_alpha_stall_models,
+        reynolds_numbers=reynolds_numbers,
+        chord_length_mid_panel=chord_length_mid_panel,
+    )
     
     vlm_forces = vlm_outputs.total_force
     vlm_moments = vlm_outputs.total_moment
+    spanwise_Cp = vlm_outputs.surface_spanwise_Cp[0]
+    spanwise_Cp = csdl.blockmat([[spanwise_Cp[0, :, 0:120].T()], [spanwise_Cp[0, :, 120:].T()]])
+    P_inf = cruise.quantities.atmos_states.pressure
+    V_inf = cruise.parameters.speed
+    rho_inf = cruise.quantities.atmos_states.density
+    spanwise_pressure = spanwise_Cp * 0.5 * rho_inf * V_inf**2 + P_inf
+
+
+    pressure_function = pressure_indexed_space.fit_function_set(
+        values=spanwise_pressure.reshape((-1, 1)), parametric_coordinates=airfoil_upper_nodes+airfoil_lower_nodes,
+        regularization_parameter=1e-4,
+    )
+
+    Cp_upper = pressure_function.evaluate(airfoil_upper_nodes).reshape((120, 40)).value
+    Cp_lower = pressure_function.evaluate(airfoil_lower_nodes).reshape((120, 40)).value
+    # print(Cp_upper[0, :])
+    # print(Cp_lower[0, :])
+
+    plt.plot(x_interp, Cp_upper[:, 20], color="r", label="IDW")
+    plt.plot(x_interp, Cp_lower[:, 20], color="r")
+    plt.plot(x_interp, spanwise_pressure[0:120, 20].value, color="b", label="data")
+    plt.plot(x_interp, spanwise_pressure[120:, 20].value, color="b")
+    plt.title("mid panel")
+    plt.legend()
+    # print("\n")
+    # print(spanwise_Cp[0:120, 20].value)
+    # print(spanwise_Cp[120:, 20].value)
+
+    # wing.geometry.plot_but_good(color=pressure_function)
+    
 
     # Drag build-up
     drag_build_up_model = cd.aircraft.models.aero.compute_drag_build_up
@@ -417,6 +582,9 @@ def define_analysis(caddee: cd.CADDEE):
     drag_build_up = drag_build_up_model(cruise.quantities.ac_states, cruise.quantities.atmos_states,
                                         wing.parameters.S_ref, [wing, fuselage, tail, v_tail, rotors] + booms)
     
+    
+    wing.geometry.plot(color=pressure_function)
+    plt.show()
     
     # BEM solver
     rotor_meshes = mesh_container["rotor_meshes"]
@@ -466,13 +634,13 @@ def define_analysis(caddee: cd.CADDEE):
     return accel_hover, accel_cruise, total_forces_hover, total_forces_cruise
 
 
-define_base_config(caddee)
+x_interp = define_base_config(caddee)
 
 define_conditions(caddee)
 
 define_mass_properties(caddee)
 
-accel_hover, accel_cruise, total_forces_hover, total_forces_cruise  = define_analysis(caddee)
+accel_hover, accel_cruise, total_forces_hover, total_forces_cruise  = define_analysis(caddee, x_interp)
 
 if run_optimization:
     from modopt import CSDLAlphaProblem

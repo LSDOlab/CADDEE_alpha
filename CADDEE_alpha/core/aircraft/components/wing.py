@@ -75,8 +75,11 @@ class Wing(Component):
         incidence : Union[int, float, csdl.Variable] = 0, 
         root_twist_delta : Union[int, float, csdl.Variable] = 0,
         tip_twist_delta : Union[int, float, csdl.Variable] = 0,
+        thickness_to_chord: float = 0.15,
+        thickness_to_chord_loc: float = 0.3,
         geometry : Union[lfs.FunctionSet, None]=None,
-        tight_fit_ffd: bool = True,
+        tight_fit_ffd: bool = False,
+        orientation: str = "horizontal",
         **kwargs
     ) -> None:
         kwargs["do_not_remake_ffd_block"] = True
@@ -92,6 +95,7 @@ class Wing(Component):
         csdl.check_parameter(taper_ratio, "taper_ratio", types=(int, float, csdl.Variable), allow_none=True)
         csdl.check_parameter(root_twist_delta, "root_twist_delta", types=(int, float, csdl.Variable))
         csdl.check_parameter(tip_twist_delta, "tip_twist_delta", types=(int, float, csdl.Variable))
+        csdl.check_parameter(orientation, "orientation", values=["horizontal", "vertical"])
 
         # Check if wing is over-parameterized
         if all(arg is not None for arg in [AR, S_ref, span]):
@@ -100,12 +104,16 @@ class Wing(Component):
         if sum(1 for arg in [AR, S_ref, span] if arg is None) >= 2:
             raise Exception("Wing comp under-parameterized: Must specify two out of three: AR, S_ref, and span.")
         
+        if orientation == "vertical" and dihedral is not None:
+            raise ValueError("Cannot specify dihedral for vertical wing.")
+        
         if incidence is not None:
             if incidence != 0.:
                 raise NotImplementedError("incidence has not yet been implemented")
 
         self._name = f"wing_{self._instance_count}"
         self._tight_fit_ffd = tight_fit_ffd
+        self._orientation = orientation
         
         # Assign parameters
         self.parameters : WingParameters =  WingParameters(
@@ -118,6 +126,8 @@ class Wing(Component):
             taper_ratio=taper_ratio,
             root_twist_delta=root_twist_delta,
             tip_twist_delta=tip_twist_delta,
+            thickness_to_chord=thickness_to_chord,
+            thickness_to_chord_loc=thickness_to_chord_loc,
         )
 
         # Compute MAC (i.e., characteristic length)
@@ -164,11 +174,8 @@ class Wing(Component):
             if not isinstance(self.geometry, (lfs.FunctionSet)):
                 raise TypeError(f"wing gometry must be of type {lfs.FunctionSet}")
             else:
-                t1 = time.time()
                 # Set the wetted area
                 self.parameters.S_wet = self.quantities.surface_area
-                t2 = time.time()
-                # print("time for copmuting wetted area", t2-t1)
 
                 t3 = time.time()
                 # Make the FFD block upon instantiation
@@ -177,16 +184,41 @@ class Wing(Component):
                 print("time for making ffd_block", t4-t3)
                 # ffd_block.plot()
 
-                t5 = time.time()
                 # Compute the corner points of the wing 
-                self._LE_left_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([1., 0., 0.62])), plot=False, extrema=True)
-                self._LE_mid_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([1., 0.5, 0.62])), plot=False, extrema=True)
-                self._LE_right_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([1., 1.0, 0.62])), plot=False, extrema=True)
+                if self._orientation == "horizontal":
+                    self._LE_left_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([1., 0., 0.5])), plot=False, extrema=True)
+                    self._LE_mid_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([1., 0.5, 0.5])), plot=False, extrema=True)
+                    self._LE_right_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([1., 1.0, 0.5])), plot=False, extrema=True)
 
-                self._TE_left_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 0., 0.5])), plot=False, extrema=True)
-                self._TE_mid_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 0.5, 0.5])),  plot=False, extrema=True)
-                self._TE_right_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 1.0, 0.5])), plot=False, extrema=True)
-                t6 = time.time()
+                    self._TE_left_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 0., 0.5])), plot=False, extrema=True)
+                    self._TE_mid_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 0.5, 0.5])),  plot=False, extrema=True)
+                    self._TE_right_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 1.0, 0.5])), plot=False, extrema=True)
+
+                    self.LE_left_tip = geometry.evaluate(self._LE_left_point)
+                    self.LE_right_tip = geometry.evaluate(self._LE_right_point)
+
+                    self.TE_left_tip = geometry.evaluate(self._TE_left_point)
+                    self.TE_right_tip = geometry.evaluate(self._TE_right_point)
+
+
+                    self.LE_center = geometry.evaluate(self._LE_mid_point)
+                    self.TE_center = geometry.evaluate(self._TE_mid_point)
+
+                else:
+                    self._LE_tip_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([1., 0.5, 0.])), direction=np.array([-1., 0., 0.]), plot=False, extrema=False)
+                    self._LE_root_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([1., 0.5, 1.])), direction=np.array([-1., 0., 0.]), plot=False, extrema=False)
+
+                    self._TE_tip_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 0.5, 0.])), plot=False, extrema=True)
+                    self._TE_root_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 0.5, 1.])), plot=False, extrema=True)
+
+                    self.LE_root = geometry.evaluate(self._LE_root_point)
+                    self.TE_root = geometry.evaluate(self._TE_root_point)
+
+                    # print(self.geometry.evaluate(self._LE_tip_point).value)
+                    # print(self.geometry.evaluate(self._LE_root_point).value)
+                    # print(self.geometry.evaluate(self._TE_tip_point).value)
+                    # print(self.geometry.evaluate(self._TE_root_point).value)
+                    # exit()
 
                 self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=False)
 
@@ -261,7 +293,11 @@ class Wing(Component):
             ffd_block = construct_tight_fit_ffd_block(name=self._name, entities=entities, 
                                                     num_coefficients=num_coefficients, degree=degree)
         else:
-            num_coefficients = (2, 3, 2) # NOTE: hard coding here might be limiting
+            if self._orientation == "horizontal":
+                num_coefficients = (2, 3, 2) # NOTE: hard coding here might be limiting
+            else:
+                degree = (1, 1, 1)
+                num_coefficients = (2, 2, 2)
             ffd_block = construct_ffd_block_around_entities(name=self._name, entities=entities,
                                                             num_coefficients=num_coefficients, degree=degree)
         
@@ -271,12 +307,18 @@ class Wing(Component):
     
     def _setup_ffd_block(self, ffd_block, parameterization_solver, plot : bool=False):
         """Set up the wing ffd block."""
+
+        if self._orientation == "horizontal":
+            principal_parametric_dimension = 1
+        else:
+            principal_parametric_dimension = 2
+
         
         # Instantiate a volume sectional parameterization object
         ffd_block_sectional_parameterization = VolumeSectionalParameterization(
             name=f'{self._name}_sectional_parameterization',
             parameterized_points=ffd_block.coefficients,
-            principal_parametric_dimension=1
+            principal_parametric_dimension=principal_parametric_dimension,
         )
         if plot:
             ffd_block_sectional_parameterization.plot()
@@ -300,23 +342,25 @@ class Wing(Component):
             name=f"{self._name}_span_stretch_b_sp_coeffs",
         )
 
-        sweep_translation_b_spline = lfs.Function(
-            space=self._linear_b_spline_3_dof_space,
-            coefficients=csdl.ImplicitVariable(
-                shape=(3, ),
-                value=np.array([0., 0., 0.,]),
-            ),
-            name=f"{self._name}_sweep_transl_b_sp_coeffs"
-        )
+        if self.parameters.sweep is not None:
+            sweep_translation_b_spline = lfs.Function(
+                space=self._linear_b_spline_3_dof_space,
+                coefficients=csdl.ImplicitVariable(
+                    shape=(3, ),
+                    value=np.array([0., 0., 0.,]),
+                ),
+                name=f"{self._name}_sweep_transl_b_sp_coeffs"
+            )
 
-        dihedral_translation_b_spline = lfs.Function(
-            space=self._linear_b_spline_3_dof_space,
-            coefficients=csdl.ImplicitVariable(
-                shape=(3, ),
-                value=np.array([0., 0., 0.,]),
-            ),
-            name=f"{self._name}_dihedral_transl_b_sp_coeffs"
-        )
+        if self.parameters.dihedral is not None:
+            dihedral_translation_b_spline = lfs.Function(
+                space=self._linear_b_spline_3_dof_space,
+                coefficients=csdl.ImplicitVariable(
+                    shape=(3, ),
+                    value=np.array([0., 0., 0.,]),
+                ),
+                name=f"{self._name}_dihedral_transl_b_sp_coeffs"
+            )
 
         coefficients=csdl.Variable(
                 shape=(3, ),
@@ -341,22 +385,32 @@ class Wing(Component):
         span_stretch_sectional_parameters = span_stretch_b_spline.evaluate(
             parametric_b_spline_inputs
         )
-        sweep_translation_sectional_parameters = sweep_translation_b_spline.evaluate(
-            parametric_b_spline_inputs
-        )
-        dihedral_translation_sectional_parameters = dihedral_translation_b_spline.evaluate(
-            parametric_b_spline_inputs
-        )
+        if self.parameters.sweep is not None:
+            sweep_translation_sectional_parameters = sweep_translation_b_spline.evaluate(
+                parametric_b_spline_inputs
+            )
+        if self.parameters.dihedral is not None:
+            dihedral_translation_sectional_parameters = dihedral_translation_b_spline.evaluate(
+                parametric_b_spline_inputs
+            )
         twist_sectional_parameters = twist_b_spline.evaluate(
             parametric_b_spline_inputs
         )
 
         sectional_parameters = VolumeSectionalParameterizationInputs()
-        sectional_parameters.add_sectional_stretch(axis=0, stretch=chord_stretch_sectional_parameters)
-        sectional_parameters.add_sectional_translation(axis=1, translation=span_stretch_sectional_parameters)
-        sectional_parameters.add_sectional_translation(axis=0, translation=sweep_translation_sectional_parameters)
-        sectional_parameters.add_sectional_translation(axis=2, translation=dihedral_translation_sectional_parameters)
-        sectional_parameters.add_sectional_rotation(axis=1, rotation=twist_sectional_parameters)
+        if self._orientation == "horizontal":
+            sectional_parameters.add_sectional_stretch(axis=0, stretch=chord_stretch_sectional_parameters)
+            sectional_parameters.add_sectional_translation(axis=1, translation=span_stretch_sectional_parameters)
+            if self.parameters.sweep is not None:
+                sectional_parameters.add_sectional_translation(axis=0, translation=sweep_translation_sectional_parameters)
+            if self.parameters.dihedral is not None:
+                sectional_parameters.add_sectional_translation(axis=2, translation=dihedral_translation_sectional_parameters)
+            sectional_parameters.add_sectional_rotation(axis=1, rotation=twist_sectional_parameters)
+        else:
+            sectional_parameters.add_sectional_stretch(axis=0, stretch=chord_stretch_sectional_parameters)
+            sectional_parameters.add_sectional_translation(axis=2, translation=span_stretch_sectional_parameters)
+            if self.parameters.sweep is not None:
+                sectional_parameters.add_sectional_translation(axis=0, translation=sweep_translation_sectional_parameters)
 
         ffd_coefficients = ffd_block_sectional_parameterization.evaluate(sectional_parameters, plot=False) 
 
@@ -386,8 +440,10 @@ class Wing(Component):
         # Add the coefficients of all B-splines to the parameterization solver
         parameterization_solver.add_parameter(chord_stretch_b_spline.coefficients)
         parameterization_solver.add_parameter(span_stretch_b_spline.coefficients)
-        parameterization_solver.add_parameter(sweep_translation_b_spline.coefficients)
-        parameterization_solver.add_parameter(dihedral_translation_b_spline.coefficients)
+        if self.parameters.sweep is not None:
+            parameterization_solver.add_parameter(sweep_translation_b_spline.coefficients)
+        if self.parameters.dihedral is not None:
+            parameterization_solver.add_parameter(dihedral_translation_b_spline.coefficients)
         parameterization_solver.add_parameter(rigid_body_translation, cost=10)
 
         return 
@@ -402,51 +458,85 @@ class Wing(Component):
         Note that this helper function will not work well in all cases (e.g.,
         in cases with high sweep or taper)
         """
-        # Re-evaluate the corner points of the FFD block (plus center)
-        # Center
-        LE_center = self.geometry.evaluate(self._LE_mid_point)
-        TE_center = self.geometry.evaluate(self._TE_mid_point)
+        if self._orientation == "horizontal":
+            # Re-evaluate the corner points of the FFD block (plus center)
+            # Root
+            LE_center = self.geometry.evaluate(self._LE_mid_point)
+            TE_center = self.geometry.evaluate(self._TE_mid_point)
 
-        qc_center = 0.75 * LE_center + 0.25 * TE_center
+            qc_center = 0.75 * LE_center + 0.25 * TE_center
 
-        # Left side
-        LE_left = self.geometry.evaluate(self._LE_left_point)
-        TE_left = self.geometry.evaluate(self._TE_left_point)
+            # Tip
+            LE_left = self.geometry.evaluate(self._LE_left_point)
+            TE_left = self.geometry.evaluate(self._TE_left_point)
 
-        qc_left = 0.75 * LE_left + 0.25 * TE_left
+            qc_left = 0.75 * LE_left + 0.25 * TE_left
 
-        # Right side 
-        LE_right = self.geometry.evaluate(self._LE_right_point)
-        TE_right = self.geometry.evaluate(self._TE_right_point)
+            # Right side 
+            LE_right = self.geometry.evaluate(self._LE_right_point)
+            TE_right = self.geometry.evaluate(self._TE_right_point)
 
-        qc_right = 0.75 * LE_right + 0.25 * TE_right
+            qc_right = 0.75 * LE_right + 0.25 * TE_right
 
-        # Compute span, root/tip chords, sweep, and dihedral
-        span = LE_left - LE_right
-        center_chord = TE_center - LE_center
-        left_tip_chord = TE_left - LE_left
-        right_tip_chord = TE_right - LE_right
+            # Compute span, root/tip chords, sweep, and dihedral
+            span = LE_left - LE_right
+            center_chord = TE_center - LE_center
+            left_tip_chord = TE_left - LE_left
+            right_tip_chord = TE_right - LE_right
 
-        qc_spanwise_left = qc_left - qc_center
-        qc_spanwise_right = qc_right - qc_center
+            qc_spanwise_left = qc_left - qc_center
+            qc_spanwise_right = qc_right - qc_center
 
-        sweep_angle_left = csdl.arcsin(qc_spanwise_left[0] / csdl.norm(qc_spanwise_left))
-        sweep_angle_right = csdl.arcsin(qc_spanwise_right[0] / csdl.norm(qc_spanwise_right))
+            sweep_angle_left = csdl.arcsin(qc_spanwise_left[0] / csdl.norm(qc_spanwise_left))
+            sweep_angle_right = csdl.arcsin(qc_spanwise_right[0] / csdl.norm(qc_spanwise_right))
 
-        dihedral_angle_left = csdl.arcsin(qc_spanwise_left[2] / csdl.norm(qc_spanwise_left))
-        dihedral_angle_right = csdl.arcsin(qc_spanwise_right[2] / csdl.norm(qc_spanwise_right))
+            dihedral_angle_left = csdl.arcsin(qc_spanwise_left[2] / csdl.norm(qc_spanwise_left))
+            dihedral_angle_right = csdl.arcsin(qc_spanwise_right[2] / csdl.norm(qc_spanwise_right))
 
 
-        wing_geometric_qts = WingGeometricQuantities(
-            span=csdl.norm(span),
-            center_chord=csdl.norm(center_chord),
-            left_tip_chord=csdl.norm(left_tip_chord),
-            right_tip_chord=csdl.norm(right_tip_chord),
-            sweep_angle_left=sweep_angle_left,
-            sweep_angle_right=sweep_angle_right,
-            dihedral_angle_left=dihedral_angle_left,
-            dihedral_angle_right=dihedral_angle_right
-        )
+            wing_geometric_qts = WingGeometricQuantities(
+                span=csdl.norm(span),
+                center_chord=csdl.norm(center_chord),
+                left_tip_chord=csdl.norm(left_tip_chord),
+                right_tip_chord=csdl.norm(right_tip_chord),
+                sweep_angle_left=sweep_angle_left,
+                sweep_angle_right=sweep_angle_right,
+                dihedral_angle_left=dihedral_angle_left,
+                dihedral_angle_right=dihedral_angle_right
+            )
+
+        else:
+            # Re-evaluate the corner points of the FFD block (plus center)
+            # Root
+            LE_root = self.geometry.evaluate(self._LE_root_point)
+            TE_root = self.geometry.evaluate(self._TE_root_point)
+
+            qc_root = 0.75 * LE_root + 0.25 * TE_root
+
+            # Tip 
+            LE_tip = self.geometry.evaluate(self._LE_tip_point)
+            TE_tip = self.geometry.evaluate(self._TE_tip_point)
+
+            qc_tip = 0.75 * LE_tip + 0.25 * TE_tip
+
+            # Compute span, root/tip chords, sweep, and dihedral
+            span = TE_tip - TE_root
+            root_chord = TE_root - LE_root
+            tip_chord = TE_tip - LE_tip
+            qc_tip_root = qc_tip - qc_root
+            sweep_angle = csdl.arcsin(qc_tip_root[0] / csdl.norm(qc_tip_root))
+
+
+            wing_geometric_qts = WingGeometricQuantities(
+                span=csdl.norm(span),
+                center_chord=csdl.norm(root_chord),
+                left_tip_chord=csdl.norm(tip_chord),
+                right_tip_chord=None,
+                sweep_angle_left=sweep_angle,
+                sweep_angle_right=None,
+                dihedral_angle_left=None,
+                dihedral_angle_right=None,
+            )
 
         return wing_geometric_qts
 
@@ -512,10 +602,15 @@ class Wing(Component):
             raise NotImplementedError
 
         # Set constraints: user input - geometric qty equivalent
-        ffd_geometric_variables.add_variable(wing_geom_qts.span, span_input)
-        ffd_geometric_variables.add_variable(wing_geom_qts.center_chord, root_chord_input)
-        ffd_geometric_variables.add_variable(wing_geom_qts.left_tip_chord, tip_chord_left_input)
-        ffd_geometric_variables.add_variable(wing_geom_qts.right_tip_chord, tip_chord_right_input)
+        if self._orientation == "horizontal":
+            ffd_geometric_variables.add_variable(wing_geom_qts.span, span_input)
+            ffd_geometric_variables.add_variable(wing_geom_qts.center_chord, root_chord_input)
+            ffd_geometric_variables.add_variable(wing_geom_qts.left_tip_chord, tip_chord_left_input)
+            ffd_geometric_variables.add_variable(wing_geom_qts.right_tip_chord, tip_chord_right_input)
+        else:
+            ffd_geometric_variables.add_variable(wing_geom_qts.span, span_input)
+            ffd_geometric_variables.add_variable(wing_geom_qts.center_chord, root_chord_input)
+            ffd_geometric_variables.add_variable(wing_geom_qts.left_tip_chord, tip_chord_left_input)
 
         if self.parameters.sweep is not None:
             sweep_input = self.parameters.sweep

@@ -274,7 +274,7 @@ class AircraftCondition(Condition):
                 initial_nodal_coordinates = discretization.nodal_coordinates
 
                 # Compute spanwise Reynolds number
-                if isinstance(discretization, CamberSurface):
+                if isinstance(discretization, CamberSurface) and not isinstance(self, HoverCondition):
                     # Compute spanwise chord length
                     LE_nodes = initial_nodal_coordinates[0, :, :]
                     TE_nodes = initial_nodal_coordinates[-1, :, :]
@@ -298,10 +298,14 @@ class AircraftCondition(Condition):
                         a = csdl.expand(a, chord_length_exp.shape, 'i->ij')
 
                     Re = rho * chord_length_exp * V_inf / mu
-                    discretization.reynolds_number = Re
 
-                    if discretization.embedded_airfoil_model is not None:
-                        airfoil_model = discretization.embedded_airfoil_model
+                    chord_length_mid_panel = (chord_length_exp[:, 0:-1] + chord_length_exp[:, 1:]) / 2
+                    discretization.mid_panel_chord_length = chord_length_mid_panel
+                    Re_mid_panel = rho * chord_length_mid_panel * V_inf / mu
+                    discretization.reynolds_number = Re_mid_panel
+
+                    if discretization.embedded_airfoil_model_Cl is not None:
+                        airfoil_model = discretization.embedded_airfoil_model_Cl
                         alpha_implicit = csdl.ImplicitVariable(shape=Re.shape, value=0.)
                         # Compute Mach number
                         Ma = V_inf / a
@@ -312,7 +316,7 @@ class AircraftCondition(Condition):
                         else:
                             raise NotImplementedError("Shape mis-match between Ma and other airfoil model inputs. Unlikely to be a user-error.")
 
-                        Cl, _ = airfoil_model.evaluate(alpha_implicit, Re, Ma_exp)
+                        Cl = airfoil_model.evaluate(alpha_implicit, Re, Ma_exp)
 
                         # 
                         solver = csdl.nonlinear_solvers.bracketed_search.BracketedSearch(elementwise_states=True)
@@ -332,6 +336,8 @@ class AircraftCondition(Condition):
                     else:
                         rotation_tensor = None
                         discretization.alpha_ML_mid_panel = None
+                else:
+                    rotation_tensor = None
 
                 if discretization._has_been_expanded:
                     shape_exp = discretization.nodal_coordinates.shape

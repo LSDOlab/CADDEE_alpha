@@ -141,6 +141,13 @@ class Component:
                 t1 = time.time()
                 self._ffd_block = self._make_ffd_block(self.geometry)
                 t2 = time.time()
+
+                self.ffd_block_face_1 = self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 0.5, 0.]))
+                self.ffd_block_face_2 = self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 0.5, 1.]))
+                self.ffd_block_face_3 = self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 0., 0.5]))
+                self.ffd_block_face_4 = self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 1., 0.5]))
+                self.ffd_block_face_5 = self._ffd_block.evaluate(parametric_coordinates=np.array([0., 0.5, 0.5]))
+                self.ffd_block_face_6 = self._ffd_block.evaluate(parametric_coordinates=np.array([1., 0.5, 0.5]))
                 
                 print("time for making ffd block", t2-t1)
     
@@ -200,9 +207,13 @@ class Component:
     def _setup_geometry(self, parameterization_solver, ffd_geometric_variables, plot=False):
         # Add rigid body translation (without FFD)
         rigid_body_translation = csdl.ImplicitVariable(shape=(3, ), value=0.)
-        action = 'l->ijkl'
-        shape = self._ffd_block.coefficients.shape
-        self._ffd_block.coefficients = self._ffd_block.coefficients + csdl.expand(rigid_body_translation, shape, action=action)
+        for function in self.geometry.functions.values():
+            shape = function.coefficients.shape
+            function.coefficients = function.coefficients +  csdl.expand(rigid_body_translation, shape, action="k->ijk")
+        
+        # action = 'l->ijkl'
+        # shape = self._ffd_block.coefficients.shape
+        # self._ffd_block.coefficients = self._ffd_block.coefficients + csdl.expand(rigid_body_translation, shape, action=action)
 
         parameterization_solver.add_parameter(rigid_body_translation, cost=0.1)
 
