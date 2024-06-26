@@ -646,7 +646,9 @@ class Wing(Component):
         
     def construct_ribs_and_spars(
             self, 
-            geometry:lg.Geometry, 
+            geometry:lg.Geometry,
+            top_geometry:lg.Geometry,
+            bottom_geometry:lg.Geometry,
             num_ribs:int=None, 
             spar_locations:np.ndarray=None, 
             rib_locations:np.ndarray=None,
@@ -660,7 +662,8 @@ class Wing(Component):
             full_length_ribs:bool=False,
             finite_te:bool=True,
             export_wing_box:bool=False,
-            spanwise_multiplicity:int=1
+            spanwise_multiplicity:int=1,
+            exclute_te:bool=False,
         ):
         """
         Construct ribs and spars for the given wing geometry.
@@ -739,7 +742,10 @@ class Wing(Component):
             spar_function_space = lfs.BSplineSpace(2, (1, 1), (num_ribs, 2))
         if rib_function_space is None:
             if full_length_ribs:
-                rib_function_space = lfs.BSplineSpace(2, 1, (num_rib_pts*(num_spars+1)+1, 2))
+                if exclute_te:
+                    rib_function_space = lfs.BSplineSpace(2, 1, (num_rib_pts*(num_spars)+1, 2))
+                else:
+                    rib_function_space = lfs.BSplineSpace(2, 1, (num_rib_pts*(num_spars+1)+1, 2))
             else:
                 rib_function_space = lfs.BSplineSpace(2, 1, (num_rib_pts*(num_spars-1)+1, 2))
 
@@ -827,36 +833,63 @@ class Wing(Component):
             rib_projection_base = spar_projection_points
 
         chord_n = rib_projection_base.shape[0]
-        rib_projection_points = np.zeros((num_ribs, num_rib_pts*(chord_n-1)+1, 3))
-        for i in range(num_ribs):
-            rib_projection_points[i,0] = rib_projection_base[0,i]
-            for j in range(chord_n-1):
-                if j == 0 and full_length_ribs:
-                    # cosine spacing near the leading edge
-                    spacing = (1-np.cos(np.linspace(0, np.pi/2, num_rib_pts+1)))**0.7
-                    for k in range(num_rib_pts):
-                        rib_projection_points[i,j*num_rib_pts+1+k] = rib_projection_base[j,i] + spacing[k+1] * (rib_projection_base[j+1,i] - rib_projection_base[j,i])
-                else:
-                    rib_projection_points[i,j*num_rib_pts+1:(j+1)*num_rib_pts+1] = np.linspace(rib_projection_base[j,i], rib_projection_base[j+1,i], num_rib_pts+1)[1:]
+        # rib_projection_points = np.zeros((num_ribs, (chord_n-1)+1, 3))
+        # for i in range(num_ribs):
+        #     rib_projection_points[i,0] = rib_projection_base[0,i]
+        #     for j in range(chord_n-1):
+        #         if j == 0 and full_length_ribs:
+        #             # cosine spacing near the leading edge
+        #             spacing = (1-np.cos(np.linspace(0, np.pi/2, num_rib_pts+1)))**0.7
+        #             for k in range(num_rib_pts):
+        #                 rib_projection_points[i,j*num_rib_pts+1+k] = rib_projection_base[j,i] + spacing[k+1] * (rib_projection_base[j+1,i] - rib_projection_base[j,i])
+        #         else:
+        #             rib_projection_points[i,j*num_rib_pts+1:(j+1)*num_rib_pts+1] = np.linspace(rib_projection_base[j,i], rib_projection_base[j+1,i], num_rib_pts+1)[1:]
 
         direction = np.array([0., 0., 1.])
-        ribs_top = wing.geometry.project(rib_projection_points+offset, direction=-direction, grid_search_density_parameter=20, plot=plot_projections)
-        ribs_bottom = wing.geometry.project(rib_projection_points-offset, direction=direction, grid_search_density_parameter=20, plot=plot_projections)
-        ribs_top_array = np.array(ribs_top, dtype='O,O').reshape((num_ribs, num_rib_pts*(chord_n-1)+1))   # it's easier to keep track of this way
-        ribs_bottom_array = np.array(ribs_bottom, dtype='O,O').reshape((num_ribs, num_rib_pts*(chord_n-1)+1))
+        ribs_top = top_geometry.project(rib_projection_base+offset, direction=direction, grid_search_density_parameter=10, plot=plot_projections)
+        ribs_bottom = bottom_geometry.project(rib_projection_base-offset, direction=direction, grid_search_density_parameter=10, plot=plot_projections)
+
+
+
+        ribs_top_base_array = np.array(ribs_top, dtype='O,O').reshape((chord_n, num_ribs))   # it's easier to keep track of this way
+        ribs_bottom_base_array = np.array(ribs_bottom, dtype='O,O').reshape((chord_n, num_ribs))
+        ribs_top_array = np.empty((num_ribs, (chord_n-1)*num_rib_pts+1), dtype='O,O')
+        ribs_bottom_array = np.empty((num_ribs, (chord_n-1)*num_rib_pts+1), dtype='O,O')
+        for i in range(chord_n-1):
+            for j in range(num_ribs):
+                top_ind = ribs_top_base_array[i,j][0]
+                bottom_ind = ribs_bottom_base_array[i,j][0]
+                top_linspace = np.linspace(ribs_top_base_array[i,j][1], ribs_top_base_array[i+1,j][1], num_rib_pts)
+                bottom_linspace = np.linspace(ribs_bottom_base_array[i,j][1], ribs_bottom_base_array[i+1,j][1], num_rib_pts)
+                ribs_top_array[j,i*num_rib_pts:(i+1)*num_rib_pts] = np.array([(top_ind, x) for x in top_linspace], dtype='O,O')
+                ribs_bottom_array[j,i*num_rib_pts:(i+1)*num_rib_pts] = np.array([(bottom_ind, x) for x in bottom_linspace], dtype='O,O')
+        ribs_top_array[:,-1] = ribs_top_base_array[-1,:]
+        ribs_bottom_array[:,-1] = ribs_bottom_base_array[-1,:]
+
+        if plot_projections:
+            wing.geometry.evaluate(ribs_top_array.flatten().tolist(), plot=True, non_csdl=True)
+            wing.geometry.evaluate(ribs_bottom_array.flatten().tolist(), plot=True, non_csdl=True)
+
+
         
         if full_length_ribs:
             # Make top and bottom leading edge point the same
             ribs_top_array[:,0] = ribs_bottom_array[:,0]
             if not finite_te:
-                # Make top and bottom leading edge point the same
+                # Make top and bottom trailing edge point the same
                 ribs_top_array[:,-1] = ribs_bottom_array[:,-1]
-            
+        if exclute_te:
+            ribs_top_array = ribs_top_array[:,:-num_rib_pts]
+            ribs_bottom_array = ribs_bottom_array[:,:-num_rib_pts]
+        
         # create spars
         coeff_flip = np.eye(3)
         coeff_flip[1,1] = -1
         if full_length_ribs:
-            spar_range = range(1, num_spars+1)
+            if False:
+                spar_range = range(1, num_spars)
+            else:
+                spar_range = range(1, num_spars+1)
         else:
             spar_range = range(num_spars)
 
@@ -869,6 +902,9 @@ class Wing(Component):
             surf_index = self._add_geometry(surf_index, spar, "Wing_l_spar_", i, geometry)
             self._add_geometry(surf_index, right_spar, "Wing_r_spar_", i)
             surf_index = self._add_geometry(surf_index, right_spar, "Wing_r_spar_", i, geometry)
+
+        if exclute_te:
+            chord_n -= 1
 
         # create ribs
         for i in range(0, num_ribs, spanwise_multiplicity):
@@ -918,7 +954,7 @@ class Wing(Component):
                     spar_segment_function_space = lfs.BSplineSpace(2, (1, 1), (spanwise_multiplicity+1, 2))
                     # spar_segment_function_space = lfs.BSplineSpace(2, 1, (2, 2))
                     if full_length_ribs:
-                        if finite_te:
+                        if finite_te and not exclute_te:
                             spar_range = range(1, num_spars+2)
                         else:
                             spar_range = range(1, num_spars+1)
