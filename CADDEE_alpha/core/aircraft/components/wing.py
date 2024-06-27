@@ -1,4 +1,5 @@
 from CADDEE_alpha.core.component import Component
+from CADDEE_alpha.core.mesh.mesh import MeshContainer
 from lsdo_geo import construct_ffd_block_around_entities, construct_tight_fit_ffd_block
 import lsdo_function_spaces as lfs
 from typing import Union, List
@@ -227,7 +228,7 @@ class Wing(Component):
             self._dependent_geometry_points = [] # {'parametric_points', 'function_space', 'fitting_coords', 'mirror'}
             self._base_geometry = self.geometry.copy()
 
-    def actuate(self, angle : Union[float, int, csdl.Variable], axis_location : float=0.25):
+    def actuate(self, angle : Union[float, int, csdl.Variable], axis_location : float=0.25, mesh_container : MeshContainer = None):
         """Actuate (i.e., rotate) the wing about an axis location at or behind the leading edge.
         
         Parameters
@@ -265,14 +266,25 @@ class Wing(Component):
         # Rotate the component about the axis
         wing_geometry.rotate(axis_origin=axis_origin, axis_vector=axis_vector / csdl.norm(axis_vector), angles=angle)
 
-        # Re-evaluate all the discretizations associated with the wing
-        for discretization_name, discretization in self._discretizations.items():
-            try:
-                discretization = discretization._update()
-                self._discretizations[discretization_name] = discretization
-            except AttributeError:
-                raise Exception(f"The discretization {discretization_name} does not have an '_update' method, which is neded to" + \
-                                " re-evaluate the geometry/meshes after the geometry coefficients have been changed")
+        # # Re-evaluate all the discretizations associated with the wing
+        # for discretization_name, discretization in self._discretizations.items():
+        #     discretization._geom = wing_geometry
+        #     try:
+        #         discretization = discretization._update()
+        #         self._discretizations[discretization_name] = discretization
+        #     except AttributeError:
+        #         raise Exception(f"The discretization {discretization_name} does not have an '_update' method, which is neded to" + \
+        #                         " re-evaluate the geometry/meshes after the geometry coefficients have been changed")
+            
+
+        #     # Update the meshes in the mesh container
+        #     if mesh_container is not None:
+        #         print("mesh_container", mesh_container.items())
+        #         for mesh_name, mesh in mesh_container.items():
+        #             for discretization_name_mesh, discretization_mesh in mesh.discretizations.items():
+        #                 if discretization_mesh.identifier == discretization.identifier:
+        #                     mesh.discretizations[discretization_name_mesh] = discretization
+
 
     def _make_ffd_block(self, 
             entities : List[lfs.Function], 

@@ -12,6 +12,174 @@ from dataclasses import dataclass
 import time
 
 
+class VectorizedAttributes:
+    def __init__(self, attribute_list, num_nodes) -> None:
+        self.attribute_list = attribute_list
+        self.num_nodes = num_nodes
+
+    def __getattr__(self, name):
+        child_attribute_list = []
+        if hasattr(self.attribute_list[0], name):
+            if callable(getattr(self.attribute_list[0], name)):
+                def method(*args, **kwargs):
+                    return_list = []
+                    for comp in self.attribute_list:
+                        output = getattr(comp, name)(*args, **kwargs)
+                        if output:
+                            return_list.append(output)
+                    return return_list
+                return method
+            else:
+                for i in range(self.num_nodes):
+                    attr = getattr(self.attribute_list[i], name)
+                    child_attribute_list.append(attr)
+                
+                if isinstance(child_attribute_list[0], (list, dict, set)) or hasattr(child_attribute_list[0], '__dict__'):
+                    return VectorizedAttributes(child_attribute_list, self.num_nodes)
+                else:
+                    return child_attribute_list
+        else:
+            existing_attrs = [attr for attr in dir(self.attribute_list[0]) if not attr.startswith(("__", "_"))]
+            raise AttributeError(f"Attribute {name} does not exist. Existing attributes are {existing_attrs}")
+        
+    def __setattr__(self, name: str, value) -> None:
+        if name in {"attribute_list", "num_nodes"}:
+            # Directly set the instance attributes
+            super().__setattr__(name, value)
+        else:
+            # Set the attribute on each component in the attribute list
+            for comp in self.attribute_list:
+                setattr(comp, name, value)
+
+# class VectorizedComponent:
+#     def __init__(self, component, num_nodes) -> None:
+#         from CADDEE_alpha.utils.copy_comps import copy_comps
+#         self.num_nodes = num_nodes
+#         self.comps = {}
+
+#         for comp_name, comp in component.comps.items():
+#             self.comps[comp_name] = VectorizedComponent(comp, num_nodes)
+
+#         self.comp_list = []
+#         for i in range(num_nodes):
+#             self.comp_list.append(copy_comps(component))
+
+class VectorizedComponent:
+    def __init__(self, component, num_nodes, comp_list=None) -> None:
+        from CADDEE_alpha.utils.copy_comps import copy_comps
+        self.num_nodes = num_nodes
+        self.comps = {}
+        
+        if comp_list is None:
+            self.comp_list = []
+            for i in range(num_nodes):
+                self.comp_list.append(copy_comps(component))
+        else:
+            self.comp_list = comp_list
+ 
+        for comp_name, comp in component.comps.items():
+            child_comp_list = [child_comp.comps[comp_name] for child_comp in self.comp_list]
+            self.comps[comp_name] = VectorizedComponent(comp, num_nodes, child_comp_list)
+
+    def __getattr__(self, name):
+        attr_list = []
+        if hasattr(self.comp_list[0], name):
+            if callable(getattr(self.comp_list[0], name)):
+                def method(*args, **kwargs):
+                    return_list = []
+                    for i, comp in enumerate(self.comp_list):
+                        args_i = [arg[i] for arg in args]
+                        kwargs_i = {key: arg[i] for key, arg in kwargs.items()}
+                        output = getattr(comp, name)(*args_i, **kwargs_i)
+                        if output:
+                            return_list.append(output)
+                    return return_list
+                return method
+            else:
+                for i in range(self.num_nodes):
+                    attr = getattr(self.comp_list[i], name)
+                    attr_list.append(attr)
+                
+                if isinstance(attr_list[0], (list, dict, set)) or hasattr(attr_list[0], '__dict__'):
+                    vectorized_attributes = VectorizedAttributes(attr_list, self.num_nodes)
+                    return vectorized_attributes
+                else:
+                    return attr_list
+        else:
+            existing_attrs = [attr for attr in dir(self.comp_list[0]) if not attr.startswith("__")]
+            raise AttributeError(f"Attribute {name} does not exist. Existing attributes are {existing_attrs}")
+        
+# class VectorizedAttributes:
+#     def __init__(self, attribute_list, num_nodes) -> None:
+#         self.attribute_list = attribute_list
+#         self.num_nodes = num_nodes
+
+#     def __getattr__(self, name):
+#         child_attribute_list = []
+#         if hasattr(self.attribute_list[0], name):
+#             if callable(self.attribute_list[0].__getattribute__(name)):
+#                 def method(*args, **kwargs):
+#                     return_list = []
+#                     for comp in self.attribute_list:
+#                         output = comp.__getattribute__(name)(*args, **kwargs)
+#                         if output:
+#                             return_list.append(output)
+                    
+#                     return return_list
+#                 return method
+#             else:
+#                 for i in range(self.num_nodes):
+#                     attr = self.attribute_list[i].__getattribute__(name)
+#                     child_attribute_list.append(attr)
+                
+#                 return child_attribute_list
+#         else:
+#             raise AttributeError(f"Attribute {name} does not exist.")
+
+
+# class VectorizedComponent:
+#     def __init__(self, component, num_nodes) -> None:
+#         from CADDEE_alpha.utils.copy_comps import copy_comps
+#         self.num_nodes = num_nodes
+#         self.comps = {}
+
+#         for comp_name, comp in component.comps.items():
+#             self.comps[comp_name] = VectorizedComponent(comp, num_nodes)
+
+#         self.comp_list : List[Component] = []
+#         for i in range(num_nodes):
+#             self.comp_list.append(copy_comps(component))
+
+#     def __getattr__(self, name):
+#         attr_list = []
+#         if hasattr(self.comp_list[0], name):
+#             if callable(self.comp_list[0].__getattribute__(name)):
+#                 def method(*args, **kwargs):
+#                     return_list = []
+#                     for i, comp in enumerate(self.comp_list):
+#                         args_i = [arg[i] for arg in args]
+#                         kwargs_i = {key:arg[i] for key, arg in kwargs.items()}
+#                         output = comp.__getattribute__(name)(*args_i, **kwargs_i)
+#                         if output:
+#                             return_list.append(output)
+                    
+#                     return return_list
+#                 return method
+             
+#             else:
+#                 if name in ["quantities", "parameters"]:
+#                     quant_list = [self.comp_list[i].__getattribute__(name) for i in range(self.num_nodes)]
+#                     return VectorizedAttributes(quant_list, self.num_nodes)
+#                 for i in range(self.num_nodes):                    
+#                     attr = self.comp_list[i].__getattribute__(name)
+#                     attr_list.append(attr)
+                
+#                 return attr_list
+#         else:
+#             raise AttributeError(f"Attribute {name} does not exist.")
+        
+        
+
 class ComponentQuantities:
     def __init__(
         self, 
@@ -304,5 +472,53 @@ class ComponentDict(dict):
             value.parent = self.parent
 
 
+if __name__ == "__main__":
+    def unpack_attributes(obj, _depth=0, _visited=None):
+        if _visited is None:
+            _visited = set()
+            
+        obj_id = id(obj)
+        if obj_id in _visited:
+            return {}
+        
+        _visited.add(obj_id)
+        
+        attributes = {}
+        for attr_name in dir(obj):
+            # Ignore private and protected attributes
+            if attr_name.startswith('_'):
+                continue
+            
+            try:
+                attr_value = getattr(obj, attr_name)
+            except AttributeError:
+                continue
+            
+            # Check if the attribute is itself an object that we should unpack
+            if hasattr(attr_value, '__dict__'):
+                attributes[attr_name] = unpack_attributes(attr_value, _depth + 1, _visited)
+            else:
+                attributes[attr_name] = attr_value
+        
+        return attributes
+
+    test_comp = Component(
+        geometry=None,
+        AR=13, S_ref=50
+    )
+
+    print(unpack_attributes(test_comp))
+
+    vectorized_comp = VectorizedComponent(test_comp, 5)
+
+
+    # vectorized_comp.parameters.sweep = 
+
+    # masses = vectorized_comp.quantities.mass_properties.mass
+    # masses.value
+
+    # vectorized_comp.quantities.mass_properties.mass.value
+
+    print(vectorized_comp.parameters.AR)
 
         
