@@ -55,7 +55,11 @@ def define_base_config(caddee : cd.CADDEE):
                                         thickness_to_chord_loc=0.4, tight_fit_ffd=True)
     
     # Make ribs and spars
-    wing.construct_ribs_and_spars(aircraft.geometry, num_ribs=8, LE_TE_interpolation="ellipse")
+    top_surface_inds = [75, 79, 83, 87]
+    top_geometry = wing.create_subgeometry(search_names=[str(i) for i in top_surface_inds])
+    bottom_geometry = wing.create_subgeometry(search_names=[str(i+1) for i in top_surface_inds])
+    wing.construct_ribs_and_spars(aircraft.geometry, num_ribs=8, LE_TE_interpolation="ellipse",
+                                  top_geometry=top_geometry, bottom_geometry=bottom_geometry)
 
     # Wing material
     aluminum = cd.materials.IsotropicMaterial(name='aluminum', E=69E9, G=26E9, density=2700, nu=0.33)
