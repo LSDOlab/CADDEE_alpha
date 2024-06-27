@@ -1,3 +1,4 @@
+from __future__ import annotations
 import csdl_alpha as csdl
 from CADDEE_alpha.core.mesh.mesh import Discretization, SolverMesh, DiscretizationsDict
 import numpy as np
@@ -198,6 +199,8 @@ def make_mesh_symmetric(quantity, num_spanwise, spanwise_index=0):
 class CamberSurface(Discretization):
     _upper_wireframe_para = None
     _lower_wireframe_para = None
+    _airfoil_upper_para = None
+    _airfoil_lower_para = None
     _geom = None
     _num_chord_wise = None
     _num_spanwise = None
@@ -212,6 +215,109 @@ class CamberSurface(Discretization):
     reynolds_number = None
     alpha_ML_mid_panel = None
     mid_panel_chord_length = None
+
+    def copy(self) -> CamberSurface:
+        discretization = CamberSurface(
+            nodal_coordinates=self.nodal_coordinates,
+        )
+        discretization.nodal_velocities = self.nodal_velocities
+        discretization.mesh_quality = self.mesh_quality
+        discretization._has_been_expanded = self._has_been_expanded
+
+        discretization._upper_wireframe_para = self._upper_wireframe_para
+        discretization._lower_wireframe_para = self._lower_wireframe_para
+        discretization._geom = self._geom
+        discretization._num_chord_wise = self._num_chord_wise
+        discretization._num_spanwise = self._num_spanwise
+        discretization._LE_points_para = self._LE_points_para
+        discretization._TE_points_para = self._TE_points_para
+        discretization._chordwise_spacing = self._chordwise_spacing
+
+        discretization.embedded_airfoil_model_Cl = self.embedded_airfoil_model_Cl
+        discretization.embedded_airfoil_model_Cd = self.embedded_airfoil_model_Cd
+        discretization.embedded_airfoil_model_Cp = self.embedded_airfoil_model_Cp
+        discretization.embedded_airfoil_model_alpha_stall = self.embedded_airfoil_model_alpha_stall
+        discretization.reynolds_number = self.reynolds_number
+        discretization.alpha_ML_mid_panel = self.alpha_ML_mid_panel
+        discretization.mid_panel_chord_length = self.mid_panel_chord_length
+
+        discretization._update = self._update
+
+        return discretization
+
+    def project_airfoil_points(self, num_points: int=120, spacing: str="sin", 
+                          grid_search_density: int = 10, plot: bool=False):
+        if self._airfoil_lower_para is not None and self._airfoil_upper_para is not None:
+            return self._airfoil_lower_para, self._airfoil_upper_para
+        
+        if self._TE_points_para is None:
+            raise ValueError("VLM surface not made yet")
+        
+        if self._geom is None:
+            raise ValueError("VLM surface not made yet")
+        
+        if spacing != "sin":
+            raise NotImplementedError
+        
+        norm_chord_wise_coordinates = 0.5 + 0.5*np.sin(np.pi*(np.linspace(0., 1., num_points)-0.5))
+        
+        wing_geometry = self._geom
+        num_spanwise = self._num_spanwise
+        
+        LE_points_csdl = self._geom.evaluate(self._LE_points_para)
+        TE_points_csdl = self._geom.evaluate(self._TE_points_para)
+        
+        y_mean_spanwise = (LE_points_csdl[:, 1] + TE_points_csdl[:, 1])/ 2 
+        LE_points_csdl = LE_points_csdl.set(csdl.slice[:, 1], y_mean_spanwise)
+        TE_points_csdl = TE_points_csdl.set(csdl.slice[:, 1], y_mean_spanwise)
+
+        LE_points_csdl_mid_panel = (LE_points_csdl[0:-1, :] + LE_points_csdl[1:, :]) / 2
+        TE_points_csdl_mid_panel = (TE_points_csdl[0:-1, :] + TE_points_csdl[1:, :]) / 2
+
+        LE_points_csdl_mid_panel = LE_points_csdl_mid_panel.set(csdl.slice[:, 0], LE_points_csdl_mid_panel[:, 0] + 0.1)
+        TE_points_csdl_mid_panel = TE_points_csdl_mid_panel.set(csdl.slice[:, 0], TE_points_csdl_mid_panel[:, 0] - 0.1)
+
+        LE_points_re_projected = wing_geometry.evaluate(wing_geometry.project(LE_points_csdl_mid_panel, grid_search_density_parameter=grid_search_density, plot=plot))
+        TE_points_re_projected = wing_geometry.evaluate(wing_geometry.project(TE_points_csdl_mid_panel, grid_search_density_parameter=grid_search_density, plot=plot))
+        
+        num_chordwise = len(norm_chord_wise_coordinates)
+        chord_surface = csdl.linear_combination(LE_points_re_projected, TE_points_re_projected, num_chordwise)
+
+        x_interp = csdl.Variable(shape=(num_chordwise, ), value=norm_chord_wise_coordinates)
+        x_interp_exp = csdl.expand(x_interp, (num_chordwise, num_spanwise), action="i->ij")
+
+        LE_exp_x = csdl.expand(LE_points_re_projected[:, 0], (num_chordwise, num_spanwise), action="j->ij")
+        TE_exp_x = csdl.expand(TE_points_re_projected[:, 0], (num_chordwise, num_spanwise), action="j->ij")
+
+        skewed_chord_surface_x = LE_exp_x + (TE_exp_x - LE_exp_x) * x_interp_exp
+
+
+        chord_surface = chord_surface.set(
+            csdl.slice[:, :, 0],
+            skewed_chord_surface_x,
+        )
+
+        vertical_offset_1 = csdl.expand(
+            csdl.Variable(shape=(3, ), value=np.array([0., 0., 0.25])),
+            chord_surface.shape, action='k->ijk'
+        )
+
+        self._airfoil_upper_para = wing_geometry.project(
+            chord_surface - vertical_offset_1, 
+            direction=np.array([0., 0., 1.]), 
+            plot=plot, 
+            grid_search_density_parameter=grid_search_density
+        )
+
+        self._airfoil_lower_para = wing_geometry.project(
+            chord_surface + vertical_offset_1, 
+            direction=np.array([0., 0., -1]), 
+            plot=plot, 
+            grid_search_density_parameter=grid_search_density,
+        )
+
+        return self._airfoil_lower_para, self._airfoil_upper_para
+        
 
     def _update(self):
         if self._upper_wireframe_para is not None and self._lower_wireframe_para is not None:
@@ -253,11 +359,17 @@ class CamberSurface(Discretization):
 
             self.nodal_coordinates = chord_surface_sym
 
+
             return self
 
 class CamberSurfaceDict(DiscretizationsDict):
     def __getitem__(self, key) -> CamberSurface:
         return super().__getitem__(key)
+    
+    def __setitem__(self, key, value : CamberSurface):
+        if not isinstance(value, CamberSurface):
+            raise ValueError(f"Can only add {CamberSurface}, received {type(value)}")
+        return super().__setitem__(key, value)
 
 class VLMMesh(SolverMesh):
     discretizations : dict[CamberSurface] = CamberSurfaceDict()
@@ -467,6 +579,7 @@ def make_vlm_surface(
             TE_points_1 = cosine_spacing(num_spanwise_half + 1, np.linspace(TE_mid_point, TE_left_point, num_spanwise_half + 1))
             TE_points_2 = cosine_spacing(num_spanwise_half + 1, np.linspace(TE_mid_point, TE_right_point, num_spanwise_half + 1), flip=True)
             TE_points = np.vstack((TE_points_1, TE_points_2[1:, :]))
+    
     else:
         raise NotImplementedError
 
@@ -498,7 +611,9 @@ def make_vlm_surface(
     chord_surface = chord_surface.reshape((num_chordwise+1, num_spanwise+1, 3))
     if ignore_camber:
         chord_surface_sym = make_mesh_symmetric(chord_surface, num_spanwise, spanwise_index=1)
-        vlm_mesh = CamberSurface(nodal_coordinates=chord_surface_sym)
+        vlm_mesh = CamberSurface(
+            nodal_coordinates=chord_surface_sym,
+        )
         vlm_mesh._geom = wing_geometry
         vlm_mesh._num_chord_wise = num_chordwise
         vlm_mesh._num_spanwise = num_spanwise
@@ -538,7 +653,9 @@ def make_vlm_surface(
         # Ensure that the mesh is symmetric across the xz-plane
         camber_surface = make_mesh_symmetric(camber_surface_raw, num_spanwise, spanwise_index=1)
     
-        vlm_mesh = CamberSurface(nodal_coordinates=camber_surface)
+        vlm_mesh = CamberSurface(
+            nodal_coordinates=camber_surface,
+        )
         vlm_mesh._geom = wing_geometry
         vlm_mesh._lower_wireframe_para = lower_surace_wireframe_para
         vlm_mesh._upper_wireframe_para = upper_surace_wireframe_para

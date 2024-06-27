@@ -71,6 +71,8 @@ class SixDofEulerFlatEarthModel:
         y = ac_states.y
         z = ac_states.z
 
+        self.num_nodes = u.shape[0]
+
         Idot = csdl.Variable(shape=(3, 3), value=0.)
 
         # cg offset from reference point
@@ -188,7 +190,11 @@ class SixDofEulerFlatEarthModel:
         state = csdl.ImplicitVariable(shape=(6, self.num_nodes), value=0.)
         residual = mp_matrix @ state - rhs.T()
 
-        accel = csdl.solve_linear(mp_matrix, rhs.T())
+        accel_mat = csdl.Variable(shape=(self.num_nodes, 6), value=0)
+
+        for i in csdl.frange(self.num_nodes):
+            accel = csdl.solve_linear(mp_matrix, rhs[i, :])
+            accel_mat = accel_mat.set(csdl.slice[i, :], accel)
 
         # Using a newton solver to solve linear system instead of looping
         # over num_nodes
@@ -196,7 +202,7 @@ class SixDofEulerFlatEarthModel:
         # solver.add_state(state, residual)
         # solver.run()
 
-        lin_and_ang_accel = accel.T()
+        lin_and_ang_accel = accel_mat# accel.T()
         # lin_and_ang_accel = state.T()
 
         lin_and_ang_accel_output = LinAngAccel(

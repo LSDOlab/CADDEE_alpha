@@ -229,17 +229,36 @@ class AircraftCondition(Condition):
         velocities (due to vehicle rotations p, q, r) in the body-fixed frame. This function 
         computes and sets the "nodal_velocities" attribute of the mesh class. 
         """
-        config = self.configuration
-        if config is None:
-            raise Exception("Cannot finalize meshes since its configuration has not been set.")
+        from CADDEE_alpha.core.configuration import VectorizedConfig
 
-        ac_mps = config.system.quantities.mass_properties
-        cg_vec = ac_mps.cg_vector
+        normal_config = self.configuration
+        vectorized_config = self.vectorized_configuration
+        
+        if normal_config is None and vectorized_config is None:
+            raise Exception("Cannot finalize meshes since its configuration or vectorized_configuration has not been set.")
 
-        if cg_vec is None:
-            config.assemble_system_mass_properties()
+        if normal_config is not None:
+            config = normal_config
+        else:
+            config = vectorized_config
+
+        if isinstance(config, VectorizedConfig):
+            cg_vec = None # TODO: MPS for Vectroized config
+
+        else:
+            ac_mps = config.system.quantities.mass_properties
+            cg_vec = ac_mps.cg_vector
+
+            if isinstance(cg_vec, list):
+                if not [cg for cg in cg_vec if cg is not None]:
+                    cg_vec = None
+                else:
+                    raise NotImplementedError()
+
             if cg_vec is None:
-                warnings.warn("No mass properties defined; ignore any body rotations in mesh velocities")
+                config.assemble_system_mass_properties()
+                if cg_vec is None:
+                    warnings.warn("No mass properties defined; ignore any body rotations in mesh velocities")
 
         mesh_container = config.mesh_container
         
@@ -273,18 +292,62 @@ class AircraftCondition(Condition):
                 # get mesh coordinates
                 initial_nodal_coordinates = discretization.nodal_coordinates
 
+
+                if isinstance(initial_nodal_coordinates, list):
+                    num_nodes_config = len(initial_nodal_coordinates)
+                    if self._num_nodes != num_nodes_config:
+                        raise Exception(f"'num_nodes' of the aircraft condition ({self._num_nodes}) and vectorized configuration ({num_nodes_config}) must be equal")
+
+                    coordinates_shape = initial_nodal_coordinates[0].shape
+                    stacked_nodal_coordiantes = csdl.Variable(shape=(num_nodes_config, ) + coordinates_shape, value=0.)
+                    for i in range(num_nodes_config):
+                        stacked_nodal_coordiantes = stacked_nodal_coordiantes.set(
+                            slices=csdl.slice[i, :], 
+                            value=initial_nodal_coordinates[i]
+                        )
+                
+                    initial_nodal_coordinates = stacked_nodal_coordiantes
+                
+                else:
+                    initial_nodal_coordinates = initial_nodal_coordinates.reshape((self._num_nodes, ) + initial_nodal_coordinates.shape)
+
+                discretization.nodal_coordinates = initial_nodal_coordinates
+
+                # for nodal_coordinates in initial_nodal_coordinates:
+                #     if isinstance(discretization, CamberSurface) and not isinstance(self, HoverCondition):
+                #         # Compute spanwise chord length
+                #         LE_nodes = nodal_coordinates[0, :, :]
+                #         TE_nodes = nodal_coordinates[-1, :, :]
+                #         chord_length = csdl.norm(LE_nodes - TE_nodes, axes=(1, ))
+
+                #         # Compute Reynolds number
+                #         V_inf = (u**2 + v**2 + w**2) ** 0.5
+                #         rho = self.quantities.atmos_states.density
+                #         mu = self.quantities.atmos_states.dynamic_viscosity
+                #         a = self.quantities.atmos_states.speed_of_sound
+                #         Re = rho * chord_length * V_inf / mu
+
+                #         chord_length_mid_panel = (chord_length_exp[:, 0:-1] + chord_length_exp[:, 1:]) / 2
+                #         discretization.mid_panel_chord_length = chord_length_mid_panel
+                #         Re_mid_panel = rho * chord_length_mid_panel * V_inf / mu
+                #         discretization.reynolds_number = Re_mid_panel
+
+
                 # Compute spanwise Reynolds number
                 if isinstance(discretization, CamberSurface) and not isinstance(self, HoverCondition):
+                    pass
                     # Compute spanwise chord length
-                    LE_nodes = initial_nodal_coordinates[0, :, :]
-                    TE_nodes = initial_nodal_coordinates[-1, :, :]
-                    chord_length = csdl.norm(LE_nodes - TE_nodes, axes=(1, ))
-                    
-                    if discretization._has_been_expanded:
-                        chord_length_exp = chord_length
+                    LE_nodes = initial_nodal_coordinates[:, 0, :, :]
+                    TE_nodes = initial_nodal_coordinates[:, -1, :, :]
+                    chord_length = csdl.norm(LE_nodes - TE_nodes, axes=(2, ))
 
-                    else:
-                        chord_length_exp = csdl.expand(chord_length, (self._num_nodes, ) + chord_length.shape, 'j->ij')
+                    chord_length_exp = chord_length
+
+                    # if discretization._has_been_expanded:
+                    #     chord_length_exp = chord_length
+
+                    # else:
+                    #     chord_length_exp = csdl.expand(chord_length, (self._num_nodes, ) + chord_length.shape, 'j->ij')
                     
                     # Compute Reynolds number
                     V_inf = (u**2 + v**2 + w**2) ** 0.5
@@ -298,10 +361,8 @@ class AircraftCondition(Condition):
                         a = csdl.expand(a, chord_length_exp.shape, 'i->ij')
 
                     Re = rho * chord_length_exp * V_inf / mu
-
-                    chord_length_mid_panel = (chord_length_exp[:, 0:-1] + chord_length_exp[:, 1:]) / 2
-                    discretization.mid_panel_chord_length = chord_length_mid_panel
-                    Re_mid_panel = rho * chord_length_mid_panel * V_inf / mu
+                    Re_mid_panel = (Re[:, 0:-1] + Re[:, 1:]) / 2
+                    
                     discretization.reynolds_number = Re_mid_panel
 
                     if discretization.embedded_airfoil_model_Cl is not None:
@@ -339,15 +400,18 @@ class AircraftCondition(Condition):
                 else:
                     rotation_tensor = None
 
-                if discretization._has_been_expanded:
-                    shape_exp = discretization.nodal_coordinates.shape
+                shape_exp = discretization.nodal_coordinates.shape
+                nodal_coordinates_exp = discretization.nodal_coordinates
+                
+                # if discretization._has_been_expanded:
+                #     shape_exp = discretization.nodal_coordinates.shape
 
-                else:
-                    mesh_shape = discretization.nodal_coordinates.shape
-                    shape_exp = (self._num_nodes, ) + mesh_shape
-                    mesh_action_string = convert_shape_to_action_string(mesh_shape, None, "mesh")
-                    nodal_coordinates_exp = csdl.expand(initial_nodal_coordinates, shape_exp, mesh_action_string)
-                    discretization.nodal_coordinates = nodal_coordinates_exp
+                # else:
+                #     mesh_shape = discretization.nodal_coordinates.shape
+                #     shape_exp = (self._num_nodes, ) + mesh_shape
+                #     mesh_action_string = convert_shape_to_action_string(mesh_shape, None, "mesh")
+                #     nodal_coordinates_exp = csdl.expand(initial_nodal_coordinates, shape_exp, mesh_action_string)
+                #     discretization.nodal_coordinates = nodal_coordinates_exp
 
                 # expand linear and angular veclocities
                 V_vec_action_string = convert_shape_to_action_string(None, shape_exp, "vel_vec")
@@ -357,6 +421,7 @@ class AircraftCondition(Condition):
 
                 if cg_vec is not None:
                     # expand cg_vec
+                    print(cg_vec)
                     cg_vec_action_string = convert_shape_to_action_string(None, shape_exp, "cg_vec")
                     r_vec_exp = nodal_coordinates_exp - csdl.expand(cg_vec, shape_exp, cg_vec_action_string)
 
@@ -379,7 +444,10 @@ class AircraftCondition(Condition):
             aero_propulsive_moments: list[csdl.Variable],
             load_factor: Union[int, float, csdl.Variable] = 1,
             ref_point: Union[csdl.Variable, np.ndarray] = np.array([0., 0., 0.]),
+            ac_mps=None,
         ) -> tuple[csdl.Variable]:
+        from CADDEE_alpha.core.configuration import VectorizedConfig
+
         """Compute the total forces and moments acting on the aircraft.
         
         This method sums the total aero-propulsive forces and inertial forces
@@ -457,10 +525,25 @@ class AircraftCondition(Condition):
         # Check if the configuration has any mass properties
         ignore_inertial_loads = False
         ignore_inertial_moments = False
-        config = self.configuration
+        norm_config = self.configuration
+        vectorized_config = self.vectorized_configuration
+
+        if norm_config is not None and vectorized_config is not None:
+            raise Exception(f"Condition {self} has configuration and vectorized_configuration. Cannot have both.")
+        
+        if norm_config is not None:
+            config = norm_config
+        else:
+            config = vectorized_config
+
         if config is None:
             warnings.warn(f"Configuration has not been set for condition {self}. Will ignore inertial loads")
             ignore_inertial_loads = True
+        
+        elif isinstance(config, VectorizedConfig):
+            mass = ac_mps.mass
+            cg = ac_mps.cg_vector            
+        
         else:
             # Compute configuration mass properties
             config.assemble_system_mass_properties()
@@ -494,7 +577,7 @@ class AircraftCondition(Condition):
 
         # If we only have mass (and no cg), only add inertial forces
         elif ignore_inertial_moments:
-            inertial_forces = csdl.Variable(shape=(num_nodes, 3), value=3)
+            inertial_forces = csdl.Variable(shape=(num_nodes, 3), value=0)
             inertial_forces = inertial_forces.set(
                 csdl.slice[:, 2], mass * g
             )
@@ -526,7 +609,7 @@ class AircraftCondition(Condition):
                 phi, theta, psi, r_exp
             )
 
-            inertial_forces = csdl.Variable(shape=(num_nodes, 3), value=3)
+            inertial_forces = csdl.Variable(shape=(num_nodes, 3), value=0)
             inertial_forces = inertial_forces.set(
                 csdl.slice[:, 2], mass * g
             )
@@ -551,7 +634,6 @@ class AircraftCondition(Condition):
             #     phi, theta, psi, total_moments
             # )
         
-
         return total_forces_body_fixed, total_moments_body_fixed
 
 
