@@ -647,8 +647,8 @@ class Wing(Component):
     def construct_ribs_and_spars(
             self, 
             geometry:lg.Geometry,
-            top_geometry:lg.Geometry,
-            bottom_geometry:lg.Geometry,
+            top_geometry:lg.Geometry=None,
+            bottom_geometry:lg.Geometry=None,
             num_ribs:int=None, 
             spar_locations:np.ndarray=None, 
             rib_locations:np.ndarray=None,
@@ -754,6 +754,39 @@ class Wing(Component):
         root_le = wing.geometry.evaluate(wing._LE_mid_point, non_csdl=True)
         r_tip_te = wing.geometry.evaluate(wing._TE_right_point, non_csdl=True)
         r_tip_le = wing.geometry.evaluate(wing._LE_right_point, non_csdl=True)
+
+        # figure out what the top and bottom surfaces are via projections
+        if top_geometry is None or bottom_geometry is None:
+            eps = 1e-1
+            num_pts = 20
+            root_center = (root_te + root_le) / 2 + [0, eps, 0]
+            r_tip_center = (r_tip_te + r_tip_le) / 2 - [0, eps, 0]
+            center_line = np.linspace(root_center, r_tip_center, num_pts)
+            top_projection_points = center_line+offset
+            bottom_projection_points = center_line-offset
+            top_points_parametric = wing.geometry.project(top_projection_points)
+            bottom_points_parametric = wing.geometry.project(bottom_projection_points)
+
+            top_surfaces = []
+            bottom_surfaces = []
+            for i in range(num_pts):
+                top_ind, point = top_points_parametric[i]
+                bottom_ind, point = bottom_points_parametric[i]
+                if not top_ind in top_surfaces:
+                    top_surfaces.append(top_ind)
+                if not bottom_ind in bottom_surfaces:
+                    bottom_surfaces.append(bottom_ind)
+            top_surfaces = [wing.geometry.function_names[i] for i in top_surfaces]
+            bottom_surfaces = [wing.geometry.function_names[i] for i in bottom_surfaces]
+            if top_geometry is None:
+                top_geometry = wing.create_subgeometry(top_surfaces)
+            if bottom_geometry is None:
+                bottom_geometry = wing.create_subgeometry(bottom_surfaces)
+
+
+
+
+
 
         # get spar start/end points (root and tip)
         root_tip_pts = np.zeros((num_spars, 2, 3))
