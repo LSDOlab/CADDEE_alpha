@@ -618,6 +618,9 @@ class AircraftCondition(Condition):
                 phi, theta, psi, inertial_forces
             )
 
+            # print(inertial_forces_body_fixed.value)
+            # exit()
+
             inertial_moments_body_fixed = csdl.cross(r_exp_body_fixed, inertial_forces_body_fixed, axis=1)
 
             total_forces = total_forces + inertial_forces_body_fixed

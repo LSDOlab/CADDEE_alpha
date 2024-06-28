@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from CADDEE_alpha.core.component import VectorizedComponent
 
 
-recorder = csdl.Recorder(inline=True, expand_ops=True)
+recorder = csdl.Recorder(inline=True, expand_ops=True, debug=True)
 recorder.start()
 
 caddee = cd.CADDEE()
@@ -176,7 +176,7 @@ def define_base_config(caddee : cd.CADDEE):
     # wing + tail
         vlm_mesh = cd.mesh.VLMMesh()
         wing_chord_surface = cd.mesh.make_vlm_surface(
-            wing, 40, 1, LE_interp="ellipse", TE_interp="ellipse", 
+            wing, 40, 3, LE_interp="ellipse", TE_interp="ellipse", 
             spacing_spanwise="cosine", ignore_camber=True, plot=False,
         )
         wing_chord_surface.project_airfoil_points()
@@ -184,7 +184,7 @@ def define_base_config(caddee : cd.CADDEE):
 
 
         tail_surface = cd.mesh.make_vlm_surface(
-            h_tail, 10, 1, ignore_camber=True
+            h_tail, 10, 2, ignore_camber=True
         )
         vlm_mesh.discretizations["tail_chord_surface"] = tail_surface
 
@@ -304,6 +304,7 @@ def define_conditions(caddee: cd.CADDEE):
         range=transition_ranges,
     )
     qst.vectorized_configuration = base_config.vectorized_copy(10)
+    # qst.configuration = base_config.copy()
     conditions["qst"] = qst
 
     return 
@@ -436,6 +437,7 @@ def define_analysis(caddee: cd.CADDEE):
     # ::::::::::::::::::::::::::: quasi-steady transition :::::::::::::::::::::::::::
     qst = conditions["qst"]
     qst_config = qst.vectorized_configuration
+    # qst_config = qst.configuration
     qst_system = qst_config.system
 
     airframe = qst_system.comps["airframe"]
@@ -448,7 +450,9 @@ def define_analysis(caddee: cd.CADDEE):
     
     qst_mesh_container = qst_config.mesh_container
 
-    tail_actuation_var = csdl.Variable(shape=(10, ), value=0)
+    num_nodes = 10
+
+    tail_actuation_var = csdl.Variable(shape=(num_nodes, ), value=0)
     tail_actuation_var.set_as_design_variable(upper=np.deg2rad(20), lower=np.deg2rad(-20))
     h_tail.actuate(angle=tail_actuation_var)
 
@@ -496,42 +500,57 @@ def define_analysis(caddee: cd.CADDEE):
     rotor_meshes = qst_mesh_container["rotor_meshes"]
     pusher_rotor_mesh = rotor_meshes.discretizations["pusher_prop_mesh"]
     mesh_vel = pusher_rotor_mesh.nodal_velocities
-    cruise_rpm = csdl.Variable(shape=(10, ), value=2000)
-    cruise_rpm.set_as_design_variable(upper=3000, lower=500, scaler=1e-3)
+    cruise_rpm = csdl.Variable(shape=(num_nodes, ), value=np.linspace(600, 2000, num_nodes))
+    cruise_rpm.set_as_design_variable(upper=3000, lower=400, scaler=1e-3)
     bem_inputs = RotorAnalysisInputs()
     bem_inputs.ac_states = qst.quantities.ac_states
     bem_inputs.atmos_states =  qst.quantities.atmos_states
     bem_inputs.mesh_parameters = pusher_rotor_mesh
     bem_inputs.mesh_velocity = mesh_vel
     bem_inputs.rpm = cruise_rpm
-    bem_model = BEMModel(num_nodes=10, airfoil_model=NACA4412MLAirfoilModel())
+    bem_model = BEMModel(num_nodes=num_nodes, airfoil_model=NACA4412MLAirfoilModel())
     bem_outputs = bem_model.evaluate(bem_inputs)
 
-    # # BEM solvers lift
-    # lift_rotor_forces = []
-    # lift_rotor_moments = []
-    # for i in range(1):
-    #     rotor_mesh = rotor_meshes.discretizations[f"rotor_{i+1}_mesh"]
-    #     mesh_vel = rotor_mesh.nodal_velocities
-    #     rpm = csdl.Variable(shape=(10, ), value=1000)
-    #     rpm.set_as_design_variable(lower=10, upper=2000, scaler=np.linspace(1e-3, 1e-1, 10))
-    #     lift_rotor_inputs = RotorAnalysisInputs()
-    #     lift_rotor_inputs.ac_states = qst.quantities.ac_states
-    #     lift_rotor_inputs.atmos_states =  qst.quantities.atmos_states
-    #     lift_rotor_inputs.mesh_parameters = rotor_mesh
-    #     lift_rotor_inputs.mesh_velocity = mesh_vel
-    #     lift_rotor_inputs.rpm = rpm
-    #     lift_rotor_model = BEMModel(num_nodes=10, airfoil_model=NACA4412MLAirfoilModel())
-    #     lift_rotor_outputs = lift_rotor_model.evaluate(lift_rotor_inputs)
-    #     lift_rotor_forces.append(lift_rotor_outputs.forces)
-    #     lift_rotor_moments.append(lift_rotor_outputs.moments)
+    # BEM solvers lift
+    lift_rotor_forces = []
+    lift_rotor_moments = []
 
+    front_inner_rpm = csdl.Variable(shape=(num_nodes, ), value=1000.)
+    front_inner_rpm.set_as_design_variable(lower=100, upper=2000, scaler=1e-3)
+    rear_inner_rpm = csdl.Variable(shape=(num_nodes, ), value=1000.)
+    rear_inner_rpm.set_as_design_variable(lower=100, upper=2000, scaler=1e-3)
+    front_outer_rpm = csdl.Variable(shape=(num_nodes, ), value=1000.)
+    front_outer_rpm.set_as_design_variable(lower=100, upper=2000, scaler=1e-3)
+    rear_outer_rpm = csdl.Variable(shape=(num_nodes, ), value=1000.)
+    rear_outer_rpm.set_as_design_variable(lower=100, upper=2000, scaler=1e-3)
+
+    rpm_list = [front_outer_rpm, rear_outer_rpm, front_inner_rpm, rear_inner_rpm, front_inner_rpm, rear_inner_rpm, front_outer_rpm, rear_outer_rpm]
+
+    for i in range(8):
+        rotor_mesh = rotor_meshes.discretizations[f"rotor_{i+1}_mesh"]
+        mesh_vel = rotor_mesh.nodal_velocities
+        # rpm = csdl.Variable(shape=(num_nodes, ), value=np.linspace(1200, 600, num_nodes))
+        # rpm.set_as_design_variable(lower=100, upper=2000, scaler=1e-3)#np.linspace(1e-3, 1e-1, 10))
+        lift_rotor_inputs = RotorAnalysisInputs()
+        lift_rotor_inputs.ac_states = qst.quantities.ac_states
+        lift_rotor_inputs.atmos_states =  qst.quantities.atmos_states
+        lift_rotor_inputs.mesh_parameters = rotor_mesh
+        lift_rotor_inputs.mesh_velocity = mesh_vel
+        lift_rotor_inputs.rpm = rpm_list[i]
+        lift_rotor_model = BEMModel(num_nodes=num_nodes, airfoil_model=NACA4412MLAirfoilModel())
+        lift_rotor_outputs = lift_rotor_model.evaluate(lift_rotor_inputs)
+        lift_rotor_forces.append(lift_rotor_outputs.forces)
+        lift_rotor_moments.append(lift_rotor_outputs.moments)
 
     total_forces_qst, total_moments_qst = qst.assemble_forces_and_moments(
-        aero_propulsive_forces=[vlm_forces, bem_outputs.forces, drag_build_up], # + lift_rotor_forces, 
-        aero_propulsive_moments=[vlm_moments, bem_outputs.moments], # + lift_rotor_moments,
+        aero_propulsive_forces=[vlm_forces, bem_outputs.forces, drag_build_up] + lift_rotor_forces, 
+        aero_propulsive_moments=[vlm_moments, bem_outputs.moments] + lift_rotor_moments,
         ac_mps=base_config.system.quantities.mass_properties,
     )
+
+    # print(total_forces_qst.value)
+    # print(total_moments_qst.value)
+    # exit()
 
     # eom
     eom_model = cd.aircraft.models.eom.SixDofEulerFlatEarthModel()
@@ -543,22 +562,33 @@ def define_analysis(caddee: cd.CADDEE):
     )
 
     dv_dt = accel_qst.dv_dt
-    dw_dt = accel_qst.dw_dt
     dp_dt = accel_qst.dp_dt
     dq_dt = accel_qst.dq_dt
     dr_dt = accel_qst.dr_dt
 
-    zero_accel_norm = csdl.norm(dv_dt + dw_dt + dp_dt + dq_dt + dr_dt)
+    # accel_norm = accel_qst.accel_norm
+    # accel_norm.name = "residual_norm"
+    # csdl.norm(accel_norm).set_as_objective(scaler=1e-1)
+
+    zero_accel_norm = csdl.norm(dv_dt + dp_dt + dq_dt +dr_dt) # 
     zero_accel_norm.name = "residual_norm"
-    zero_accel_norm.set_as_objective()
+    zero_accel_norm.set_as_objective(scaler=1e-1)
     
     du_dt = accel_qst.du_dt
-    du_dt.name = "horizontal acceleration"
-    du_dt_constraint = np.array(
+    dw_dt = accel_qst.dw_dt
+    du_dt.name = "du_dt"
+    dw_dt.name = "dw_dt"
+    dV_dt_constraint = np.array(
             [3.05090108, 1.84555602, 0.67632681, 0.39583939, 0.30159843, 
             0.25379256, 0.22345727, 0.20269499, 0.18808881, 0.17860702]
         )
+    theta = np.array([-0.0134037, -0.04973228, 0.16195989, 0.10779469, 0.04, 0.06704556, 0.05598293, 0.04712265, 0.03981101, 0.03369678])
+    
+    du_dt_constraint = dV_dt_constraint * np.cos(theta)
+    dw_dt_constraint = dV_dt_constraint * np.sin(theta)
+    
     du_dt.set_as_constraint(upper=du_dt_constraint, lower=du_dt_constraint)
+    dw_dt.set_as_constraint(upper=dw_dt_constraint, lower=dw_dt_constraint)
 
 
     # # ::::::::::::::::::::::::::: Hover :::::::::::::::::::::::::::
@@ -609,6 +639,7 @@ def define_analysis(caddee: cd.CADDEE):
     #     ac_mass_properties=hover_config.system.quantities.mass_properties
     # )
     # accel_norm_hover = accel_hover.accel_norm
+    # accel_norm_hover.set_as_objective()
     # # accel_norm_hover.set_as_constraint(upper=0, lower=0)
 
     # # ::::::::::::::::::::::::::: Cruise :::::::::::::::::::::::::::
@@ -624,7 +655,7 @@ def define_analysis(caddee: cd.CADDEE):
 
     # # Actuate tail
     # tail = airframe.comps["empennage"].comps["h_tail"]
-    # elevator_deflection = csdl.Variable(shape=(3, ), value=np.deg2rad(0))
+    # elevator_deflection = csdl.Variable(shape=(1, ), value=np.deg2rad(0))
     # elevator_deflection.set_as_design_variable(lower=np.deg2rad(-10), upper=np.deg2rad(10), scaler=10)
     # tail.actuate(elevator_deflection)
 
@@ -642,54 +673,55 @@ def define_analysis(caddee: cd.CADDEE):
     # # run vlm solver
     # lattice_coordinates = [wing_lattice.nodal_coordinates, tail_lattice.nodal_coordinates]
     # lattice_nodal_velocitiies = [wing_lattice.nodal_velocities, tail_lattice.nodal_velocities]
-    # alpha_ml_list = [wing_lattice.alpha_ML_mid_panel, tail_lattice.alpha_ML_mid_panel]
-    # # airfoil_Cd_models = [wing_lattice.embedded_airfoil_model_Cd, tail_lattice.embedded_airfoil_model_Cd]
-    # airfoil_Cl_models = [wing_lattice.embedded_airfoil_model_Cl, tail_lattice.embedded_airfoil_model_Cl]
-    # airfoil_Cp_models = [wing_lattice.embedded_airfoil_model_Cp, tail_lattice.embedded_airfoil_model_Cp]
-    # airfoil_alpha_stall_models = [wing_lattice.embedded_airfoil_model_alpha_stall, tail_lattice.embedded_airfoil_model_alpha_stall]
-    # reynolds_numbers = [wing_lattice.reynolds_number, tail_lattice.reynolds_number]
-    # chord_length_mid_panel = [wing_lattice.mid_panel_chord_length, tail_lattice.mid_panel_chord_length]
+    
+    #  # Add an airfoil model
+    # nasa_langley_airfoil_maker = ThreeDAirfoilMLModelMaker(
+    #     airfoil_name="ls417",
+    #         aoa_range=np.linspace(-12, 16, 50), 
+    #         reynolds_range=[1e5, 2e5, 5e5, 1e6, 2e6, 4e6, 7e6, 10e6], 
+    #         mach_range=[0., 0.2, 0.3, 0.4, 0.5, 0.6],
+    # )
+    # Cl_model = nasa_langley_airfoil_maker.get_airfoil_model(quantities=["Cl"])
+    # Cd_model = nasa_langley_airfoil_maker.get_airfoil_model(quantities=["Cd"])
+    # Cp_model = nasa_langley_airfoil_maker.get_airfoil_model(quantities=["Cp"])
+    # alpha_stall_model = nasa_langley_airfoil_maker.get_airfoil_model(quantities=["alpha_Cl_min_max"])
+    
     # vlm_outputs = vlm_solver(
     #     lattice_coordinates, 
     #     lattice_nodal_velocitiies, 
-    #     alpha_ML=alpha_ml_list,
+    #     atmos_states=cruise.quantities.atmos_states,
     #     airfoil_Cd_models=[None, None],#=airfoil_Cd_models,
-    #     airfoil_Cl_models=airfoil_Cl_models,
-    #     airfoil_Cp_models=airfoil_Cp_models,
-    #     airfoil_alpha_stall_models=airfoil_alpha_stall_models,
-    #     reynolds_numbers=reynolds_numbers,
-    #     chord_length_mid_panel=chord_length_mid_panel,
+    #     airfoil_Cl_models=[Cl_model, None],
+    #     airfoil_Cp_models=[None, None],
+    #     airfoil_alpha_stall_models=[None, None],
     # )
     
     # vlm_forces = vlm_outputs.total_force
     # vlm_moments = vlm_outputs.total_moment
-    # spanwise_Cp = vlm_outputs.surface_spanwise_Cp[0]
-    # spanwise_Cp = csdl.blockmat([[spanwise_Cp[0, :, 0:120].T()], [spanwise_Cp[0, :, 120:].T()]])
-    # P_inf = cruise.quantities.atmos_states.pressure
-    # V_inf = cruise.parameters.speed
-    # rho_inf = cruise.quantities.atmos_states.density
-    # spanwise_pressure = spanwise_Cp * 0.5 * rho_inf * V_inf**2 + P_inf
+    
+    # # spanwise_Cp = vlm_outputs.surface_spanwise_Cp[0]
+    # # spanwise_Cp = csdl.blockmat([[spanwise_Cp[0, :, 0:120].T()], [spanwise_Cp[0, :, 120:].T()]])
+    # # P_inf = cruise.quantities.atmos_states.pressure
+    # # V_inf = cruise.parameters.speed
+    # # rho_inf = cruise.quantities.atmos_states.density
+    # # spanwise_pressure = spanwise_Cp * 0.5 * rho_inf * V_inf**2 + P_inf
 
+    # # pressure_function = pressure_indexed_space.fit_function_set(
+    # #     values=spanwise_pressure.reshape((-1, 1)), parametric_coordinates=airfoil_upper_nodes+airfoil_lower_nodes,
+    # #     regularization_parameter=1e-4,
+    # # )
 
-    # pressure_function = pressure_indexed_space.fit_function_set(
-    #     values=spanwise_pressure.reshape((-1, 1)), parametric_coordinates=airfoil_upper_nodes+airfoil_lower_nodes,
-    #     regularization_parameter=1e-4,
-    # )
+    # # Cp_upper = pressure_function.evaluate(airfoil_upper_nodes).reshape((120, 40)).value
+    # # Cp_lower = pressure_function.evaluate(airfoil_lower_nodes).reshape((120, 40)).value
+    # # # print(Cp_upper[0, :])
+    # # # print(Cp_lower[0, :])
 
-    # Cp_upper = pressure_function.evaluate(airfoil_upper_nodes).reshape((120, 40)).value
-    # Cp_lower = pressure_function.evaluate(airfoil_lower_nodes).reshape((120, 40)).value
-    # # print(Cp_upper[0, :])
-    # # print(Cp_lower[0, :])
-
-    # plt.plot(x_interp, Cp_upper[:, 20], color="r", label="IDW")
-    # plt.plot(x_interp, Cp_lower[:, 20], color="r")
-    # plt.plot(x_interp, spanwise_pressure[0:120, 20].value, color="b", label="data")
-    # plt.plot(x_interp, spanwise_pressure[120:, 20].value, color="b")
-    # plt.title("mid panel")
-    # plt.legend()
-    # # print("\n")
-    # # print(spanwise_Cp[0:120, 20].value)
-    # # print(spanwise_Cp[120:, 20].value)
+    # # plt.plot(x_interp, Cp_upper[:, 20], color="r", label="IDW")
+    # # plt.plot(x_interp, Cp_lower[:, 20], color="r")
+    # # plt.plot(x_interp, spanwise_pressure[0:120, 20].value, color="b", label="data")
+    # # plt.plot(x_interp, spanwise_pressure[120:, 20].value, color="b")
+    # # plt.title("mid panel")
+    # # plt.legend()
 
     # # wing.geometry.plot_but_good(color=pressure_function)
     
@@ -701,8 +733,8 @@ def define_analysis(caddee: cd.CADDEE):
     #                                     wing.parameters.S_ref, [wing, fuselage, tail, v_tail, rotors] + booms)
     
     
-    # wing.geometry.plot(color=pressure_function)
-    # plt.show()
+    # # wing.geometry.plot(color=pressure_function)
+    # # plt.show()
     
     # # BEM solver
     # rotor_meshes = mesh_container["rotor_meshes"]
@@ -734,6 +766,7 @@ def define_analysis(caddee: cd.CADDEE):
     #     ac_mass_properties=cruise_config.system.quantities.mass_properties
     # )
     # accel_norm_cruise = accel_cruise.accel_norm
+    # accel_norm_cruise.set_as_objective(scaler=1e-1)
     
     # accel_norm_total = accel_norm_cruise + accel_norm_hover
     
@@ -749,8 +782,11 @@ def define_analysis(caddee: cd.CADDEE):
 
     # plot_vlm(vlm_outputs)
 
-    return accel_qst #accel_hover, accel_cruise, total_forces_hover, total_forces_cruise
+    return accel_qst, total_forces_qst, total_moments_qst #accel_hover, accel_cruise, total_forces_hover, total_forces_cruise
 
+    # return accel_hover, total_forces_hover, total_moments_hover
+    
+    # return accel_cruise, total_forces_cruise, total_moments_cruise
 
 define_base_config(caddee)
 
@@ -758,42 +794,311 @@ define_conditions(caddee)
 
 define_mass_properties(caddee)
 
-accel_qst  = define_analysis(caddee)
+# accel_qst, total_forces_qst, total_moments_qst = define_analysis(caddee)
+accel, total_forces, total_moments = define_analysis(caddee)
 
-recorder.inline = False
-recorder.stop()
+
+# recorder.inline = False
+# recorder.stop()
+
+recorder.count_operations()
+recorder.print_largest_variables()
+recorder.count_origins(mode="line")
+exit()
 
 if run_optimization:
     from modopt import CSDLAlphaProblem
     from modopt import SLSQP
-    sim = csdl.experimental.JaxSimulator(recorder)
-    
-    
+    jax_sim = csdl.experimental.JaxSimulator(
+        recorder=recorder, gpu=False,
+        additional_outputs=[accel.du_dt, accel.dv_dt, accel.dw_dt, accel.dp_dt, accel.dq_dt, accel.dr_dt, total_forces, total_moments]
+    )
 
-    # sim = csdl.experimental.PySimulator(
-    #     recorder=recorder,
-    # )
+    py_sim = csdl.experimental.PySimulator(
+        recorder=recorder,
+    )
 
-    sim.check_totals(step_size=1e-3)
-    exit()
+    # jax_sim.check_totals(step_size=1e-3)
+    # py_sim.check_totals(step_size=1e-3)
+    # exit()
 
-    prob = CSDLAlphaProblem(problem_name='LPC_trim', simulator=sim)
+    prob = CSDLAlphaProblem(problem_name='LPC_trim', simulator=jax_sim)
 
-    optimizer = SLSQP(prob, ftol=1e-8, maxiter=10, outputs=['x'])
+    optimizer = SLSQP(prob, ftol=1e-8, maxiter=200, outputs=['x'])
 
     # Solve your optimization problem
     optimizer.solve()
     optimizer.print_results()
 
-print(accel_qst.accel_norm.value)
-print(accel_qst.du_dt.value)
-print(accel_qst.dv_dt.value)
-print(accel_qst.dw_dt.value)
-print(accel_qst.dp_dt.value)
-print(accel_qst.dq_dt.value)
-print(accel_qst.dr_dt.value)
+recorder.execute()
+
+print("total_forces", jax_sim[total_forces])
+print("total_moments", jax_sim[total_moments])
+
+print("\n")
+
+print("du_dt", jax_sim[accel.du_dt])
+print("dv_dt", jax_sim[accel.dv_dt])
+print("dw_dt", jax_sim[accel.dw_dt])
+print("dp_dt", jax_sim[accel.dp_dt])
+print("dq_dt", jax_sim[accel.dq_dt])
+print("dr_dt", jax_sim[accel.dr_dt])
+print("\n")
 
 dv_dict = recorder.design_variables
 
 for dv in dv_dict.keys():
     print(dv.value)
+
+
+
+
+
+# ::::::::::::::::::::::::::::::::::::PySim::::::::::::::::::::::::::::::::::::
+# total_forces [[-4.97112674  0.02406187 -9.51770693]]
+# total_moments [[  0.51460276 -24.35518937   0.66755083]]
+
+
+# du_dt [-0.00112339]
+# dv_dt [0.00021442]
+# dw_dt [-0.00317855]
+# dp_dt [3.82166697e-05]
+# dq_dt [0.00016413]
+# dr_dt [7.97913106e-05]
+
+
+# [0.05170884]
+# [-0.03332447]
+# [1858.4147944]
+    
+
+
+# ::::::::::::::::::::::::::::::::::::JAXSim GPU (torch cpu) run 1::::::::::::::::::::::::::::::::::::
+# total_forces [[ 1.10272070e+02  2.49237931e-02 -6.00345138e+02]]
+# total_moments [[ 5.33619742e-01 -2.08330948e+03  6.90579867e-01]]
+
+
+# du_dt [-0.07829857]
+# dv_dt [0.00022122]
+# dw_dt [0.0715057]
+# dp_dt [3.97731993e-05]
+# dq_dt [-0.07118617]
+# dr_dt [8.24702433e-05]
+
+
+# [0.05461365]
+# [-0.03775286]
+# [1866.82700542]
+    
+# ::::::::::::::::::::::::::::::::::::JAXSim GPU (torch cpu) run 2::::::::::::::::::::::::::::::::::::
+# total time 4.849106550216675
+# total_forces [[ 1.91832639e+02  2.44923702e-02 -2.74584511e+02]]
+# total_moments [[ 5.24149543e-01 -1.17848826e+03  6.78327571e-01]]
+
+
+# du_dt [0.01511043]
+# dv_dt [0.00021732]
+# dw_dt [0.00686962]
+# dp_dt [3.90614933e-05]
+# dq_dt [-0.02481406]
+# dr_dt [8.10108873e-05]
+
+
+# [0.05317487]
+# [-0.0362718]
+
+
+# ::::::::::::::::::::::::::::::::::::JAXSim CPU run 1::::::::::::::::::::::::::::::::::::
+# total_forces [[-8.98941318e+00  2.40175509e-02  2.41861932e+01]]
+# total_moments [[  0.51363152 103.36185926   0.66627966]]
+
+
+# du_dt [-0.01356258]
+# dv_dt [0.00021401]
+# dw_dt [0.03086753]
+# dp_dt [3.81444251e-05]
+# dq_dt [-0.0072491]
+# dr_dt [7.96403213e-05]
+
+
+# [0.0515592]
+# [-0.03318248]
+# [1858.11727248]
+
+
+# ::::::::::::::::::::::::::::::::::::JAXSim CPU run 2::::::::::::::::::::::::::::::::::::
+# total_forces [[-8.98941318e+00  2.40175509e-02  2.41861932e+01]]
+# total_moments [[  0.51363152 103.36185926   0.66627966]]
+
+
+# du_dt [-0.01356258]
+# dv_dt [0.00021401]
+# dw_dt [0.03086753]
+# dp_dt [3.81444251e-05]
+# dq_dt [-0.0072491]
+# dr_dt [7.96403213e-05]
+
+
+# [0.0515592]
+# [-0.03318248]
+# [1858.11727248]
+
+
+
+#          ==============
+#          Scipy summary:
+#          ==============
+#          Problem                    : LPC_trim
+#          Solver                     : scipy_slsqp
+#          Success                    : True
+#          Message                    : Optimization terminated successfully
+#          Objective                  : 0.0002790552862106368
+#          Gradient norm              : 0.7409795232014156
+#          Total time                 : 244.7714831829071
+#          Major iterations           : 17
+#          Total function evals       : 52
+#          Total gradient evals       : 17
+#          ==================================================
+# /home/marius/Desktop/packages/lsdo_lab/CSDL_alpha/csdl_alpha/src/operations/division.py:19: RuntimeWarning: divide by zero encountered in divide
+#   return x/y
+# nonlinear solver: bracketed_search converged in 42 iterations.
+# nonlinear solver: bracketed_search converged in 34 iterations.
+# total_forces [[-3.22678579  0.02405088 -0.97092618]]
+# total_moments [[0.51436201 1.37619778 0.66722884]]
+
+
+# du_dt [-0.00050072]
+# dv_dt [0.00021431]
+# dw_dt [-0.00112254]
+# dp_dt [3.81993796e-05]
+# dq_dt [0.00025605]
+# dr_dt [7.97526367e-05]
+
+
+# [0.05167176]
+# [-0.03329087]
+# [1858.53207306]
+
+
+#   ==============
+#          Scipy summary:
+#          ==============
+#          Problem                    : LPC_trim
+#          Solver                     : scipy_slsqp
+#          Success                    : True
+#          Message                    : Optimization terminated successfully
+#          Objective                  : 0.0002790552862106368
+#          Gradient norm              : 0.7409795232014156
+#          Total time                 : 247.31665658950806
+#          Major iterations           : 17
+#          Total function evals       : 52
+#          Total gradient evals       : 17
+#          ==================================================
+# /home/marius/Desktop/packages/lsdo_lab/CSDL_alpha/csdl_alpha/src/operations/division.py:19: RuntimeWarning: divide by zero encountered in divide
+#   return x/y
+# nonlinear solver: bracketed_search converged in 42 iterations.
+# nonlinear solver: bracketed_search converged in 34 iterations.
+# total_forces [[-3.22678579  0.02405088 -0.97092618]]
+# total_moments [[0.51436201 1.37619778 0.66722884]]
+
+
+# du_dt [-0.00050072]
+# dv_dt [0.00021431]
+# dw_dt [-0.00112254]
+# dp_dt [3.81993796e-05]
+# dq_dt [0.00025605]
+# dr_dt [7.97526367e-05]
+
+
+# [0.05167176]
+# [-0.03329087]
+# 1858.53207306
+
+
+
+
+# total_forces [[-1.13285697e+02  2.40383106e-02  4.95744642e+00]]
+# total_moments [[  0.51409049 313.98250329   0.66681587]]
+
+
+# du_dt [-0.18529727]
+# dv_dt [0.0002142]
+# dw_dt [0.33750011]
+# dp_dt [3.81802194e-05]
+# dq_dt [-0.10076421]
+# dr_dt [7.97095103e-05]
+
+
+# [0.05163007]
+# [-0.03331046]
+# [1849.54752017]
+    
+
+# total_forces [[-1.34462168e+02  2.39919663e-02  3.38712928e+01]]
+# total_moments [[  0.51306434 440.0387343    0.66563708]]
+
+
+# du_dt [-0.18773904]
+# dv_dt [0.00021387]
+# dw_dt [0.33804439]
+# dp_dt [3.80910506e-05]
+# dq_dt [-0.0985313]
+# dr_dt [7.9575203e-05]
+
+
+# [0.05147152]
+# [-0.03299989]
+# [1847.84743352]
+    
+
+
+# :::::::::::::::::::::::::::::::::::::Operations count (w/ tail actuation) :::::::::::::::::::::::::::::::::::::
+# Reshape : 11713
+# BroadcastMult : 6979
+# GetVarIndex : 6911
+# Add : 5655
+# SetVarIndex : 4187
+# Neg : 3389
+# Mult : 2125
+# Loop : 2047
+# BroadcastSetIndex : 1921
+# RightBroadcastPower : 1562
+
+    
+
+
+# :::::::::::::::::::::::::::::::::::::Operations count (w/o tail actuation) :::::::::::::::::::::::::::::::::::::
+# Reshape : 6043
+# GetVarIndex : 2881
+# SetVarIndex : 2587
+# Loop : 2027
+# BroadcastMult : 1859
+# Mult : 1645
+# Add : 1455
+# RightBroadcastPower : 1392
+# Neg : 809
+# Sum : 663
+
+
+Reshape : 12353
+BroadcastMult : 6979
+GetVarIndex : 6911
+Add : 5655
+SetVarIndex : 3547
+Neg : 3389
+Mult : 2125
+Loop : 2047
+BroadcastSetIndex : 1921
+RightBroadcastPower : 1562
+
+
+Reshape : 11713
+BroadcastMult : 6979
+GetVarIndex : 6911
+Add : 5655
+SetVarIndex : 4187
+Neg : 3389
+Mult : 2125
+Loop : 2047
+BroadcastSetIndex : 1921
+RightBroadcastPower : 1562

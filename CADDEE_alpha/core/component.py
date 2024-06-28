@@ -395,6 +395,7 @@ class Component:
             self._find_system_component(parent)
 
     def _compute_surface_area(self, geometry:Geometry):
+        import time 
         """Compute the surface area of a component."""
         parametric_mesh_grid_num = 10
 
@@ -403,39 +404,75 @@ class Component:
 
         surface_mesh = self.quantities.surface_mesh
 
-        for i in surfaces.keys():
-            oml_para_mesh = []
-            for u in np.linspace(0, 1, parametric_mesh_grid_num):
-                for v in np.linspace(0, 1, parametric_mesh_grid_num):
-                    oml_para_mesh.append((i, np.array([u,v]).reshape((1,2))))
+        num_surfaces = len(surfaces.keys())
+
+        parametric_mesh = geometry.generate_parametric_grid(grid_resolution=(parametric_mesh_grid_num, parametric_mesh_grid_num))
+        coords_vec = geometry.evaluate(parametric_mesh).reshape((num_surfaces, parametric_mesh_grid_num, parametric_mesh_grid_num, 3))
+        surface_mesh.append(coords_vec)
+
+        coords_u_end = coords_vec[:, 1:, :, :].reshape((num_surfaces, parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))
+        coords_u_start = coords_vec[:, :-1, :, :].reshape((num_surfaces, parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))
+
+        coords_v_end = coords_vec[:, :, 1:, :].reshape((num_surfaces, parametric_mesh_grid_num, parametric_mesh_grid_num-1, 3))
+        coords_v_start = coords_vec[:, :, :-1, :].reshape((num_surfaces, parametric_mesh_grid_num, parametric_mesh_grid_num-1, 3))
+
+        u_vectors = coords_u_end - coords_u_start
+        u_vectors_start = u_vectors # .reshape((-1, ))
+        u_vectors_1 = u_vectors_start[:, :, :-1, :].reshape((num_surfaces, parametric_mesh_grid_num-1, parametric_mesh_grid_num-1, 3))
+        u_vectors_2 = u_vectors_start[:, :, 1:, :].reshape((num_surfaces, parametric_mesh_grid_num-1, parametric_mesh_grid_num-1, 3))
+
+
+        v_vectors = coords_v_end - coords_v_start
+        v_vectors_start = v_vectors # .reshape((-1, ))
+        v_vectors_1 = v_vectors_start[:, :-1, :, :].reshape((num_surfaces, parametric_mesh_grid_num-1, parametric_mesh_grid_num-1, 3))
+        v_vectors_2 = v_vectors_start[:, 1:, :, :].reshape((num_surfaces, parametric_mesh_grid_num-1, parametric_mesh_grid_num-1, 3))
+
+        area_vectors_left_lower = csdl.cross(u_vectors_1, v_vectors_2, axis=3)
+        area_vectors_right_upper = csdl.cross(v_vectors_1, u_vectors_2, axis=3)
+        area_magnitudes_left_lower = csdl.norm(area_vectors_left_lower, ord=2, axes=(3, ))
+        area_magnitudes_right_upper = csdl.norm(area_vectors_right_upper, ord=2, axes=(3, ))
+        area_magnitudes = (area_magnitudes_left_lower + area_magnitudes_right_upper)/2
+        wireframe_area = csdl.sum(area_magnitudes)
+        surface_area =  surface_area + wireframe_area
+
+        # surface_area_2 = csdl.Variable(shape=(1, ), value=1)
+
+        # t3 = time.time()
+        # for i in surfaces.keys():
+        #     oml_para_mesh = []
+        #     for u in np.linspace(0, 1, parametric_mesh_grid_num):
+        #         for v in np.linspace(0, 1, parametric_mesh_grid_num):
+        #             oml_para_mesh.append((i, np.array([u,v]).reshape((1,2))))
             
-            coords_vec = geometry.evaluate(oml_para_mesh).reshape((parametric_mesh_grid_num, parametric_mesh_grid_num, 3))
-            surface_mesh.append(coords_vec)
+        #     coords_vec = geometry.evaluate(oml_para_mesh).reshape((parametric_mesh_grid_num, parametric_mesh_grid_num, 3))
+        #     surface_mesh.append(coords_vec)
             
-            coords_u_end = coords_vec[1:, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))
-            coords_u_start = coords_vec[:-1, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))
+        #     coords_u_end = coords_vec[1:, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))
+        #     coords_u_start = coords_vec[:-1, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))
 
-            coords_v_end = coords_vec[:, 1:, :].reshape((parametric_mesh_grid_num, parametric_mesh_grid_num-1, 3))
-            coords_v_start = coords_vec[:, :-1, :].reshape((parametric_mesh_grid_num, parametric_mesh_grid_num-1, 3))
+        #     coords_v_end = coords_vec[:, 1:, :].reshape((parametric_mesh_grid_num, parametric_mesh_grid_num-1, 3))
+        #     coords_v_start = coords_vec[:, :-1, :].reshape((parametric_mesh_grid_num, parametric_mesh_grid_num-1, 3))
 
-            u_vectors = coords_u_end - coords_u_start
-            u_vectors_start = u_vectors # .reshape((-1, ))
-            u_vectors_1 = u_vectors_start[:, :-1, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num-1, 3))
-            u_vectors_2 = u_vectors_start[:, 1:, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num-1, 3))
+        #     u_vectors = coords_u_end - coords_u_start
+        #     u_vectors_start = u_vectors # .reshape((-1, ))
+        #     u_vectors_1 = u_vectors_start[:, :-1, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num-1, 3))
+        #     u_vectors_2 = u_vectors_start[:, 1:, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num-1, 3))
 
 
-            v_vectors = coords_v_end - coords_v_start
-            v_vectors_start = v_vectors # .reshape((-1, ))
-            v_vectors_1 = v_vectors_start[:-1, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num-1, 3))
-            v_vectors_2 = v_vectors_start[1:, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num-1, 3))
+        #     v_vectors = coords_v_end - coords_v_start
+        #     v_vectors_start = v_vectors # .reshape((-1, ))
+        #     v_vectors_1 = v_vectors_start[:-1, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num-1, 3))
+        #     v_vectors_2 = v_vectors_start[1:, :, :].reshape((parametric_mesh_grid_num-1, parametric_mesh_grid_num-1, 3))
 
-            area_vectors_left_lower = csdl.cross(u_vectors_1, v_vectors_2, axis=2)
-            area_vectors_right_upper = csdl.cross(v_vectors_1, u_vectors_2, axis=2)
-            area_magnitudes_left_lower = csdl.norm(area_vectors_left_lower, ord=2, axes=(2, ))
-            area_magnitudes_right_upper = csdl.norm(area_vectors_right_upper, ord=2, axes=(2, ))
-            area_magnitudes = (area_magnitudes_left_lower + area_magnitudes_right_upper)/2
-            wireframe_area = csdl.sum(area_magnitudes)
-            surface_area =  surface_area + wireframe_area 
+        #     area_vectors_left_lower = csdl.cross(u_vectors_1, v_vectors_2, axis=2)
+        #     area_vectors_right_upper = csdl.cross(v_vectors_1, u_vectors_2, axis=2)
+        #     area_magnitudes_left_lower = csdl.norm(area_vectors_left_lower, ord=2, axes=(2, ))
+        #     area_magnitudes_right_upper = csdl.norm(area_vectors_right_upper, ord=2, axes=(2, ))
+        #     area_magnitudes = (area_magnitudes_left_lower + area_magnitudes_right_upper)/2
+        #     wireframe_area = csdl.sum(area_magnitudes)
+        #     surface_area_2 =  surface_area_2 + wireframe_area 
+
+        # t4 = time.time()
 
         return surface_area
 
