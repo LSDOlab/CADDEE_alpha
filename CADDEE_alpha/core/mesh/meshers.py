@@ -246,7 +246,7 @@ class CamberSurface(Discretization):
         return discretization
 
     def project_airfoil_points(self, num_points: int=120, spacing: str="sin", 
-                          grid_search_density: int = 10, plot: bool=False):
+                          grid_search_density: int = 10, plot: bool=False, oml_geometry=None):
         if self._airfoil_lower_para is not None and self._airfoil_upper_para is not None:
             return self._airfoil_lower_para, self._airfoil_upper_para
         
@@ -261,11 +261,14 @@ class CamberSurface(Discretization):
         
         norm_chord_wise_coordinates = 0.5 + 0.5*np.sin(np.pi*(np.linspace(0., 1., num_points)-0.5))
         
-        wing_geometry = self._geom
+        if oml_geometry is not None:
+            wing_geometry = oml_geometry
+        else:
+            wing_geometry = self._geom
         num_spanwise = self._num_spanwise
         
-        LE_points_csdl = self._geom.evaluate(self._LE_points_para)
-        TE_points_csdl = self._geom.evaluate(self._TE_points_para)
+        LE_points_csdl = wing_geometry.evaluate(self._LE_points_para)
+        TE_points_csdl = wing_geometry.evaluate(self._TE_points_para)
         
         y_mean_spanwise = (LE_points_csdl[:, 1] + TE_points_csdl[:, 1])/ 2 
         LE_points_csdl = LE_points_csdl.set(csdl.slice[:, 1], y_mean_spanwise)
