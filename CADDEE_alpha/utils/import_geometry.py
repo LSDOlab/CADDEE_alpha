@@ -72,8 +72,12 @@ def import_geometry(
 
         if rotate_to_body_fixed_frame:
             for function in geometry.functions.values():
-                coeffs = function.coefficients
-                function.coefficients = function.coefficients.set(csdl.slice[:, :, 0], value=coeffs[:, :, 0] * -1)
-                function.coefficients = function.coefficients.set(csdl.slice[:, :, 2], value=coeffs[:, :, 2] * -1)
+                coeffs = function.coefficients.value
+                coeffs[:,:,0] = -coeffs[:,:,0]
+                coeffs[:,:,2] = -coeffs[:,:,2]
+                function.coefficients = csdl.Variable(value=coeffs)
+                # coeffs = function.coefficients
+                # function.coefficients = function.coefficients.set(csdl.slice[:, :, 0], value=coeffs[:, :, 0] * -1)
+                # function.coefficients = function.coefficients.set(csdl.slice[:, :, 2], value=coeffs[:, :, 2] * -1)
 
         return geometry
