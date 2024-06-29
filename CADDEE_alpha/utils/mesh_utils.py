@@ -4,7 +4,8 @@ import time
 import lsdo_geo as lg
 
 
-def import_mesh(file, component:lg.Geometry, rescale:list=[1,1,1], remove_dupes=True, plot=False, grid_search_n:int=5, force_reprojection=False):
+def import_mesh(file, component:lg.Geometry, rescale:list=[1,1,1], remove_dupes=True, plot=False, grid_search_n:int=5, force_reprojection=False,
+                priority_inds=None, priority_eps=1e-4):
     '''
     Read mesh file (from any format meshio supports) and convert into mapped array + connectivity
     ------------
@@ -93,7 +94,8 @@ def import_mesh(file, component:lg.Geometry, rescale:list=[1,1,1], remove_dupes=
         if plot:
             ms.plot_meshes(ma_nodes, mesh_plot_types=['point_cloud'])
     else:
-        ma_nodes_parametric = component.project(nodes, grid_search_density_parameter=grid_search_n, plot=plot, force_reprojection=force_reprojection)
+        ma_nodes_parametric = component.project(nodes, grid_search_density_parameter=grid_search_n, plot=plot, force_reprojection=force_reprojection,
+                                                priority_inds=priority_inds, priority_eps=priority_eps)
         ma_nodes = component.evaluate(ma_nodes_parametric)
 
     return ma_nodes, ma_nodes_parametric, connectivity

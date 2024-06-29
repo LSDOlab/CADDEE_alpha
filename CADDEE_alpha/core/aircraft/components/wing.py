@@ -674,6 +674,7 @@ class Wing(Component):
             full_length_ribs:bool=False,
             finite_te:bool=True,
             export_wing_box:bool=False,
+            export_half_wing:bool=False,
             spanwise_multiplicity:int=1,
             exclute_te:bool=False,
         ):
@@ -968,7 +969,7 @@ class Wing(Component):
                 for j in range(chord_n-1):
                     top_parametric_points = ribs_top_array[i,j*num_rib_pts:(j+1)*num_rib_pts+1].tolist()
                     bottom_parametric_points = ribs_bottom_array[i,j*num_rib_pts:(j+1)*num_rib_pts+1].tolist()
-                    surfs = self._fit_surface(top_parametric_points+bottom_parametric_points, fitting_coords, rib_panel_function_space, i>0, False)
+                    surfs = self._fit_surface(top_parametric_points+bottom_parametric_points, fitting_coords, rib_panel_function_space, i>0 and not export_half_wing, False)
                     wing_box_surf_index = self._add_geometry(wing_box_surf_index, surfs, "Wing_rib_panel_", i, wing_box_geometry)
 
                 if i > 0:
@@ -990,9 +991,9 @@ class Wing(Component):
                         #                          ribs_top_array[i,j*num_rib_pts:(j+1)*num_rib_pts+1].tolist())
                         # bottom_parametric_points = (ribs_bottom_array[i-1,j*num_rib_pts:(j+1)*num_rib_pts+1].tolist() +
                         #                             ribs_bottom_array[i,j*num_rib_pts:(j+1)*num_rib_pts+1].tolist())
-                        top_surfs = self._fit_surface(top_parametric_points, fitting_coords, panel_function_space, True, False)
+                        top_surfs = self._fit_surface(top_parametric_points, fitting_coords, panel_function_space, not export_half_wing, False)
                         wing_box_surf_index = self._add_geometry(wing_box_surf_index, top_surfs, "Wing_top_panel_", i, wing_box_geometry)
-                        bottom_surfs = self._fit_surface(bottom_parametric_points, fitting_coords, panel_function_space, True, False)
+                        bottom_surfs = self._fit_surface(bottom_parametric_points, fitting_coords, panel_function_space, not export_half_wing, False)
                         wing_box_surf_index = self._add_geometry(wing_box_surf_index, bottom_surfs, "Wing_bottom_panel_", i, wing_box_geometry)
 
                     # create spar segments
@@ -1022,7 +1023,7 @@ class Wing(Component):
                         # bottom_parametric_points = [ribs_bottom_array[i-2,j*num_rib_pts], ribs_bottom_array[i-1,j*num_rib_pts], ribs_bottom_array[i,j*num_rib_pts]]
                         # fitting_coords = np.array([[0., 0.], [0.5, 0], [1., 0.], [0., 1.], [0.5, 1.], [1., 1.]])
                         fitting_coords = np.array(top_fitting_coords + bottom_fitting_coords)
-                        surfs = self._fit_surface(top_parametric_points+bottom_parametric_points, fitting_coords, spar_segment_function_space, True, False)
+                        surfs = self._fit_surface(top_parametric_points+bottom_parametric_points, fitting_coords, spar_segment_function_space, not export_half_wing, False)
                         wing_box_surf_index = self._add_geometry(wing_box_surf_index, surfs, "Wing_spar_segment_", i, wing_box_geometry)
 
         if export_wing_box:
