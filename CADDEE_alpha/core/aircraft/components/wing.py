@@ -137,6 +137,7 @@ class Wing(Component):
         if AR is not None and S_ref is not None:
             lam = taper_ratio
             span = (AR * S_ref)**0.5
+            self.parameters.span = span
             root_chord = 2 * S_ref/((1 + lam) * span)
             MAC = (2/3) * (1 + lam + lam**2) / (1 + lam) * root_chord
             self.quantities.drag_parameters.characteristic_length = MAC
@@ -284,7 +285,6 @@ class Wing(Component):
         #             for discretization_name_mesh, discretization_mesh in mesh.discretizations.items():
         #                 if discretization_mesh.identifier == discretization.identifier:
         #                     mesh.discretizations[discretization_name_mesh] = discretization
-
 
     def _make_ffd_block(self, 
             entities : List[lfs.Function], 
@@ -450,13 +450,17 @@ class Wing(Component):
             function.coefficients = function.coefficients + csdl.expand(rigid_body_translation, shape, action='j->ij')
 
         # Add the coefficients of all B-splines to the parameterization solver
-        parameterization_solver.add_parameter(chord_stretch_b_spline.coefficients)
-        parameterization_solver.add_parameter(span_stretch_b_spline.coefficients)
-        if self.parameters.sweep is not None:
-            parameterization_solver.add_parameter(sweep_translation_b_spline.coefficients)
-        if self.parameters.dihedral is not None:
-            parameterization_solver.add_parameter(dihedral_translation_b_spline.coefficients)
-        parameterization_solver.add_parameter(rigid_body_translation, cost=10)
+        if self.skip_ffd:
+            parameterization_solver.add_parameter(rigid_body_translation, cost=10)
+        
+        else:            
+            parameterization_solver.add_parameter(chord_stretch_b_spline.coefficients)
+            parameterization_solver.add_parameter(span_stretch_b_spline.coefficients)
+            if self.parameters.sweep is not None:
+                parameterization_solver.add_parameter(sweep_translation_b_spline.coefficients)
+            if self.parameters.dihedral is not None:
+                parameterization_solver.add_parameter(dihedral_translation_b_spline.coefficients)
+            parameterization_solver.add_parameter(rigid_body_translation, cost=10)
 
         return 
 
@@ -648,11 +652,12 @@ class Wing(Component):
         # Set up the ffd block
         self._setup_ffd_block(wing_ffd_block, parameterization_solver, plot=plot)
 
-        # Get wing geometric quantities (as csdl variable)
-        wing_geom_qts = self._extract_geometric_quantities_from_ffd_block()
+        if self.skip_ffd is False:
+            # Get wing geometric quantities (as csdl variable)
+            wing_geom_qts = self._extract_geometric_quantities_from_ffd_block()
 
-        # Define the geometric constraints
-        self._setup_ffd_parameterization(wing_geom_qts, ffd_geometric_variables)
+            # Define the geometric constraints
+            self._setup_ffd_parameterization(wing_geom_qts, ffd_geometric_variables)
         
         return 
         

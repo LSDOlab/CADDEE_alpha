@@ -22,6 +22,10 @@ class VectorizedAttributes:
         if hasattr(self.attribute_list[0], name):
             if callable(getattr(self.attribute_list[0], name)):
                 def method(*args, **kwargs):
+                    if 'vectorized' in kwargs:
+                        if not kwargs['vectorized']:
+                            kwargs.pop('vectorized')
+                            return getattr(self.attribute_list[0], name)(*args, **kwargs)
                     return_list = []
                     for comp in self.attribute_list:
                         output = getattr(comp, name)(*args, **kwargs)
@@ -86,6 +90,10 @@ class VectorizedComponent:
         if hasattr(self.comp_list[0], name):
             if callable(getattr(self.comp_list[0], name)):
                 def method(*args, **kwargs):
+                    if 'vectorized' in kwargs:
+                        if not kwargs['vectorized']:
+                            kwargs.pop('vectorized')
+                            return getattr(self.comp_list[0], name)(*args, **kwargs)
                     return_list = []
                     for i, comp in enumerate(self.comp_list):
                         args_i = [arg[i] for arg in args]
@@ -283,13 +291,15 @@ class Component:
     parent = None
 
     def __init__(self, geometry : Union[FunctionSet, None]=None, 
-                 **kwargs) -> None: 
+                 compute_surface_area: bool=True, skip_ffd: bool=False, **kwargs) -> None: 
         csdl.check_parameter(geometry, "geometry", types=(FunctionSet), allow_none=True)
         
         # Increment instance count and set private component name (will be obsolete in the future)
         Component._instance_count += 1
         self._name = f"component_{self._instance_count}"
         self._discretizations: DiscretizationsDict =  DiscretizationsDict()
+        self.compute_surface_area = compute_surface_area
+        self.skip_ffd = skip_ffd
 
         # set class attributes
         self.geometry : Union[FunctionSet, Geometry, None] = geometry
@@ -302,7 +312,8 @@ class Component:
             setattr(self.parameters, key, value)
         
         if geometry is not None and isinstance(geometry, FunctionSet):
-            self.quantities.surface_area = self._compute_surface_area(geometry=geometry)
+            if self.compute_surface_area:
+                self.quantities.surface_area = self._compute_surface_area(geometry=geometry)
             if "do_not_remake_ffd_block" in kwargs.keys():
                 pass
             else:

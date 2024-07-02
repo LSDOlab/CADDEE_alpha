@@ -1,5 +1,5 @@
 import csdl_alpha as csdl
-from CADDEE_alpha.core.component import Component, VectorizedComponent
+from CADDEE_alpha.core.component import Component, VectorizedComponent, VectorizedAttributes
 from CADDEE_alpha.utils.var_groups import AircaftStates, AtmosphericStates
 from typing import List, Union
 from CADDEE_alpha.utils.coordinate_transformations import perform_local_to_body_transformation
@@ -51,14 +51,26 @@ def compute_drag_build_up(
             if isinstance(comp, VectorizedComponent):
                 try:
                     S_wet = comp.quantities.surface_area.attribute_list[0]
-                    ff = comp.quantities.drag_parameters.form_factor.attribute_list[0]
-                    interference_factor = comp.quantities.drag_parameters.interference_factor[0]
-                    length = comp.quantities.drag_parameters.characteristic_length[0]
                 except:
-                    S_wet = comp.quantities.surface_area.attribute_list[0]
+                    S_wet = comp.quantities.surface_area[0]
+                try:
+                    ff = comp.quantities.drag_parameters.form_factor.attribute_list[0]
+                except:
                     ff = comp.quantities.drag_parameters.form_factor[0]
+                
+                try:
+                    interference_factor = comp.quantities.drag_parameters.interference_factor.attribute_list[0]
+                except:
                     interference_factor = comp.quantities.drag_parameters.interference_factor[0]
+
+                try:
+                    length = comp.quantities.drag_parameters.characteristic_length.attribute_list[0]
+                except:
                     length = comp.quantities.drag_parameters.characteristic_length[0]
+
+
+
+
 
             else:
                 S_wet = comp.quantities.surface_area
@@ -90,7 +102,7 @@ def compute_drag_build_up(
             Cf_fun_turb = comp.quantities.drag_parameters.cf_turbulent_fun
 
             if isinstance(comp, VectorizedComponent):
-                Cf = per_lam * Cf_fun_lam(Re)[0] + per_turb * Cf_fun_turb(Re, Mach)[0]
+                Cf = per_lam * Cf_fun_lam(Re, vectorized=False) + per_turb * Cf_fun_turb(Re, Mach, vectorized=False)
             else:
                 Cf = per_lam * Cf_fun_lam(Re) + per_turb * Cf_fun_turb(Re, Mach)
 
@@ -99,6 +111,12 @@ def compute_drag_build_up(
 
     if isinstance(S_ref, list):
         S_ref = S_ref[0]
+    elif isinstance(S_ref, VectorizedAttributes):
+        try:
+            S_ref = S_ref.attribute_list[0]
+        except:
+            S_ref = S_ref[0]
+
 
     Cd_0 = drag_area / S_ref
 
