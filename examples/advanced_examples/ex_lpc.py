@@ -52,7 +52,7 @@ do_climb = True
 do_descent = True
 do_structural_sizing = False
 
-recorder = csdl.Recorder(inline=True, expand_ops=True, debug=False)
+recorder = csdl.Recorder(inline=True, expand_ops=True, debug=True)
 recorder.start()
 
 caddee = cd.CADDEE()
@@ -80,12 +80,12 @@ def define_base_config(caddee : cd.CADDEE):
     # ::::::::::::::::::::::::::: Make components :::::::::::::::::::::::::::
     # ---------- Fuselage ----------
     fuselage_length = csdl.Variable(name="fuselage_length", shape=(1, ), value=9.144)
-    fuselage_length.set_as_design_variable(lower=0.9 * 9.144, upper=1.1*9.144, scaler=1e-1)
+    # fuselage_length.set_as_design_variable(lower=0.9 * 9.144, upper=1.1*9.144, scaler=1e-1)
     fuselage_geometry = aircraft.create_subgeometry(search_names=["Fuselage"])
-    fuselage = cd.aircraft.components.Fuselage(length=fuselage_length, 
-                                               max_height=1.688,
-                                               max_width=1.557,
-                                               geometry=fuselage_geometry)
+    fuselage = cd.aircraft.components.Fuselage(
+        length=fuselage_length, max_height=1.688,
+        max_width=1.557, geometry=fuselage_geometry, skip_ffd=True
+    )
     airframe.comps["fuselage"] = fuselage
 
     # ---------- Main wing ----------
@@ -99,7 +99,7 @@ def define_base_config(caddee : cd.CADDEE):
                                        geometry=wing_geometry,thickness_to_chord=0.17,
                                         thickness_to_chord_loc=0.4, tight_fit_ffd=True)
     # Make ribs and spars
-    wing.construct_ribs_and_spars(aircraft.geometry, num_ribs=8, LE_TE_interpolation="ellipse")
+    # wing.construct_ribs_and_spars(aircraft.geometry, num_ribs=8, LE_TE_interpolation="ellipse")
 
     # Wing material
     aluminum = cd.materials.IsotropicMaterial(name='aluminum', E=69E9, G=26E9, density=2700, nu=0.33)
@@ -131,12 +131,14 @@ def define_base_config(caddee : cd.CADDEE):
 
     # Horizontal tail
     tail_AR = csdl.Variable(name="tail_AR", shape=(1, ), value=4.3)
-    tail_AR.set_as_design_variable(lower=0.8 * 4.3, upper=1.2*4.3, scaler=5e-1)
+    # tail_AR.set_as_design_variable(lower=0.8 * 4.3, upper=1.2*4.3, scaler=5e-1)
     tail_S_ref = csdl.Variable(name="tail_S_ref", shape=(1, ), value=3.7)
-    tail_S_ref.set_as_design_variable(lower=0.8 * 3.7, upper=1.2*3.7, scaler=6e-1)
+    # tail_S_ref.set_as_design_variable(lower=0.8 * 3.7, upper=1.2*3.7, scaler=6e-1)
     h_tail_geometry = aircraft.create_subgeometry(search_names=["Tail_1"])
-    h_tail = cd.aircraft.components.Wing(AR=tail_AR, S_ref=tail_S_ref, 
-                                         taper_ratio=0.6, geometry=h_tail_geometry)
+    h_tail = cd.aircraft.components.Wing(
+        AR=tail_AR, S_ref=tail_S_ref, 
+        taper_ratio=0.6, geometry=h_tail_geometry, skip_ffd=True
+    )
     empennage.comps["h_tail"] = h_tail
     
     # Connect h-tail to fuselage
@@ -189,9 +191,11 @@ def define_base_config(caddee : cd.CADDEE):
     rear_outer_radius.set_as_design_variable(upper=1.8, lower=1.2, scaler=1)
 
     r_over_span_radius_1 = (front_inner_radius + front_outer_radius) / wing.parameters.span
+    r_over_span_radius_1.name = "front_radii_intersection_constraint"
     r_over_span_radius_1.set_as_constraint(upper=0.2, lower=0.2)
 
     r_over_span_radius_2 = (rear_inner_radius + rear_outer_radius) / wing.parameters.span
+    r_over_span_radius_2.name ="rear_radii_intersection_constraint"
     r_over_span_radius_2.set_as_constraint(upper=0.2, lower=0.2)
 
     radius_list = [front_outer_radius, rear_outer_radius, front_inner_radius, rear_inner_radius, 
@@ -243,7 +247,7 @@ def define_base_config(caddee : cd.CADDEE):
             wing, 40, 2, LE_interp="ellipse", TE_interp="ellipse", 
             spacing_spanwise="linear", ignore_camber=True, plot=False,
         )
-        wing_chord_surface.project_airfoil_points()
+        # wing_chord_surface.project_airfoil_points()
         vlm_mesh.discretizations["wing_chord_surface"] = wing_chord_surface
 
 
@@ -446,8 +450,7 @@ def define_mass_properties(caddee: cd.CADDEE):
         cruise = conditions["descent"]
         cruise_speed = cruise.parameters.speed[0]
     else:
-        cruise_speed = 67.
-
+        cruise_speed = csdl.Variable(shape=(1, ), value=61.24764871)
 
     # Get system component
     aircraft = base_config.system
@@ -717,6 +720,117 @@ def define_quasi_steady_transition(qst, mass_properties):
 
     return accel_qst, total_forces_qst, total_moments_qst
 
+# def define_hover_but_good(hover):
+#     hover_config = hover.configuration
+#     mesh_container = hover_config.mesh_container
+#     rotor_meshes = mesh_container["rotor_meshes"]
+
+#     # Re-evaluate meshes and compute nodal velocities
+#     hover.finalize_meshes()
+
+#     # BEM analysis
+#     bem_forces = []
+#     bem_moments = []
+#     rpm_list = []
+#     hover_power = {}
+
+#     rpm_stack = csdl.Variable(shape=(8, ), value=0)
+#     radius_stack = csdl.Variable(shape=(8, ), value=0)
+#     thrust_vector_stack = csdl.Variable(shape=(8, 3), value=0)
+#     thrust_origin_stack = csdl.Variable(shape=(8, 3), value=0)
+#     chord_profile_stack = csdl.Variable(shape=(8, 30), value=0)
+#     twist_profile_stack = csdl.Variable(shape=(8, 30), value=0)
+#     nodal_velocity_stack = csdl.Variable(shape=(8, 3), value=0)
+
+#     for i in range(8):
+#         rpm = csdl.Variable(name=f"hover_lift_rotor_{i}_rpm", shape=(1, ), value=hover_lift_rotor_rpms[i])
+#         rpm.set_as_design_variable(upper=1500, lower=500, scaler=1e-3)
+#         rpm_list.append(rpm)
+#         rpm_stack = rpm_stack.set(csdl.slice[i], rpm)
+
+#         rotor_mesh = rotor_meshes.discretizations[f"rotor_{i+1}_mesh"]
+#         mesh_vel = rotor_mesh.nodal_velocities
+#         nodal_velocity_stack = nodal_velocity_stack.set(
+#             slices=csdl.slice[i, :], value=mesh_vel.flatten()
+#         )
+
+#         radius_stack = radius_stack.set(csdl.slice[i], rotor_mesh.radius)
+
+#         thrust_vector_stack = thrust_vector_stack.set(
+#             csdl.slice[i, :], rotor_mesh.thrust_vector
+#         )
+
+#         thrust_origin_stack = thrust_origin_stack.set(
+#             csdl.slice[i, :], rotor_mesh.thrust_origin
+#         )
+
+#         chord_profile_stack = chord_profile_stack.set(
+#             csdl.slice[i, :], rotor_mesh.chord_profile
+#         )
+
+#         twist_profile_stack = twist_profile_stack.set(
+#             csdl.slice[i, :], rotor_mesh.twist_profile
+#         )
+
+
+#     # Run BEM model and store forces and moment
+#     bem_model = BEMModel(
+#         num_nodes=1, 
+#         airfoil_model=NACA4412MLAirfoilModel(),
+#         hover_mode=True,
+#     )
+
+#     power_list = []
+#     for i in csdl.frange(8):
+#         # Set up BEM model
+#         bem_inputs = RotorAnalysisInputs()
+#         bem_inputs.atmos_states = hover.quantities.atmos_states
+#         bem_inputs.ac_states = hover.quantities.ac_states
+#         mesh_parameters = RotorMeshParameters(
+#             thrust_origin = thrust_origin_stack[i, :],
+#             thrust_vector = thrust_vector_stack[i, :],
+#             chord_profile = chord_profile_stack[i, :],
+#             twist_profile = twist_profile_stack[i, :],
+#             num_azimuthal = 1,
+#             num_blades = 2,
+#             num_radial = 30,
+#             radius = radius_stack[i],
+#         )
+#         bem_inputs.mesh_parameters = mesh_parameters
+#         bem_inputs.rpm = rpm_stack[i]
+#         bem_inputs.mesh_velocity = nodal_velocity_stack[i, :].reshape((-1, 3))
+        
+#         bem_outputs = bem_model.evaluate(bem_inputs)
+#         bem_forces.append(bem_outputs.forces)
+#         bem_moments.append(bem_outputs.moments)
+#         power_list.append(bem_outputs.total_power)
+
+#     for power in enumerate(power_list):
+#         print(power.value)
+#         hover_power[f"lift_rotor_{i+1}"] = power
+
+#     exit()
+#     hover.quantities.rotor_power_dict = hover_power
+
+#     # total forces and moments
+#     total_forces_hover, total_moments_hover = hover.assemble_forces_and_moments(
+#         bem_forces, bem_moments
+#     )
+
+#     # eom
+#     eom_model = cd.aircraft.models.eom.SixDofEulerFlatEarthModel()
+#     accel_hover = eom_model.evaluate(
+#         total_forces=total_forces_hover,
+#         total_moments=total_moments_hover,
+#         ac_states=hover.quantities.ac_states,
+#         ac_mass_properties=hover_config.system.quantities.mass_properties
+#     )
+#     accel_norm_hover = accel_hover.accel_norm
+#     accel_norm_hover.name = "hover_trim_residual"
+#     accel_norm_hover.set_as_constraint(upper=0, lower=0)
+
+#     return accel_hover, total_forces_hover, total_moments_hover
+
 def define_hover(hover):
     hover_config = hover.configuration
     mesh_container = hover_config.mesh_container
@@ -748,7 +862,11 @@ def define_hover(hover):
         bem_inputs.mesh_velocity = mesh_vel
         
         # Run BEM model and store forces and moment
-        bem_model = BEMModel(num_nodes=1, airfoil_model=NACA4412MLAirfoilModel())
+        bem_model = BEMModel(
+            num_nodes=1, 
+            airfoil_model=NACA4412MLAirfoilModel(),
+            hover_mode=True,
+        )
         bem_outputs = bem_model.evaluate(bem_inputs)
         bem_forces.append(bem_outputs.forces)
         bem_moments.append(bem_outputs.moments)
@@ -770,6 +888,7 @@ def define_hover(hover):
         ac_mass_properties=hover_config.system.quantities.mass_properties
     )
     accel_norm_hover = accel_hover.accel_norm
+    accel_norm_hover.name = "hover_trim_residual"
     accel_norm_hover.set_as_constraint(upper=0, lower=0)
 
     return accel_hover, total_forces_hover, total_moments_hover
@@ -897,6 +1016,7 @@ def define_cruise(cruise):
         ac_mass_properties=cruise_config.system.quantities.mass_properties
     )
     accel_norm_cruise = accel_cruise.accel_norm
+    accel_norm_cruise.name = "cruise_trim"
     accel_norm_cruise.set_as_constraint(upper=0, lower=0, scaler=4)
     
     return accel_cruise, total_forces_cruise, total_moments_cruise
@@ -1116,8 +1236,8 @@ def define_analysis(caddee: cd.CADDEE):
         accel_descent, total_forces_descent, total_moments_descent = define_descent(descent)
 
 
-    accel_norm = accel_hover.accel_norm + accel_climb.accel_norm + accel_cruise.accel_norm
-    # accel_norm = accel_hover.accel_norm 
+    # accel_norm = accel_hover.accel_norm + accel_climb.accel_norm + accel_cruise.accel_norm
+    accel_norm = accel_hover.accel_norm 
     # accel_norm = accel_descent.accel_norm #(accel_climb.accel_norm**2 + accel_cruise.accel_norm**2)**0.5
     return accel_norm
 
@@ -1222,13 +1342,15 @@ if run_optimization:
         recorder=recorder,
     )
 
-    # jax_sim.check_totals(step_size=1e-3)
-    # py_sim.check_totals(step_size=1e-3)
+    py_sim.check_totals()
+
+    # jax_sim.check_totals(step_size=1e-5)
+    # py_sim.check_totals(step_size=1e-5)
     # exit()
 
-    prob = CSDLAlphaProblem(problem_name='LPC_trim', simulator=py_sim)
+    prob = CSDLAlphaProblem(problem_name='LPC_trim', simulator=jax_sim)
 
-    optimizer = SLSQP(prob, ftol=1e-8, maxiter=150, outputs=['x'])
+    optimizer = SLSQP(prob, ftol=1e-8, maxiter=50, outputs=['x'])
     # optimizer = IPOPT(prob, solver_options={'max_iter': 200, 'tol': 1e-7})
 
     # Solve your optimization problem

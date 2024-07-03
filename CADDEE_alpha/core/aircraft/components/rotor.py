@@ -246,6 +246,7 @@ class Rotor(Component):
         self._setup_ffd_block(fuselage_ffd_block, parameterization_solver)
 
         if self.skip_ffd is False:
+            print("DO ROTOR FFD")
             # Get fuselage geometric quantities
             r1, r2 = self._extract_geometric_quantities_from_ffd_block()
 

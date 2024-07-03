@@ -80,6 +80,7 @@ class Wing(Component):
         thickness_to_chord_loc: float = 0.3,
         geometry : Union[lfs.FunctionSet, None]=None,
         tight_fit_ffd: bool = False,
+        skip_ffd: bool = False,
         orientation: str = "horizontal",
         **kwargs
     ) -> None:
@@ -115,6 +116,7 @@ class Wing(Component):
         self._name = f"wing_{self._instance_count}"
         self._tight_fit_ffd = tight_fit_ffd
         self._orientation = orientation
+        self.skip_ffd = skip_ffd
         
         # Assign parameters
         self.parameters : WingParameters =  WingParameters(
@@ -653,6 +655,7 @@ class Wing(Component):
         self._setup_ffd_block(wing_ffd_block, parameterization_solver, plot=plot)
 
         if self.skip_ffd is False:
+            print("DO WING FFD")
             # Get wing geometric quantities (as csdl variable)
             wing_geom_qts = self._extract_geometric_quantities_from_ffd_block()
 
