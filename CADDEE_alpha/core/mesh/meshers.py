@@ -1185,7 +1185,7 @@ class ShellDiscretization(Discretization):
         return self
         
 def import_shell_mesh(file_name:str, 
-                      component,
+                      geometry,
                       plot=False,
                       rescale=[1,1,1],
                       grid_search_n = 1,
@@ -1195,7 +1195,9 @@ def import_shell_mesh(file_name:str,
     """
     Create a shell mesh for a component using a mesh file
     """
-    geometry = component.geometry
+    import CADDEE_alpha as cd
+    if isinstance(geometry, cd.Component):
+        geometry = geometry.geometry
     nodes, nodes_parametric, connectivity = import_mesh(file_name, 
                                                         geometry, 
                                                         rescale=rescale, 
