@@ -396,6 +396,7 @@ class Configuration:
             ):
             """Add component-level mass properties to the system-level mass properties. 
             Only called internally by 'assemble_system_mass_properties'"""
+            # first, compute total mass
             for comp_name, comp in comps.items():
                 mass_props = comp.quantities.mass_properties
                 # Check if mass_properties have been set/computed
@@ -403,15 +404,10 @@ class Configuration:
                     warnings.warn(f"Component {comp} has no mass properties")
 
                     system_mass = system_mass * 1
-                    system_cg = system_cg * 1
-                    system_inertia_tensor = system_inertia_tensor * 1
 
-                # otherwise add the mass properties
                 else:
                     m = mass_props.mass
-                    cg = mass_props.cg_vector
-                    it = mass_props.inertia_tensor
-
+                    
                     # if isinstance(m, csdl.Variable):
                     #     print(f"{comp_name} mass", m.value)
                     # else:
@@ -419,14 +415,66 @@ class Configuration:
 
                     if m is not None:
                         system_mass = system_mass + m
+                    
+            # second, compute total cg 
+            for comp_name, comp in comps.items():
+                mass_props = comp.quantities.mass_properties
+                if mass_props is None:
+                    system_cg = system_cg * 1
+                    system_inertia_tensor = system_inertia_tensor * 1
+
+                # otherwise add component cg contribution
+                else:
+                    cg = mass_props.cg_vector
+                    m = mass_props.mass
                     if cg is not None:
-                        system_cg = (system_cg * system_mass + m * cg) / (system_mass +  m)
+                        system_cg = system_cg + m * cg / system_mass
+           
+            # Third, compute total cg and inertia tensor
+            for comp_name, comp in comps.items():
+                mass_props = comp.quantities.mass_properties
+                if mass_props is None:
+                    system_inertia_tensor = system_inertia_tensor * 1
+
+                else:
+                    it = mass_props.inertia_tensor
+                    m = mass_props.mass
+
+                    x = system_cg[0]
+                    y = system_cg[1]
+                    z = system_cg[2]
+                    
+                    # use given mps
                     if it is not None:
+                        if m is None:
+                            raise Exception(f"Component {comp_name}, has an inertia tensor but no mass. Cannot apply parallel axis theorem.")
+                        # Apply parallel axis theorem to get inertias w.r.t to global cg
+                        ixx = it[0, 0] + m * (y**2 + z**2)
+                        ixy = it[0, 1] - m * (x * y)
+                        ixz = it[0, 2] - m * (x * z)
+                        iyx = ixy 
+                        iyy = it[1, 1] + m * (x**2 + z**2)
+                        iyz = it[1, 2] - m * (y * z)
+                        izx = ixz 
+                        izy = iyz 
+                        izz = it[2, 2] + m * (x**2  + y**2)
+
+                        it = csdl.Variable(shape=(3, 3), value=0.)
+                        it = it.set(csdl.slice[0, 0], ixx)
+                        it = it.set(csdl.slice[0, 1], ixy)
+                        it = it.set(csdl.slice[0, 2], ixz)
+                        it = it.set(csdl.slice[1, 0], iyx)
+                        it = it.set(csdl.slice[1, 1], iyy)
+                        it = it.set(csdl.slice[1, 2], iyz)
+                        it = it.set(csdl.slice[2, 0], izx)
+                        it = it.set(csdl.slice[2, 1], izy)
+                        it = it.set(csdl.slice[2, 2], izz)
+
                         system_inertia_tensor = system_inertia_tensor + it
-                    elif m is not None and cg is not None:
-                        x = cg[0]
-                        y = cg[1]
-                        z = cg[2]
+                    
+                    # point mass assumption
+                    elif m is not None: 
+                        # Apply parallel axis theorem to get inertias w.r.t to global cg
                         ixx = m * (y**2 + z**2)
                         ixy = -m * (x * y)
                         ixz = -m * (x * z)
@@ -538,32 +586,6 @@ class Configuration:
         from CADDEE_alpha.core.component import VectorizedAttributes, VectorizedComponent
         # Update mass properties for any copied configurations
         if update_copies:
-            # def _print_existing_mps(comp: Component):
-            #     m = comp.quantities.mass_properties.mass
-            #     cg_vector = comp.quantities.mass_properties.cg_vector
-            #     inertia_tensor = comp.quantities.mass_properties.inertia_tensor
-
-            #     if isinstance(m, csdl.Variable):
-            #         print(m.value)
-            #     else:
-            #         print(m)
-            #     if isinstance(cg_vector, csdl.Variable):
-            #         print(cg_vector.value)
-            #     else:
-            #         print(cg_vector)
-
-            #     if isinstance(inertia_tensor, csdl.Variable):
-            #         print(inertia_tensor.value)
-            #     else:
-            #         print(inertia_tensor)
-
-            #     print("\n")
-
-            #     if comp.comps:
-            #         for comp in comp.comps.values():
-            #             _print_existing_mps(comp)
-
-            # _print_existing_mps(system)
 
             def _update_comp_copy_mps(component_copy: Component, original_component: Component):
                 # Get original mass properties
@@ -668,7 +690,7 @@ class Configuration:
         
         return
 
-    def setup_geometry(self, run_ffd : bool=True, plot : bool=False):
+    def setup_geometry(self, run_ffd : bool=True, plot : bool=False, recorder: csdl.Recorder =None):
         """Run the geometry parameterization solver. 
         
         Note: This is only allowed on the based configuration.
@@ -727,6 +749,9 @@ class Configuration:
 
         # Evalauate the parameterization solver
         t1 = time.time()
+        if recorder is not None:
+            print("Setting 'inline' to false for inner optimization")
+            recorder.inline = False
         parameterization_solver.evaluate(ffd_geometric_variables)
         t2 = time.time()
         print("time for inner optimization", t2-t1)

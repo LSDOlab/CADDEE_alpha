@@ -7,6 +7,7 @@ class Condition:
         self.parameters : dict = {}
         self._configuration : Configuration = None
         self._vectorized_configuration : VectorizedConfig = None
+        self.quantities : dict = {}
 
     @property
     def configuration(self):

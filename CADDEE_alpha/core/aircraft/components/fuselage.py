@@ -178,10 +178,13 @@ class Fuselage(Component):
             function.coefficients = function.coefficients + csdl.expand(rigid_body_translation, shape, action='j->ij')
 
         # Add (B-spline) coefficients to parameterization solver
-        parameterization_solver.add_parameter(length_stretch_b_spline.coefficients)
-        parameterization_solver.add_parameter(height_stretch_b_spline.coefficients)
-        parameterization_solver.add_parameter(width_stretch_b_spline.coefficients)
-        parameterization_solver.add_parameter(rigid_body_translation, cost=1000)
+        if self.skip_ffd:
+            parameterization_solver.add_parameter(rigid_body_translation, cost=1000)
+        else:
+            parameterization_solver.add_parameter(length_stretch_b_spline.coefficients)
+            parameterization_solver.add_parameter(height_stretch_b_spline.coefficients)
+            parameterization_solver.add_parameter(width_stretch_b_spline.coefficients)
+            parameterization_solver.add_parameter(rigid_body_translation, cost=1000)
 
         return
 
@@ -249,10 +252,11 @@ class Fuselage(Component):
         # Set up the ffd block
         self._setup_ffd_block(fuselage_ffd_block, parameterization_solver)
 
-        # Get fuselage geometric quantities
-        fuselage_geom_qts = self._extract_geometric_quantities_from_ffd_block()
+        if self.skip_ffd is False:
+            # Get fuselage geometric quantities
+            fuselage_geom_qts = self._extract_geometric_quantities_from_ffd_block()
 
-        # Define geometric constraints
-        self._setup_ffd_parameterization(fuselage_geom_qts, ffd_geometric_variables)
+            # Define geometric constraints
+            self._setup_ffd_parameterization(fuselage_geom_qts, ffd_geometric_variables)
         
         return

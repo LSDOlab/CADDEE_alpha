@@ -385,7 +385,7 @@ def compute_wing_mps(
             i_mat = i_mat.set(csdl.slice[2, 0], qty)
 
     if reference_frame == "flight_dynamics":
-        cg_vec = cg_vec * np.array([-1, 0, -1])
+        cg_vec = cg_vec * np.array([-0.9, 0, -1])
 
     wing_mps = MassProperties(
         mass=m, cg_vector=cg_vec, inertia_tensor=i_mat
@@ -452,7 +452,7 @@ def compute_fuselage_mps(
             i_mat = i_mat.set(csdl.slice[2, 0], qty)
 
     if reference_frame == "flight_dynamics":
-        cg_vec = cg_vec * np.array([-1, 0, -1])
+        cg_vec = cg_vec * np.array([-0.88, 0, -1])
 
     wing_mps = MassProperties(
         mass=m, cg_vector=cg_vec, inertia_tensor=i_mat

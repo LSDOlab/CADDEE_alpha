@@ -204,9 +204,12 @@ class Rotor(Component):
 
 
         # Add (B-spline) coefficients to parameterization solver
-        parameterization_solver.add_parameter(non_principal_1_b_spline.coefficients)
-        parameterization_solver.add_parameter(non_principal_2_b_spline.coefficients)
-        parameterization_solver.add_parameter(rigid_body_translation)
+        if self.skip_ffd:
+            parameterization_solver.add_parameter(rigid_body_translation)
+        else:
+            parameterization_solver.add_parameter(non_principal_1_b_spline.coefficients)
+            parameterization_solver.add_parameter(non_principal_2_b_spline.coefficients)
+            parameterization_solver.add_parameter(rigid_body_translation)
 
         return
     
@@ -242,11 +245,13 @@ class Rotor(Component):
         # Set up the ffd block
         self._setup_ffd_block(fuselage_ffd_block, parameterization_solver)
 
-        # Get fuselage geometric quantities
-        r1, r2 = self._extract_geometric_quantities_from_ffd_block()
+        if self.skip_ffd is False:
+            print("DO ROTOR FFD")
+            # Get fuselage geometric quantities
+            r1, r2 = self._extract_geometric_quantities_from_ffd_block()
 
-        # Define geometric constraints
-        self._setup_ffd_parameterization(r1, r2, ffd_geometric_variables)
+            # Define geometric constraints
+            self._setup_ffd_parameterization(r1, r2, ffd_geometric_variables)
         
         return
 
