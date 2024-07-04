@@ -808,7 +808,9 @@ def make_1d_box_beam(
     spacing: str = "linear",
     plot: bool = False,
     grid_search_density: int = 10,
-    project_spars = False,
+    project_spars: bool = False,
+    make_half_beam: bool = False,
+    LE_TE_interp: str = None,
 ) -> OneDBoxBeam:
     """Create a 1-D box beam mesh for a wing-like component. It is NOT intended
     to work for creating beam-mesh of fuselage-like or vertical tail like components.
@@ -882,13 +884,72 @@ def make_1d_box_beam(
         if spacing == "linear":
             num_spanwise_half = int(num_beam_nodes / 2)
             LE_points_1 = np.linspace(LE_left_point, LE_mid_point, num_spanwise_half + 1)
-            
             LE_points_2 = np.linspace(LE_mid_point, LE_right_point, num_spanwise_half + 1)
-            LE_points = np.vstack((LE_points_1, LE_points_2[1:, :]))
-
+            
             TE_points_1 = np.linspace(TE_left_point, TE_mid_point, num_spanwise_half + 1)
             TE_points_2 = np.linspace(TE_mid_point, TE_right_point, num_spanwise_half + 1)
-            TE_points = np.vstack((TE_points_1, TE_points_2[1:, :]))
+
+            if LE_TE_interp is not None:
+                array_to_project_LE = np.zeros((num_beam_nodes, 3))
+                y_LE = np.array([LE_left_point[1], LE_mid_point[1], LE_right_point[1]])
+                z_LE = np.array([LE_left_point[2], LE_mid_point[2], LE_right_point[2]])
+                fz_LE = interp1d(y_LE, z_LE, kind="linear")
+
+                # Set up equation for an ellipse
+                h_LE = LE_left_point[0]
+                b_LE = 2 * (h_LE - LE_mid_point[0]) # Semi-minor axis
+                a_LE = LE_right_point[1] # semi-major axis
+                
+                interp_y_1_LE = np.linspace(y_LE[0], y_LE[1], num_spanwise_half+1)
+                interp_y_2_LE = np.linspace(y_LE[1], y_LE[2], num_spanwise_half+1)
+
+                array_to_project_LE[0:num_spanwise_half+1, 0] = (b_LE**2 * (1 - interp_y_1_LE**2/a_LE**2))**0.5 + h_LE
+                array_to_project_LE[0:num_spanwise_half+1, 1] = interp_y_1_LE
+                array_to_project_LE[0:num_spanwise_half+1, 2] = fz_LE(interp_y_1_LE)
+
+                array_to_project_LE[num_spanwise_half:, 0] = (b_LE**2 * (1 - interp_y_2_LE**2/a_LE**2))**0.5 + h_LE
+                array_to_project_LE[num_spanwise_half:, 1] = interp_y_2_LE
+                array_to_project_LE[num_spanwise_half:, 2] = fz_LE(interp_y_2_LE)
+
+                LE_points = array_to_project_LE
+
+                array_to_project_TE = np.zeros((num_beam_nodes, 3))
+                y_TE = np.array([TE_left_point[1], TE_mid_point[1], TE_right_point[1]])
+                z_TE = np.array([TE_left_point[2], TE_mid_point[2], TE_right_point[2]])
+                fz_TE = interp1d(y_TE, z_TE, kind="linear")
+
+                # Set up equation for an ellipse
+                h_TE = TE_left_point[0]
+                b_TE = 2 * (h_TE - TE_mid_point[0]) # Semi-minor axis
+                a_TE = TE_right_point[1] # semi-major axis
+                
+                interp_y_1_TE = np.linspace(y_TE[0], y_TE[1], num_spanwise_half+1)
+                interp_y_2_TE = np.linspace(y_TE[1], y_TE[2], num_spanwise_half+1)
+
+                array_to_project_TE[0:num_spanwise_half+1, 0] = -(b_TE**2 * (1 - interp_y_1_TE**2/a_TE**2))**0.5 + h_TE
+                array_to_project_TE[0:num_spanwise_half+1, 1] = interp_y_1_TE
+                array_to_project_TE[0:num_spanwise_half+1, 2] = fz_TE(interp_y_1_TE)
+
+                array_to_project_TE[num_spanwise_half:, 0] = -(b_TE**2 * (1 - interp_y_2_TE**2/a_TE**2))**0.5 + h_TE
+                array_to_project_TE[num_spanwise_half:, 1] = interp_y_2_TE
+                array_to_project_TE[num_spanwise_half:, 2] = fz_TE(interp_y_2_TE)
+
+                TE_points = array_to_project_TE
+
+                if make_half_beam:
+                    LE_points = LE_points[num_spanwise_half:, :]
+                    TE_points = TE_points[num_spanwise_half:, :]
+            
+            else:
+                LE_points = np.vstack((LE_points_1, LE_points_2[1:, :]))
+                TE_points = np.vstack((TE_points_1, TE_points_2[1:, :]))
+
+                if make_half_beam:
+                    LE_points = LE_points_2
+                    TE_points = TE_points_2
+                else:
+                    LE_points = np.vstack((LE_points_1, LE_points_2[1:, :]))
+                    TE_points = np.vstack((TE_points_1, TE_points_2[1:, :]))
         
         elif spacing == "cosine":
             num_spanwise_half = int(num_beam_nodes / 2)
@@ -899,9 +960,21 @@ def make_1d_box_beam(
             TE_points_1 = cosine_spacing(num_spanwise_half + 1, np.linspace(TE_mid_point, TE_left_point, num_spanwise_half + 1))
             TE_points_2 = cosine_spacing(num_spanwise_half + 1, np.linspace(TE_mid_point, TE_right_point, num_spanwise_half + 1), flip=True)
             TE_points = np.vstack((TE_points_1, TE_points_2[1:, :]))
+
+            if make_half_beam:
+                LE_points = LE_points_2
+                TE_points = TE_points_2
+            else:
+                LE_points = np.vstack((LE_points_1, LE_points_2[1:, :]))
+                TE_points = np.vstack((TE_points_1, TE_points_2[1:, :]))
+        
         else:
             raise NotImplementedError
     
+
+    if make_half_beam:
+        num_beam_nodes = num_beam_nodes // 2 + 1
+
     LE_points_parametric = wing_geometry.project(LE_points, plot=plot, grid_search_density_parameter=grid_search_density)
     TE_points_parametric = wing_geometry.project(TE_points, plot=plot, grid_search_density_parameter=grid_search_density)
 
@@ -916,9 +989,14 @@ def make_1d_box_beam(
         np.ones((num_beam_nodes, )) * norm_node_center,
     ).reshape((num_beam_nodes, 3))
 
-    beam_width_raw = csdl.norm((LE_points_csdl - TE_points_csdl) * norm_beam_width, axes=(1, ))
-    beam_width_nodal = make_mesh_symmetric(beam_width_raw, num_beam_nodes, spanwise_index=None)
-    beam_width = (beam_width_nodal[0:-1] + beam_width_nodal[1:]) / 2
+    if make_half_beam:
+        beam_width_raw = csdl.norm((LE_points_csdl - TE_points_csdl) * norm_beam_width, axes=(1, ))
+        beam_width_nodal = beam_width_raw
+        beam_width = beam_width_raw
+    else:
+        beam_width_raw = csdl.norm((LE_points_csdl - TE_points_csdl) * norm_beam_width, axes=(1, ))
+        beam_width_nodal = make_mesh_symmetric(beam_width_raw, num_beam_nodes, spanwise_index=None)
+        beam_width = (beam_width_nodal[0:-1] + beam_width_nodal[1:]) / 2
 
     if project_spars:
         # use the spars to get the beam width
@@ -942,11 +1020,17 @@ def make_1d_box_beam(
     node_bottom = wing_geometry.evaluate(node_bottom_parametric).reshape((num_beam_nodes, 3))
 
     # Beam nodes will be at the center vertically (i.e., at the mid-point between upper and lower wing surface)
-    beam_nodes = make_mesh_symmetric((node_top + node_bottom) / 2, num_beam_nodes)
+    if make_half_beam:
+        beam_nodes = (node_top + node_bottom) / 2
+    else:
+        beam_nodes = make_mesh_symmetric((node_top + node_bottom) / 2, num_beam_nodes)
 
     beam_height_raw = csdl.norm((node_top - node_bottom), axes=(1, ))
-    beam_height_nodal = make_mesh_symmetric(beam_height_raw, num_beam_nodes, spanwise_index=None)
-    beam_height = (beam_height_nodal[0:-1] + beam_height_nodal[1:]) / 2
+    if make_half_beam:
+        beam_height = (beam_height_raw[0:-1] + beam_height_raw[1:]) / 2
+    else:
+        beam_height_nodal = make_mesh_symmetric(beam_height_raw, num_beam_nodes, spanwise_index=None)
+        beam_height = (beam_height_nodal[0:-1] + beam_height_nodal[1:]) / 2
 
     # Compute top and bottom thicknesses of the beam
     material_properties = wing_comp.quantities.material_properties

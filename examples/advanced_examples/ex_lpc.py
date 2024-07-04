@@ -6,12 +6,14 @@ from VortexAD.core.vlm.vlm_solver import vlm_solver
 from BladeAD.core.airfoil.ml_airfoil_models.NACA_4412.naca_4412_model import NACA4412MLAirfoilModel
 from BladeAD.utils.parameterization import BsplineParameterization
 from BladeAD.core.BEM.bem_model import BEMModel
-from BladeAD.utils.var_groups import RotorAnalysisInputs
+from BladeAD.utils.var_groups import RotorAnalysisInputs, RotorMeshParameters
 from lsdo_airfoil.core.three_d_airfoil_aero_model import ThreeDAirfoilMLModelMaker
 import lsdo_function_spaces as lfs
+import aframe as af
+from ex_lpc_materials import construct_bay_condition, construct_thickness_function
 
 
-# :::::::::::::::::::::::::::::::::: design variables ::::::::::::::::::::::::::::::::::
+# region:::::::::::::::::::::::::::::::::: design variables ::::::::::::::::::::::::::::::::::
 qst_tail_deflection_dvs = np.array([-1.84169007e-07 , 1.70793925e-03, -8.42541605e-02 ,-7.86878417e-02,
  -3.21922047e-02 , -5.68630747e-02 ,-4.78010192e-02, -3.73583355e-02,
  -3.56211004e-02 , -3.53845675e-02])
@@ -44,21 +46,29 @@ descent_tail_deflection = -0.00571552
 climb_pusher_rpm = 2123.12337628
 cruise_pusher_rpm = 1858.81612397
 descent_pusher_rpm = 1672.01908959
+# endregion
 
-do_qst = True
+
+max_stress = 350E6 # Pa
+max_displacement = 0.33 # m
+minimum_thickness = 0.0003 # m
+initial_thickness = 5*minimum_thickness
+
+do_qst = False
 do_hover = True
 do_cruise = True
 do_climb = True
 do_descent = True
 do_structural_sizing = False
+do_post_process = True
 
-recorder = csdl.Recorder(inline=True, expand_ops=True, debug=True)
+recorder = csdl.Recorder(inline=True, expand_ops=True, debug=False)
 recorder.start()
 
 caddee = cd.CADDEE()
 
 make_meshes = True
-run_ffd = True
+run_ffd = False
 run_optimization = True
 
 
@@ -99,25 +109,30 @@ def define_base_config(caddee : cd.CADDEE):
                                        geometry=wing_geometry,thickness_to_chord=0.17,
                                         thickness_to_chord_loc=0.4, tight_fit_ffd=True)
     # Make ribs and spars
-    # wing.construct_ribs_and_spars(aircraft.geometry, num_ribs=8, LE_TE_interpolation="ellipse")
+    wing.construct_ribs_and_spars(aircraft.geometry, num_ribs=8, LE_TE_interpolation="ellipse")
 
     # Wing material
     aluminum = cd.materials.IsotropicMaterial(name='aluminum', E=69E9, G=26E9, density=2700, nu=0.33)
-    
-    # Aerodynamic parameters for drag build up
-    wing.quantities.drag_parameters.percent_laminar = 70
-    wing.quantities.drag_parameters.percent_turbulent = 30
+
+    construct_thickness_function(
+        wing=wing, num_ribs=8, top_array=top_array, bottom_array=bottom_array, material=aluminum, 
+        initial_thickness=initial_thickness, minimum_thickness=minimum_thickness,    
+    )
     
     # Function spaces
     # Thickness
     thickness_space = wing_geometry.create_parallel_space(lfs.ConstantSpace(2))
-    thickness_var, thickness_function = thickness_space.initialize_function(1, value=0.001)
-    wing.quantities.material_properties.set_material(aluminum, thickness_function)
+    thickness_var, thickness_function = thickness_space.initialize_function(1, value=0.005)
+    wing.quantities.material_properties.set_material(aluminum, thickness=None)
 
     # Pressure space
     pressure_function_space = lfs.IDWFunctionSpace(num_parametric_dimensions=2, order=6, grid_size=(240, 40), conserve=False)
     indexed_pressue_function_space = wing.geometry.create_parallel_space(pressure_function_space)
     wing.quantities.pressure_space = indexed_pressue_function_space
+
+    # Aerodynamic parameters for drag build up
+    wing.quantities.drag_parameters.percent_laminar = 70
+    wing.quantities.drag_parameters.percent_turbulent = 30
 
     # Component hierarchy
     airframe.comps["wing"] = wing
@@ -256,13 +271,15 @@ def define_base_config(caddee : cd.CADDEE):
         )
         vlm_mesh.discretizations["tail_chord_surface"] = tail_surface
 
-        # # Beam nodal mesh
-        # beam_mesh = cd.mesh.BeamMesh()
-        # num_beam_nodes = 21
-        # wing_box_beam = cd.mesh.make_1d_box_beam(wing, num_beam_nodes, norm_node_center=0.5, norm_beam_width=0.5, project_spars=True, plot=False)
-        # beam_mesh.discretizations["wing_box_beam"] = wing_box_beam
+        # Beam nodal mesh
+        beam_mesh = cd.mesh.BeamMesh()
+        num_beam_nodes = 21
+        wing_box_beam = cd.mesh.make_1d_box_beam(
+            wing, num_beam_nodes, norm_node_center=0.5, 
+            norm_beam_width=0.5, project_spars=True, plot=False, make_half_beam=True, LE_TE_interp="ellipse"
+        )
+        beam_mesh.discretizations["wing_box_beam"] = wing_box_beam
 
-        # lpc_geom.plot_meshes([wing_box_beam.nodal_coordinates])
         # rotors
         num_radial = 30
         num_cp = 4
@@ -327,7 +344,7 @@ def define_base_config(caddee : cd.CADDEE):
         mesh_container = base_config.mesh_container
         mesh_container["vlm_mesh"] = vlm_mesh
         mesh_container["rotor_meshes"] = rotor_meshes
-        
+        mesh_container["beam_mesh"] = beam_mesh
 
     return
 
@@ -470,6 +487,32 @@ def define_mass_properties(caddee: cd.CADDEE):
     wing = airframe.comps["wing"]
     wing_area = wing.parameters.S_ref
     wing_AR = wing.parameters.AR
+
+    beam_mesh = base_config.mesh_container["beam_mesh"]
+    wing_box = beam_mesh.discretizations["wing_box_beam"]
+    aluminum = af.IsotropicMaterial(name='aluminum', E=69E9, G=26E9, density=2700, nu=0.33)
+
+    box_cs = af.CSBox(
+        ttop=wing_box.top_skin_thickness,
+        tbot=wing_box.bottom_skin_thickness,
+        tweb=wing_box.shear_web_thickness,
+        height=wing_box.beam_height,
+        width=wing_box.beam_width,
+    )
+    beam = af.Beam(
+        name="wing_beam", 
+        mesh=wing_box.nodal_coordinates, 
+        cs=box_cs,
+        material=aluminum,
+    )
+
+    wing_mass_model = af.FrameMass()
+    wing_mass_model.add_beam(beam)
+    wing_mps = wing_mass_model.evaluate()
+
+    print(wing_mps.cg.value)
+    print(wing_mps.mass.value)
+    exit()
 
     # Fuselage
     fuselage = airframe.comps["fuselage"]
@@ -659,8 +702,9 @@ def define_quasi_steady_transition(qst, mass_properties):
     front_outer_rpm.set_as_design_variable(lower=100, upper=2000, scaler=1e-3)
     rear_outer_rpm = csdl.Variable(name="qst_rear_outer_rpm", shape=(num_nodes, ), value=qst_rear_outer_rotor_rpm_dvs)
     rear_outer_rpm.set_as_design_variable(lower=100, upper=2000, scaler=1e-3)
-
+    
     rpm_list = [front_outer_rpm, rear_outer_rpm, front_inner_rpm, rear_inner_rpm, front_inner_rpm, rear_inner_rpm, front_outer_rpm, rear_outer_rpm]
+    
     for i in range(8):
         rotor_mesh = rotor_meshes.discretizations[f"rotor_{i+1}_mesh"]
         mesh_vel = rotor_mesh.nodal_velocities
@@ -675,6 +719,75 @@ def define_quasi_steady_transition(qst, mass_properties):
         lift_rotor_forces.append(lift_rotor_outputs.forces)
         lift_rotor_moments.append(lift_rotor_outputs.moments)
         qst_power[f"lift_rotor_{i}"] = lift_rotor_outputs.total_power
+
+    # rpm_stack = csdl.Variable(shape=(8, 10), value=0)
+    # radius_stack = csdl.Variable(shape=(8, ), value=0)
+    # thrust_vector_stack = csdl.Variable(shape=(8, 3), value=0)
+    # thrust_origin_stack = csdl.Variable(shape=(8, 3), value=0)
+    # chord_profile_stack = csdl.Variable(shape=(8, 30), value=0)
+    # twist_profile_stack = csdl.Variable(shape=(8, 30), value=0)
+    # nodal_velocity_stack = csdl.Variable(shape=(8, 10, 3), value=0)
+
+    # # Assemble BEM inputs into csdl variables for frange
+    # for i in range(8):
+    #     rpm_stack = rpm_stack.set(csdl.slice[i], rpm_list[i])
+
+    #     rotor_mesh = rotor_meshes.discretizations[f"rotor_{i+1}_mesh"]
+    #     mesh_vel = rotor_mesh.nodal_velocities
+    #     nodal_velocity_stack = nodal_velocity_stack.set(
+    #         slices=csdl.slice[i,:, :], value=mesh_vel
+    #     )
+
+    #     radius_stack = radius_stack.set(csdl.slice[i], rotor_mesh.radius[0])
+
+    #     thrust_vector_stack = thrust_vector_stack.set(
+    #         csdl.slice[i, :], rotor_mesh.thrust_vector[0]
+    #     )
+
+    #     thrust_origin_stack = thrust_origin_stack.set(
+    #         csdl.slice[i, :], rotor_mesh.thrust_origin[0]
+    #     )
+
+    #     chord_profile_stack = chord_profile_stack.set(
+    #         csdl.slice[i, :], rotor_mesh.chord_profile[0]
+    #     )
+
+    #     twist_profile_stack = twist_profile_stack.set(
+    #         csdl.slice[i, :], rotor_mesh.twist_profile[0]
+    #     )
+
+    # lift_rotor_model = BEMModel(num_nodes=num_nodes, airfoil_model=NACA4412MLAirfoilModel())
+    # stacked_forces = csdl.Variable(shape=(8, 10, 3), value=0)
+    # stacked_moments = csdl.Variable(shape=(8, 10, 3), value=0)
+    # stacked_power = csdl.Variable(shape=(8, 10), value=0.)
+    # for i in csdl.frange(8):
+    #     # Set up BEM model
+    #     lift_rotor_inputs = RotorAnalysisInputs()
+    #     lift_rotor_inputs.atmos_states = qst.quantities.atmos_states
+    #     lift_rotor_inputs.ac_states = qst.quantities.ac_states
+    #     mesh_parameters = RotorMeshParameters(
+    #         thrust_origin = thrust_origin_stack[i, :],
+    #         thrust_vector = thrust_vector_stack[i, :],
+    #         chord_profile = chord_profile_stack[i, :],
+    #         twist_profile = twist_profile_stack[i, :],
+    #         num_azimuthal = 1,
+    #         num_blades = 2,
+    #         num_radial = 30,
+    #         radius = radius_stack[i],
+    #     )
+    #     lift_rotor_inputs.mesh_parameters = mesh_parameters
+    #     lift_rotor_inputs.rpm = rpm_stack[i]
+    #     lift_rotor_inputs.mesh_velocity = nodal_velocity_stack[i, :, :].reshape((-1, 3))
+        
+    #     lift_rotor_outputs = lift_rotor_model.evaluate(lift_rotor_inputs)
+    #     stacked_forces = stacked_forces.set(csdl.slice[i, :, :], lift_rotor_outputs.forces)
+    #     stacked_moments = stacked_moments.set(csdl.slice[i, :, :], lift_rotor_outputs.moments)
+    #     stacked_power = stacked_power.set(csdl.slice[i, :], lift_rotor_outputs.total_power)
+
+    # for i in range(8):
+    #     qst_power[f"lift_rotor_{i+1}"] = stacked_power[i]
+    #     lift_rotor_forces.append(stacked_forces[i, :].reshape((-1, 3)))
+    #     lift_rotor_moments.append(stacked_moments[i, :].reshape((-1, 3)))
 
     qst.quantities.rotor_power_dict = qst_power
 
@@ -742,6 +855,7 @@ def define_quasi_steady_transition(qst, mass_properties):
 #     twist_profile_stack = csdl.Variable(shape=(8, 30), value=0)
 #     nodal_velocity_stack = csdl.Variable(shape=(8, 3), value=0)
 
+#     # Assemble BEM inputs into csdl variables for frange
 #     for i in range(8):
 #         rpm = csdl.Variable(name=f"hover_lift_rotor_{i}_rpm", shape=(1, ), value=hover_lift_rotor_rpms[i])
 #         rpm.set_as_design_variable(upper=1500, lower=500, scaler=1e-3)
@@ -780,7 +894,10 @@ def define_quasi_steady_transition(qst, mass_properties):
 #         hover_mode=True,
 #     )
 
-#     power_list = []
+#     stacked_forces = csdl.Variable(shape=(8, 3), value=0)
+#     stacked_moments = csdl.Variable(shape=(8, 3), value=0)
+#     stacked_power = csdl.Variable(shape=(8, ), value=0.)
+#     # Evaluate same BEM model using frange
 #     for i in csdl.frange(8):
 #         # Set up BEM model
 #         bem_inputs = RotorAnalysisInputs()
@@ -801,15 +918,15 @@ def define_quasi_steady_transition(qst, mass_properties):
 #         bem_inputs.mesh_velocity = nodal_velocity_stack[i, :].reshape((-1, 3))
         
 #         bem_outputs = bem_model.evaluate(bem_inputs)
-#         bem_forces.append(bem_outputs.forces)
-#         bem_moments.append(bem_outputs.moments)
-#         power_list.append(bem_outputs.total_power)
+#         stacked_forces = stacked_forces.set(csdl.slice[i, :], bem_outputs.forces.flatten())
+#         stacked_moments = stacked_moments.set(csdl.slice[i, :], bem_outputs.moments.flatten())
+#         stacked_power = stacked_power.set(csdl.slice[i], bem_outputs.total_power)
 
-#     for power in enumerate(power_list):
-#         print(power.value)
-#         hover_power[f"lift_rotor_{i+1}"] = power
+#     for i in range(8):
+#         hover_power[f"lift_rotor_{i+1}"] = stacked_power[i]
+#         bem_forces.append(stacked_forces[i, :].reshape((-1, 3)))
+#         bem_moments.append(stacked_moments[i, :].reshape((-1, 3)))
 
-#     exit()
 #     hover.quantities.rotor_power_dict = hover_power
 
 #     # total forces and moments
@@ -871,7 +988,6 @@ def define_hover(hover):
         bem_forces.append(bem_outputs.forces)
         bem_moments.append(bem_outputs.moments)
         hover_power[f"lift_rotor_{i+1}"] = bem_outputs.total_power
-
     hover.quantities.rotor_power_dict = hover_power
 
     # total forces and moments
@@ -1236,8 +1352,8 @@ def define_analysis(caddee: cd.CADDEE):
         accel_descent, total_forces_descent, total_moments_descent = define_descent(descent)
 
 
-    # accel_norm = accel_hover.accel_norm + accel_climb.accel_norm + accel_cruise.accel_norm
-    accel_norm = accel_hover.accel_norm 
+    accel_norm = accel_hover.accel_norm + accel_climb.accel_norm + accel_cruise.accel_norm
+    # accel_norm = accel_qst.accel_norm 
     # accel_norm = accel_descent.accel_norm #(accel_climb.accel_norm**2 + accel_cruise.accel_norm**2)**0.5
     return accel_norm
 
@@ -1320,7 +1436,8 @@ define_mass_properties(caddee)
 
 accel_norm = define_analysis(caddee)
 
-define_post_proecss(caddee)
+if do_post_process:
+    define_post_proecss(caddee)
 
 recorder.count_operations()
 # recorder.count_origins(n=20, mode="line")
@@ -1328,8 +1445,7 @@ recorder.count_operations()
 
 if run_optimization:
     from modopt import CSDLAlphaProblem
-    from modopt import SLSQP
-    from modopt import IPOPT
+    from modopt import SLSQP, IPOPT, SNOPT
     jax_sim = csdl.experimental.JaxSimulator(
         recorder=recorder, gpu=False,
         # additional_outputs=[accel.du_dt, accel.dv_dt, accel.dw_dt, accel.dp_dt, accel.dq_dt, accel.dr_dt, total_forces, total_moments]
@@ -1342,7 +1458,7 @@ if run_optimization:
         recorder=recorder,
     )
 
-    py_sim.check_totals()
+    # py_sim.check_totals()
 
     # jax_sim.check_totals(step_size=1e-5)
     # py_sim.check_totals(step_size=1e-5)
@@ -1350,8 +1466,15 @@ if run_optimization:
 
     prob = CSDLAlphaProblem(problem_name='LPC_trim', simulator=jax_sim)
 
-    optimizer = SLSQP(prob, ftol=1e-8, maxiter=50, outputs=['x'])
-    # optimizer = IPOPT(prob, solver_options={'max_iter': 200, 'tol': 1e-7})
+    # optimizer = SLSQP(prob, ftol=1e-8, maxiter=100, outputs=['x'])
+    optimizer = IPOPT(prob, solver_options={'max_iter': 200, 'tol': 1e-5})
+    # optimizer = SNOPT(prob, 
+    #     Major_iterations=100, 
+    #     Major_optimality=1e-5, 
+    #     Major_feasibility=1e-5,
+    #     Major_step_limit=1.5,
+    #     Linesearch_tolerance=0.6,
+    # )
 
     # Solve your optimization problem
     optimizer.solve()

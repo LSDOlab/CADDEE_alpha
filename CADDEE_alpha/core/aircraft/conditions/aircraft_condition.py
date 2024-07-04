@@ -7,7 +7,7 @@ import csdl_alpha as csdl
 from dataclasses import dataclass, asdict, fields
 import numpy as np
 import warnings
-from CADDEE_alpha.core.mesh.meshers import CamberSurface
+from CADDEE_alpha.core.mesh.meshers import CamberSurface, RotorDiscretization
 
 
 @dataclass
@@ -300,15 +300,19 @@ class AircraftCondition(Condition):
 
                     coordinates_shape = initial_nodal_coordinates[0].shape
                     stacked_nodal_coordiantes = csdl.Variable(shape=(num_nodes_config, ) + coordinates_shape, value=0.)
-                    for i in range(num_nodes_config):
+                    for i in csdl.frange(num_nodes_config):
                         stacked_nodal_coordiantes = stacked_nodal_coordiantes.set(
                             slices=csdl.slice[i, :], 
-                            value=initial_nodal_coordinates[i]
+                            value=initial_nodal_coordinates[0]
                         )
-                
+
                     initial_nodal_coordinates = stacked_nodal_coordiantes
                     discretization.nodal_coordinates = initial_nodal_coordinates
                     discretization._has_been_expanded = True
+
+
+                # else:
+                #     if isinstance()
                 
                 # else:
                 #     initial_nodal_coordinates = initial_nodal_coordinates.reshape((self._num_nodes, ) + initial_nodal_coordinates.shape)
