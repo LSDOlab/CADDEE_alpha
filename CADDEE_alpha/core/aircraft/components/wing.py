@@ -685,6 +685,7 @@ class Wing(Component):
             export_half_wing:bool=False,
             spanwise_multiplicity:int=1,
             exclute_te:bool=False,
+            return_rib_points=False,
         ):
         """
         Construct ribs and spars for the given wing geometry.
@@ -726,6 +727,9 @@ class Wing(Component):
         csdl.check_parameter(LE_TE_interpolation, "LE_TE_interpolation", values=("ellipse", None))
         csdl.check_parameter(surf_index, "surf_index", types=int)
 
+        bay_mappings = {}
+
+
         # Check if if spar and rib locations are between 0 and 1
         if spar_locations is not None:
             if not np.all((spar_locations > 0) & (spar_locations < 1)):
@@ -760,7 +764,7 @@ class Wing(Component):
         if num_spars == 1:
             raise Exception("Cannot have single spar. Provide at least two normalized spar locations.")
         if spar_function_space is None:
-            spar_function_space = lfs.BSplineSpace(2, (1, 1), (num_ribs, 2))
+            spar_function_space = lfs.BSplineSpace(2, (2, 1), (num_ribs, 2))
         if rib_function_space is None:
             if full_length_ribs:
                 if exclute_te:
@@ -982,7 +986,7 @@ class Wing(Component):
 
                 if i > 0:
                     # create surface panels
-                    panel_function_space = lfs.BSplineSpace(2, (1, 1), (num_rib_pts+1, spanwise_multiplicity+1))
+                    panel_function_space = lfs.BSplineSpace(2, (1, 2), (num_rib_pts+1, spanwise_multiplicity+1))
                     u_coords = np.linspace(0, 1, num_rib_pts+1)
                     fitting_coords = []
                     for j in range(spanwise_multiplicity+1):
@@ -1005,7 +1009,7 @@ class Wing(Component):
                         wing_box_surf_index = self._add_geometry(wing_box_surf_index, bottom_surfs, "Wing_bottom_panel_", i, wing_box_geometry)
 
                     # create spar segments
-                    spar_segment_function_space = lfs.BSplineSpace(2, (1, 1), (spanwise_multiplicity+1, 2))
+                    spar_segment_function_space = lfs.BSplineSpace(2, (2, 1), (spanwise_multiplicity+1, 2))
                     # spar_segment_function_space = lfs.BSplineSpace(2, 1, (2, 2))
                     if full_length_ribs:
                         if finite_te and not exclute_te:
@@ -1037,6 +1041,9 @@ class Wing(Component):
         if export_wing_box:
             wing_box_geometry.plot(opacity=0.5)
             wing_box_geometry.export_iges("wing_box.igs")
+
+        if return_rib_points:
+            return ribs_top_base_array, ribs_bottom_base_array
          
     def _fit_surface(self, parametric_points:list, fitting_coords:list, function_space:lfs.FunctionSpace, mirror:bool, dependent:bool):
         """Fit a surface to the given parametric points."""

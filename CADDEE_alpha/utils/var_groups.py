@@ -205,30 +205,64 @@ class MaterialProperties:
             else:
                 return np.ones(len(parametric_coordinates)) * self.thickness
 
-        # TODO: improve this somehow idk.
-        out = csdl.Variable(shape=(len(parametric_coordinates),), value=0)
+        # TODO: group inds together
+        index_group = {}
         for i, parametric_coordinate in enumerate(parametric_coordinates):
             ind = parametric_coordinate[0]
+            if ind not in index_group:
+                index_group[ind] = []
+            index_group[ind].append(i)
+
+        out = csdl.Variable(shape=(len(parametric_coordinates),), value=0)
+        parametric_coordinates = np.array(parametric_coordinates, dtype='O,O')
+        for ind, inds in index_group.items():
+            inds = np.array(inds)
             material_stack = self.get_material_stack(ind)
             if len(material_stack) == 0:
                 if isinstance(self.thickness, fs.FunctionSet):
-                    evaluated_thickness = self.thickness.evaluate(parametric_coordinates=[parametric_coordinate])
+                    evaluated_thickness = self.thickness.evaluate(parametric_coordinates=[parametric_coordinates[inds[0]]])
                 elif self.thickness is not None:
                     evaluated_thickness = self.thickness
                 else:
                     evaluated_thickness = 0
             else:
-                evaluated_thickness = 0
+                evaluated_thickness = np.zeros(len(inds))
                 for material_info in material_stack:
                     thickness = material_info['thickness']
                     bounding_function = material_info['bounding_function']
                     if isinstance(thickness, fs.FunctionSet):
-                        thickness = thickness.evaluate([parametric_coordinate])
+                        thickness = thickness.evaluate(parametric_coordinates[inds])
                     if isinstance(bounding_function, fs.FunctionSet):
-                        bounding_function = bounding_function.evaluate([parametric_coordinate])
+                        bounding_function = bounding_function.evaluate(parametric_coordinates[inds])
                         thickness = thickness * bounding_function
                     evaluated_thickness = evaluated_thickness + thickness
-            out = out.set(csdl.slice[i], evaluated_thickness)
+            out = out.set(csdl.slice[[(ind,) for ind in inds]], evaluated_thickness.reshape((-1, 1)))
+
+
+
+        # out = csdl.Variable(shape=(len(parametric_coordinates),), value=0)
+        # for i, parametric_coordinate in enumerate(parametric_coordinates):
+        #     ind = parametric_coordinate[0]
+        #     material_stack = self.get_material_stack(ind)
+        #     if len(material_stack) == 0:
+        #         if isinstance(self.thickness, fs.FunctionSet):
+        #             evaluated_thickness = self.thickness.evaluate(parametric_coordinates=[parametric_coordinate])
+        #         elif self.thickness is not None:
+        #             evaluated_thickness = self.thickness
+        #         else:
+        #             evaluated_thickness = 0
+        #     else:
+        #         evaluated_thickness = 0
+        #         for material_info in material_stack:
+        #             thickness = material_info['thickness']
+        #             bounding_function = material_info['bounding_function']
+        #             if isinstance(thickness, fs.FunctionSet):
+        #                 thickness = thickness.evaluate([parametric_coordinate])
+        #             if isinstance(bounding_function, fs.FunctionSet):
+        #                 bounding_function = bounding_function.evaluate([parametric_coordinate])
+        #                 thickness = thickness * bounding_function
+        #             evaluated_thickness = evaluated_thickness + thickness
+        #     out = out.set(csdl.slice[i], evaluated_thickness)
         return out
 
     def evaluate_stack(self, parametric_coordinates):
