@@ -20,7 +20,7 @@ def construct_bay_condition(upper, lower):
         return out.T
     return condition
 
-def construct_thickness_function(wing, num_ribs, top_array, bottom_array, material, initial_thickness, minimum_thickness):
+def construct_thickness_function(wing, num_ribs, top_array, bottom_array, material, initial_thickness, minimum_thickness, dv_dict=None, add_dvs=True):
     bay_eps = 1e-2
     for i in range(num_ribs-1):
         # upper wing bays
@@ -37,7 +37,10 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
         if l_surf_ind == u_surf_ind:
             condition = construct_bay_condition(u_coord_u, l_coord_u)
             thickness = csdl.Variable(value=initial_thickness, name='upper_wing_thickness_'+str(i))
-            thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
+            if dv_dict is not None:
+                thickness.value = dv_dict[thickness.name]
+            if add_dvs:
+                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
             function = lfs.Function(lfs.ConditionalSpace(2, condition), thickness)
             functions = {l_surf_ind: function}
             thickness_fs = lfs.FunctionSet(functions)
@@ -46,7 +49,10 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
             condition1 = construct_bay_condition(1, l_coord_u)
             condition2 = construct_bay_condition(u_coord_u, 0)
             thickness = csdl.Variable(value=initial_thickness, name='upper_wing_thickness_'+str(i))
-            thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
+            if dv_dict is not None:
+                thickness.value = dv_dict[thickness.name]
+            if add_dvs:
+                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
             function1 = lfs.Function(lfs.ConditionalSpace(2, condition1), thickness)
             function2 = lfs.Function(lfs.ConditionalSpace(2, condition2), thickness)
             functions = {l_surf_ind: function1, u_surf_ind: function2}
@@ -67,7 +73,10 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
         if l_surf_ind == u_surf_ind:
             condition = construct_bay_condition(u_coord_u, l_coord_u)
             thickness = csdl.Variable(value=initial_thickness, name='lower_wing_thickness_'+str(i))
-            thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
+            if dv_dict is not None:
+                thickness.value = dv_dict[thickness.name]
+            if add_dvs:
+                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
             function = lfs.Function(lfs.ConditionalSpace(2, condition), thickness)
             functions = {l_surf_ind: function}
             thickness_fs = lfs.FunctionSet(functions)
@@ -76,7 +85,10 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
             condition1 = construct_bay_condition(1, l_coord_u)
             condition2 = construct_bay_condition(u_coord_u, 0)
             thickness = csdl.Variable(value=initial_thickness, name='lower_wing_thickness_'+str(i))
-            thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
+            if dv_dict is not None:
+                thickness.value = dv_dict[thickness.name]
+            if add_dvs:
+                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
             function1 = lfs.Function(lfs.ConditionalSpace(2, condition1), thickness)
             function2 = lfs.Function(lfs.ConditionalSpace(2, condition2), thickness)
             functions = {l_surf_ind: function1, u_surf_ind: function2}
@@ -92,7 +104,10 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
             pass
         else:
             thickness = csdl.Variable(value=initial_thickness, name=name+'_thickness')
-            thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
+            if dv_dict is not None:
+                thickness.value = dv_dict[thickness.name]
+            if add_dvs:
+                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
             function = lfs.Function(rib_fsp, thickness)
             functions = {ind: function}
             thickness_fs = lfs.FunctionSet(functions)
@@ -111,7 +126,10 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
         spar_num = 0
         for ind in spar_inds:
             thickness = csdl.Variable(value=initial_thickness, name=f'spar_{spar_num}_thickness_{i}')
-            thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
+            if dv_dict is not None:
+                thickness.value = dv_dict[thickness.name]
+            if add_dvs:
+                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
             function = lfs.Function(lfs.ConditionalSpace(2, condition), thickness)
             functions = {ind: function}
             thickness_fs = lfs.FunctionSet(functions)

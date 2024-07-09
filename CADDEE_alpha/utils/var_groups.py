@@ -224,7 +224,7 @@ class MaterialProperties:
                 elif self.thickness is not None:
                     evaluated_thickness = self.thickness
                 else:
-                    evaluated_thickness = 0
+                    evaluated_thickness = np.zeros(len(inds))
             else:
                 evaluated_thickness = np.zeros(len(inds))
                 for material_info in material_stack:

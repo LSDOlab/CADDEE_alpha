@@ -755,6 +755,11 @@ class Configuration:
         parameterization_solver.evaluate(ffd_geometric_variables)
         t2 = time.time()
         print("time for inner optimization", t2-t1)
+
+        print("update meshes after inner optimization")
+        for mesh_name, mesh in self.mesh_container.items():
+            for discretization_name, discretization in mesh.discretizations.items():
+                discretization._update()
         
         if plot:
             system_geometry.plot(show=True)

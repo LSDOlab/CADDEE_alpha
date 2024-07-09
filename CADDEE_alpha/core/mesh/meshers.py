@@ -598,7 +598,6 @@ def make_vlm_surface(
 
     
 
-
     if spacing_chordwise == "linear":
         chord_surface = csdl.linear_combination(LE_points_csdl, TE_points_csdl, num_chordwise+1).reshape((num_chordwise+1, num_spanwise+1, 3))
     
@@ -757,6 +756,7 @@ class OneDBoxBeam(Discretization):
     _bottom_grid_parametric = None
     _front_grid_parametric = None
     _rear_grid_parametric = None
+    _half_wing = False
 
 
     def _update(self):
@@ -768,16 +768,28 @@ class OneDBoxBeam(Discretization):
                                 - self._geom.evaluate(self._aft_points_parametric)[:,0])
         else:
             beam_width_raw = csdl.norm((LE_points_csdl - TE_points_csdl) * self._norm_beam_width, axes=(1, ))
-            beam_width_nodal = make_mesh_symmetric(beam_width_raw, self.num_beam_nodes, spanwise_index=None)
+            if self._half_wing:
+                beam_width_nodal = beam_width_raw
+            else:
+                beam_width_nodal = make_mesh_symmetric(beam_width_raw, self.num_beam_nodes, spanwise_index=None)
+        
+        
         self.beam_width = (beam_width_nodal[0:-1] + beam_width_nodal[1:]) / 2
 
         node_top = self._geom.evaluate(self._node_top_parametric).reshape((self.num_beam_nodes, 3))
         node_bottom = self._geom.evaluate(self._node_bottom_parametric).reshape((self.num_beam_nodes, 3))
 
-        self.nodal_coordinates = make_mesh_symmetric((node_top + node_bottom) / 2, self.num_beam_nodes)
+        if self._half_wing:
+            self.nodal_coordinates = (node_top + node_bottom) / 2
+        else:
+            self.nodal_coordinates = make_mesh_symmetric((node_top + node_bottom) / 2, self.num_beam_nodes)
 
         beam_height_raw = csdl.norm((node_top - node_bottom), axes=(1, ))
-        beam_height_nodal = make_mesh_symmetric(beam_height_raw, self.num_beam_nodes, spanwise_index=None)
+        if self._half_wing:
+            beam_height_nodal = beam_height_raw
+        else:
+            beam_height_nodal = make_mesh_symmetric(beam_height_raw, self.num_beam_nodes, spanwise_index=None)
+        
         self.beam_height = (beam_height_nodal[0:-1] + beam_height_nodal[1:]) / 2
 
         top_thickness_grid = self._material_properties.evaluate_thickness(self._top_grid_parametric)
@@ -811,6 +823,7 @@ def make_1d_box_beam(
     project_spars: bool = False,
     make_half_beam: bool = False,
     LE_TE_interp: str = None,
+    one_side_geometry: FunctionSet=None
 ) -> OneDBoxBeam:
     """Create a 1-D box beam mesh for a wing-like component. It is NOT intended
     to work for creating beam-mesh of fuselage-like or vertical tail like components.
@@ -998,6 +1011,9 @@ def make_1d_box_beam(
         beam_width_nodal = make_mesh_symmetric(beam_width_raw, num_beam_nodes, spanwise_index=None)
         beam_width = (beam_width_nodal[0:-1] + beam_width_nodal[1:]) / 2
 
+    if one_side_geometry is not None:
+        wing_geometry = one_side_geometry
+
     if project_spars:
         # use the spars to get the beam width
         fore_projection_points = beam_nodes_raw.value.copy()
@@ -1087,6 +1103,9 @@ def make_1d_box_beam(
         shear_web_thickness=shear_web_thickness if project_spars else None,
     )
 
+    if make_half_beam:
+        beam_mesh._half_wing = True
+
     wing_comp._discretizations[f"{wing_comp._name}_1d_beam_mesh"] = beam_mesh
 
     beam_mesh._geom = wing_geometry
@@ -1171,7 +1190,8 @@ def make_rotor_mesh(
     num_azimuthal: int = 1,
     num_blades: int = 2,
     blade_comps=None,
-    plot: bool = False
+    plot: bool = False,
+    do_disk_projections:bool = False,
 ) -> RotorDiscretization: 
     
     from CADDEE_alpha.core.aircraft.components.rotor import Rotor
@@ -1225,7 +1245,7 @@ def make_rotor_mesh(
     rotor_mesh_parameters._geom = rotor_geometry
     
     # make disk mesh
-    if num_azimuthal > 1:
+    if num_azimuthal > 1 and do_disk_projections:
         p = thrust_origin
         v1 = in_plane_ex
         v2 = in_plane_ey
