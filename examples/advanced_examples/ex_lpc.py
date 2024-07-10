@@ -57,7 +57,7 @@ descent_pusher_rpm = 1672.01908959
 
 print_dvs = False
 
-with open("lpc_dv_dict_struct_sizing.pickle", "rb") as file:
+with open("lpc_dv_dict_full_opt.pickle", "rb") as file:
     dv_dict = pickle.load(file)
 
 if print_dvs:
@@ -65,14 +65,13 @@ if print_dvs:
         print(key, value)
         print("\n")
 
-with open("lpc_constraints_dict_struct_sizing.pickle", "rb") as file:
+with open("lpc_constraints_dict_full_opt.pickle", "rb") as file:
     c_dict = pickle.load(file)
 
 if print_dvs:
     for key, value in c_dict.items():
         print(key, value)
         print("\n")
-
 
 max_stress = 350E6 # Pa
 max_displacement = 0.33 # m
@@ -420,7 +419,7 @@ def define_base_config(caddee : cd.CADDEE):
         if debug:
             base_config.setup_geometry(plot=False)
         else:
-            base_config.setup_geometry(plot=False)#, recorder=recorder)
+            base_config.setup_geometry(plot=False, recorder=recorder)
     caddee.base_configuration = base_config
 
     return
@@ -1139,7 +1138,8 @@ def define_plus_3g(plus_3g):
         regularization_parameter=1e-4,
     )
 
-    wing.geometry.plot_but_good(color=pressure_function)
+    if recorder.inline is True:
+        wing.geometry.plot_but_good(color=pressure_function)
     box_beam_mesh = mesh_container["beam_mesh"]
     box_beam = box_beam_mesh.discretizations["wing_box_beam"]
     beam_nodes = box_beam.nodal_coordinates
@@ -1177,10 +1177,10 @@ def define_plus_3g(plus_3g):
     beam_bkl_top.name = "top_buckling_plus_3g"
     beam_bkl_bot.set_as_constraint(upper=1.)
     beam_bkl_top.set_as_constraint(upper=1.)
-    beam_stress = struct_solution.get_stress(beam)
-    # max_stress_csdl = csdl.maximum(beam_stress)
-    beam_stress.name = "max_stress"
-    beam_stress.set_as_constraint(upper=max_stress, scaler=1e-8)
+    # beam_stress = csdl.maximum(struct_solution.get_stress(beam))
+    # # max_stress_csdl = csdl.maximum(beam_stress)
+    # beam_stress.name = "max_stress"
+    # beam_stress.set_as_constraint(upper=max_stress, scaler=1e-8)
 
     # Drag build-up
     drag_build_up_model = cd.aircraft.models.aero.compute_drag_build_up
@@ -1339,10 +1339,11 @@ def define_minus_1g(minus_1g):
     beam_bkl_bot.name = "bottom_buckling_minus_1g"
     beam_bkl_top.set_as_constraint(upper=1.)
     beam_bkl_bot.set_as_constraint(upper=1.)
-    beam_stress = struct_solution.get_stress(beam)
-    # max_stress_csdl = csdl.maximum(beam_stress)
-    beam_stress.name = "max_stress_minus_1g"
-    beam_stress.set_as_constraint(upper=max_stress, scaler=1e-8)
+    
+    # beam_stress = csdl.maximum(struct_solution.get_stress(beam))
+    # # max_stress_csdl = csdl.maximum(beam_stress)
+    # beam_stress.name = "max_stress_minus_1g"
+    # beam_stress.set_as_constraint(upper=max_stress, scaler=1e-8)
 
     # Drag build-up
     drag_build_up_model = cd.aircraft.models.aero.compute_drag_build_up
@@ -2192,7 +2193,6 @@ define_conditions(caddee)
 
 define_mass_properties(caddee)
 
-# recorder.inline = False
 
 define_analysis(caddee)
 
@@ -2201,40 +2201,60 @@ if do_post_process:
 
 # recorder.count_operations()
 # recorder.count_origins(n=20, mode="line")
-
+    
+# Set design variable values
+for dv, dv_val in recorder.design_variables.items():
+    if dv.name in dv_dict:
+        dv.value = dv_dict[dv.name]
+        recorder.design_variables[dv] = (1/dv_dict[dv.name], dv_val[1], dv_val[2])
 
 if run_optimization:
     from modopt import CSDLAlphaProblem
     from modopt import SLSQP, IPOPT, SNOPT
+
+    # turn off inline
+    recorder.inline = False
+
     jax_sim = csdl.experimental.JaxSimulator(
-        recorder=recorder, gpu=False,
+        recorder=recorder, gpu=False, derivatives_kwargs= {
+            "concatenate_ofs" : True
+        }
     )
 
     if debug:
         py_sim = csdl.experimental.PySimulator(
             recorder=recorder,
         )
-
         py_sim.check_totals()
 
     # jax_sim.check_totals()
     # py_sim.compute_totals()
+    if run_optimization:
+        import time
+        t1 = time.time()
+        jax_sim.run_forward()
+        t2 = time.time()
+        print("Compile fwd run time:", t2-t1)
+        t3 = time.time()
+        jax_sim.compute_optimization_derivatives()
+        t4 = time.time()
+        print("Compile derivative function time: ", t4-t3)
 
-    prob = CSDLAlphaProblem(problem_name='LPC_trim', simulator=jax_sim)
+        prob = CSDLAlphaProblem(problem_name='LPC_full_optimization', simulator=jax_sim)
 
-    optimizer = SLSQP(prob, ftol=1e-5, maxiter=150, outputs=['x'])
-    # optimizer = IPOPT(prob, solver_options={'max_iter': 200, 'tol': 1e-5})
-    # optimizer = SNOPT(prob, 
-    #     Major_iterations=100, 
-    #     Major_optimality=1e-5, 
-    #     Major_feasibility=1e-5,
-    #     Major_step_limit=1.5,
-    #     Linesearch_tolerance=0.6,
-    # )
+        # optimizer = SLSQP(prob, ftol=1e-5, maxiter=150, outputs=['x'])
+        # optimizer = IPOPT(prob, solver_options={'max_iter': 200, 'tol': 1e-5})
+        optimizer = SNOPT(prob, 
+            Major_iterations=100, 
+            Major_optimality=1e-5, 
+            Major_feasibility=1e-5,
+            Major_step_limit=1.5,
+            Linesearch_tolerance=0.6,
+        )
 
-    # Solve your optimization problem
-    optimizer.solve()
-    optimizer.print_results()
+        # Solve your optimization problem
+        optimizer.solve()
+        optimizer.print_results()
 
 recorder.execute()
 
