@@ -22,22 +22,27 @@ import pickle
 
 print_dvs = True
 
-with open("lpc_dv_dict_full_opt.pickle", "rb") as file:
+with open("lpc_dv_dict_full_opt_new_2.pickle", "rb") as file:
+# with open("lpc_dv_dict_struct_sizing_opt_new.pickle", "rb") as file:
     dv_dict_full_opt = pickle.load(file)
 
-with open("lpc_dv_dict_trim_opt.pickle", "rb") as file:
+# with open("lpc_dv_dict_trim_opt_new.pickle", "rb") as file:
+with open("lpc_dv_dict_climb_trim_new.pickle", "rb") as file:
     dv_dict_trim_opt = pickle.load(file)
 
 if print_dvs:
     for key, value in dv_dict_full_opt.items():
-        print(key, value)
-        print("\n")
-    for key, value in dv_dict_trim_opt.items():
-        print(key, value)
-        print("\n")
+        if key in dv_dict_trim_opt:
+            dv_dict_full_opt[key] = dv_dict_trim_opt[key]
+        
+            print(key, value, dv_dict_trim_opt[key])
+            print("\n")
+    # for key, value in dv_dict_trim_opt.items():
+    #     print(key, value)
+    #     print("\n")
 
 
-with open("lpc_constraints_dict_full_opt.pickle", "rb") as file:
+with open("lpc_constraints_dict_climb_trim_new.pickle", "rb") as file:
     c_dict = pickle.load(file)
 
 if print_dvs:
@@ -184,7 +189,7 @@ def define_base_config(caddee : cd.CADDEE):
     base_config.connect_component_geometries(fuselage, v_tail, v_tail.TE_root)
 
     # ----------motor group ----------
-    power_density = 5000
+    power_density = 6500
     efficiency = 0.95
     motors = cd.Component()
     airframe.comps["motors"] = motors
@@ -228,23 +233,31 @@ def define_base_config(caddee : cd.CADDEE):
     # set design variables
     if run_optimization:
         if do_trim_optimization:
-            pass
+            cd.load_var(fuselage_length, dv_flag=False, lower=0.9 * 9.144, upper=1.1*9.144, scaler=1e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(wing_AR, dv_flag=False, lower=0.8 * 12.12, upper=1.2*12.12, scaler=1e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(wing_S_ref, dv_flag=False, lower=0.8 * 19.6, upper=1.2*19.6, scaler=8e-2, var_dict=dv_dict_full_opt)
+            cd.load_var(tail_AR, dv_flag=False, lower=0.8 * 4.3, upper=1.2*4.3, scaler=5e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(tail_S_ref, dv_flag=False, lower=0.8 * 3.7, upper=1.2*3.7, scaler=6e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(pusher_radius, dv_flag=False, lower=0.8*2.74/2, upper=1.2*2.74/2, scaler=8e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(front_inner_radius, dv_flag=False, upper=1.8, lower=1.2, scaler=8e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(rear_inner_radius, dv_flag=False, upper=1.8, lower=1.2, scaler=8e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(front_outer_radius, dv_flag=False, upper=1.8, lower=1.2, scaler=8e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(rear_outer_radius, dv_flag=False, upper=1.8, lower=1.2, scaler=8e-1, var_dict=dv_dict_full_opt)
         elif do_structural_sizing is True and run_ffd is False:
             pass
         else:
-            fuselage_length.set_as_design_variable(lower=0.9 * 9.144, upper=1.1*9.144, scaler=1e-1)
-            wing_AR.set_as_design_variable(lower=0.8 * 12.12, upper=1.2*12.12, scaler=1e-1)
-            wing_S_ref.set_as_design_variable(lower=0.8 * 19.6, upper=1.2*19.6, scaler=9e-2)
-            tail_AR.set_as_design_variable(lower=0.8 * 4.3, upper=1.2*4.3, scaler=5e-1)
-            tail_S_ref.set_as_design_variable(lower=0.8 * 3.7, upper=1.2*3.7, scaler=6e-1)
-            pusher_radius.set_as_design_variable(lower=0.8*2.74/2, upper=1.2*2.74/2, scaler=8e-1)
-            front_inner_radius.set_as_design_variable(upper=1.8, lower=1.2, scaler=1)
-            rear_inner_radius.set_as_design_variable(upper=1.8, lower=1.2, scaler=1)
-            front_outer_radius.set_as_design_variable(upper=1.8, lower=1.2, scaler=1)
-            rear_outer_radius.set_as_design_variable(upper=1.8, lower=1.2, scaler=1)
+            cd.load_var(fuselage_length, lower=0.9 * 9.144, upper=1.1*9.144, scaler=1e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(wing_AR, lower=0.8 * 12.12, upper=1.2*12.12, scaler=1e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(wing_S_ref, lower=0.8 * 19.6, upper=1.2*19.6, scaler=8e-2, var_dict=dv_dict_full_opt)
+            cd.load_var(tail_AR, lower=0.8 * 4.3, upper=1.2*4.3, scaler=5e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(tail_S_ref, lower=0.8 * 3.7, upper=1.2*3.7, scaler=6e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(pusher_radius, lower=0.8*2.74/2, upper=1.2*2.74/2, scaler=8e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(front_inner_radius, upper=1.8, lower=1.2, scaler=8e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(rear_inner_radius, upper=1.8, lower=1.2, scaler=8e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(front_outer_radius, upper=1.8, lower=1.2, scaler=8e-1, var_dict=dv_dict_full_opt)
+            cd.load_var(rear_outer_radius, upper=1.8, lower=1.2, scaler=8e-1, var_dict=dv_dict_full_opt)
             r_over_span_radius_1.set_as_constraint(upper=0.2, lower=0.2)
             r_over_span_radius_2.set_as_constraint(upper=0.2, lower=0.2)
-            
 
     lift_rotors = []
     for i in range(8):
@@ -349,22 +362,21 @@ def define_base_config(caddee : cd.CADDEE):
 
         if run_optimization:
             if do_structural_sizing is True and run_ffd is False:
-                chord_cps.set_as_design_variable(upper=0.5, lower=0.02, scaler=2)
-                twist_cps.set_as_design_variable(upper=np.deg2rad(85), lower=np.deg2rad(3), scaler=5)
+                cd.load_var(chord_cps, upper=0.5, lower=0.02, scaler=2, var_dict=dv_dict_full_opt)
+                cd.load_var(twist_cps, upper=np.deg2rad(85), lower=np.deg2rad(3), scaler=1, var_dict=dv_dict_full_opt)
             elif do_trim_optimization:
                 pass
             else:
-                chord_cps.set_as_design_variable(upper=0.5, lower=0.02, scaler=2)
-                twist_cps.set_as_design_variable(upper=np.deg2rad(85), lower=np.deg2rad(3), scaler=5)
-                front_inner_chord.set_as_design_variable(upper=0.5, lower=0.02, scaler=2)
-                rear_inner_chord.set_as_design_variable(upper=0.5, lower=0.02, scaler=2)
-                front_outer_chord.set_as_design_variable(upper=0.5, lower=0.02, scaler=2)
-                rear_outer_chord.set_as_design_variable(upper=0.5, lower=0.02, scaler=2)
-                front_inner_twist.set_as_design_variable(upper=np.deg2rad(85), lower=np.deg2rad(3), scaler=5)
-                rear_inner_twist.set_as_design_variable(upper=np.deg2rad(85), lower=np.deg2rad(3), scaler=5)
-                front_outer_twist.set_as_design_variable(upper=np.deg2rad(85), lower=np.deg2rad(3), scaler=5)
-                rear_outer_twist.set_as_design_variable(upper=np.deg2rad(85), lower=np.deg2rad(3), scaler=5)
-
+                cd.load_var(chord_cps, upper=0.5, lower=0.02, scaler=2, var_dict=dv_dict_full_opt)
+                cd.load_var(twist_cps, upper=np.deg2rad(85), lower=np.deg2rad(3), scaler=1, var_dict=dv_dict_full_opt)
+                cd.load_var(front_inner_chord, upper=0.5, lower=0.02, scaler=2, var_dict=dv_dict_full_opt)
+                cd.load_var(rear_inner_chord, upper=0.5, lower=0.02, scaler=2, var_dict=dv_dict_full_opt)
+                cd.load_var(front_outer_chord, upper=0.5, lower=0.02, scaler=2, var_dict=dv_dict_full_opt)
+                cd.load_var(rear_outer_chord, upper=0.5, lower=0.02, scaler=2, var_dict=dv_dict_full_opt)
+                cd.load_var(front_inner_twist, upper=np.deg2rad(85), lower=np.deg2rad(3), scaler=1.2, var_dict=dv_dict_full_opt)
+                cd.load_var(rear_inner_twist, upper=np.deg2rad(85), lower=np.deg2rad(3), scaler=1.2, var_dict=dv_dict_full_opt)
+                cd.load_var(front_outer_twist, upper=np.deg2rad(85), lower=np.deg2rad(3), scaler=1.2, var_dict=dv_dict_full_opt)
+                cd.load_var(rear_outer_twist, upper=np.deg2rad(85), lower=np.deg2rad(3), scaler=1.2, var_dict=dv_dict_full_opt)
 
         # lift rotors
         for i in range(8):
@@ -398,6 +410,7 @@ def define_base_config(caddee : cd.CADDEE):
             pass
         else:
             recorder.inline = False
+    
     caddee.base_configuration = base_config
 
     return
@@ -428,7 +441,7 @@ def define_conditions(caddee: cd.CADDEE):
     # Cruise
     if do_cruise:
         pitch_angle = csdl.Variable(name="cruise_pitch", shape=(1, ), value=np.deg2rad(2))
-        pitch_angle.set_as_design_variable(upper=np.deg2rad(10), lower=np.deg2rad(-10), scaler=10)
+        cd.load_var(pitch_angle, upper=np.deg2rad(10), lower=np.deg2rad(-10), scaler=2, var_dict=dv_dict_full_opt)
         cruise = cd.aircraft.conditions.CruiseCondition(
             altitude=1,
             range=56 * cd.Units.length.kilometer_to_m,
@@ -441,8 +454,8 @@ def define_conditions(caddee: cd.CADDEE):
     # Climb
     if do_climb:
         pitch_angle = csdl.Variable(name="climb_pitch", shape=(1, ), value=np.deg2rad(4))
-        pitch_angle.set_as_design_variable(upper=np.deg2rad(10), lower=np.deg2rad(-2), scaler=10)
-        flight_path_angle = csdl.Variable(name="climb_gamm", shape=(1, ), value=np.deg2rad(6))
+        cd.load_var(pitch_angle, upper=np.deg2rad(13), lower=np.deg2rad(4.3), scaler=2, var_dict=dv_dict_full_opt)
+        flight_path_angle = csdl.Variable(name="climb_gamm", shape=(1, ), value=np.deg2rad(4.3))
         climb = cd.aircraft.conditions.ClimbCondition(
             initial_altitude=300, 
             final_altitude=1000,
@@ -456,7 +469,7 @@ def define_conditions(caddee: cd.CADDEE):
     # descent
     if do_descent:
         pitch_angle = csdl.Variable(name="descent_pitch", shape=(1, ), value=0)
-        pitch_angle.set_as_design_variable(upper=np.deg2rad(2), lower=np.deg2rad(-10), scaler=2)
+        cd.load_var(pitch_angle, upper=np.deg2rad(2), lower=np.deg2rad(-10), scaler=2, var_dict=dv_dict_full_opt)
         flight_path_angle = csdl.Variable(name="descent_gamm", shape=(1, ), value=np.deg2rad(-3))
         descent = cd.aircraft.conditions.ClimbCondition(
             initial_altitude=1000, 
@@ -471,7 +484,7 @@ def define_conditions(caddee: cd.CADDEE):
     if do_structural_sizing:
         # +3g 
         pitch_angle = csdl.Variable(name="3g_pitch", shape=(1, ), value=np.deg2rad(8))
-        pitch_angle.set_as_design_variable(upper=np.deg2rad(18), lower=0, scaler=10)
+        cd.load_var(pitch_angle, upper=np.deg2rad(18), lower=0, scaler=1, var_dict=dv_dict_full_opt)
         flight_path_angle = csdl.Variable(shape=(1, ), value=np.deg2rad(5))
         plus_3g = cd.aircraft.conditions.ClimbCondition(
             initial_altitude=1000, 
@@ -486,7 +499,7 @@ def define_conditions(caddee: cd.CADDEE):
 
         # -1g 
         pitch_angle = csdl.Variable(name="m1g_pitch", shape=(1, ), value=np.deg2rad(-12))
-        pitch_angle.set_as_design_variable(upper=np.deg2rad(0), lower=np.deg2rad(-18), scaler=10)
+        cd.load_var(pitch_angle, upper=np.deg2rad(0), lower=np.deg2rad(-18), scaler=1, var_dict=dv_dict_full_opt)
         flight_path_angle = csdl.Variable(shape=(1, ), value=np.deg2rad(-1))
         minus_1g = cd.aircraft.conditions.ClimbCondition(
             initial_altitude=2000, 
@@ -560,7 +573,8 @@ def define_mass_properties(caddee: cd.CADDEE):
         elif do_trim_optimization:
             pass
         else:
-            battery_mass.set_as_design_variable(lower=0.8 * 800, upper=1.2 * 800, scaler=8e-2)
+            cd.load_var(battery_mass, lower=0.8 * 800, upper=1.2 * 800, scaler=1e-3, var_dict=dv_dict_full_opt)
+
     battery_cg = csdl.Variable(shape=(3, ), value=np.array([-2.85, 0., -1.]))
     battery.quantities.mass_properties.mass = battery_mass
     battery.quantities.mass_properties.cg_vector = battery_cg
@@ -633,17 +647,6 @@ def define_mass_properties(caddee: cd.CADDEE):
     # M4-regression mass models (scaled to match better with NDARC)
     nasa_lpc_weights = cd.aircraft.models.weights.nasa_lpc
     scaler = 1.3
-    # wing_mps = nasa_lpc_weights.compute_wing_mps(
-    #     wing_area=wing_area,
-    #     wing_AR=wing_AR,
-    #     fuselage_length=fuselage_length,
-    #     battery_mass=battery_mass, 
-    #     cruise_speed=cruise_speed,
-    # )
-    # wing_mps.mass = wing_mps.mass * scaler
-    # wing.quantities.mass_properties.mass = wing_mps.mass
-    # wing.quantities.mass_properties.cg_vector = wing_mps.cg_vector
-    # wing.quantities.mass_properties.inertia_tensor = wing_mps.inertia_tensor
 
     fuselage_mps = nasa_lpc_weights.compute_fuselage_mps(
         wing_area=wing_area,
@@ -680,21 +683,47 @@ def define_mass_properties(caddee: cd.CADDEE):
     motor_group = airframe.comps["motors"]
     motors = list(motor_group.comps.values())
     
-        # get rotor meshes to obtain thrust origin (i.e., motor cg)
+    # get rotor meshes to obtain thrust origin (i.e., motor cg)
     mesh_container = base_config.mesh_container
     rotor_meshes = mesh_container["rotor_meshes"]
     
-        # Loop over all motors to assign mass properties
+    pusher_motor_mass = csdl.Variable(name="pusher_motor_mass", shape=(1, ), value=101.17692394)
+    front_inner_motor_mass = csdl.Variable(name="front_inner_motor_mass",shape=(1, ), value=24.44283266)
+    rear_inner_motor_mass = csdl.Variable(name="rear_inner_motor_mass", shape=(1, ), value=28.43176338)
+    front_outer_motor_mass = csdl.Variable(name="front_outer_motor_mass" ,shape=(1, ), value=21.18230019)
+    rear_outer_motor_mass = csdl.Variable(name="rear_outer_motor_mass", shape=(1, ), value=24.57177679)
+
+    if run_optimization:
+        if do_structural_sizing is True and run_ffd is False:
+            pass
+        elif do_trim_optimization:
+            cd.load_var(pusher_motor_mass,  upper=150, lower=10, scaler=1e-2, var_dict=dv_dict_full_opt)
+
+        else:
+            cd.load_var(pusher_motor_mass,  upper=70, lower=10, scaler=5e-2, var_dict=dv_dict_full_opt)
+            cd.load_var(front_inner_motor_mass,  upper=50, lower=5, scaler=8e-2, var_dict=dv_dict_full_opt)
+            cd.load_var(rear_inner_motor_mass,  upper=50, lower=5, scaler=8e-2, var_dict=dv_dict_full_opt)
+            cd.load_var(front_outer_motor_mass,  upper=50, lower=5, scaler=8e-2, var_dict=dv_dict_full_opt)
+            cd.load_var(rear_outer_motor_mass,  upper=50, lower=5, scaler=8e-2, var_dict=dv_dict_full_opt)
+
+    motor_mass_list = [pusher_motor_mass, front_outer_motor_mass, rear_outer_motor_mass, front_inner_motor_mass, rear_inner_motor_mass, front_inner_motor_mass, rear_inner_motor_mass, front_outer_motor_mass, rear_outer_motor_mass]
+
+    # Loop over all motors to assign mass properties
     for i, rotor_mesh in enumerate(rotor_meshes.discretizations.values()):
         motor_comp = motors[i]
-        motor_mass = csdl.Variable(name=f"motor_{i}_mass", shape=(1, ), value=25)
-        if run_optimization:
-            if do_structural_sizing is True and run_ffd is False:
-                pass
-            elif do_trim_optimization:
-                pass
-            else:
-                motor_mass.set_as_design_variable(upper=50, lower=5, scaler=5e-2)
+        # motor_mass = csdl.Variable(name=f"motor_{i}_mass", shape=(1, ), value=value)
+        motor_mass = motor_mass_list[i]
+        # if run_optimization:
+        #     if do_structural_sizing is True and run_ffd is False:
+        #         pass
+        #     elif do_trim_optimization:
+        #         pass
+        #     else:
+        #         # if i == 0:
+        #         #     dv_flag = False
+        #         # else:
+        #         #     dv_flag = True
+        #         cd.load_var(motor_mass, upper=50, lower=5, scaler=8e-2, var_dict=dv_dict_full_opt)
         motor_cg = rotor_mesh.thrust_origin
         motor_comp.quantities.mass_properties.mass = motor_mass
         motor_comp.quantities.mass_properties.cg_vector = motor_cg
@@ -715,13 +744,15 @@ def define_mass_properties(caddee: cd.CADDEE):
 
     # Assemble system mass properties
     base_config.assemble_system_mass_properties(update_copies=True)
+    print("total mass", base_config.system.quantities.mass_properties.mass.value)
+    print("total cg", base_config.system.quantities.mass_properties.cg_vector.value)
 
     aircraft_mass = base_config.system.quantities.mass_properties.mass
     aircraft_mass.name = "aircraft_mass"
     if do_trim_optimization:
         pass
     else:
-        aircraft_mass.set_as_objective(scaler=8e-4)
+        aircraft_mass.set_as_objective(scaler=1e-3)
 
 def define_quasi_steady_transition(qst, mass_properties, dV_dt_constraint, pitch_angle_constraint, qst_ind):
     if vectorize_qst:
@@ -748,7 +779,7 @@ def define_quasi_steady_transition(qst, mass_properties, dV_dt_constraint, pitch
     else:
         tail_actuation_var = csdl.Variable(name=f'qst_{qst_ind}_tail_actuation', shape=(num_nodes, ), value=0)
     
-    tail_actuation_var.set_as_design_variable(upper=np.deg2rad(20), lower=np.deg2rad(-20), scaler=5)
+    cd.load_var(tail_actuation_var, upper=np.deg2rad(20), lower=np.deg2rad(-20), scaler=3, var_dict=dv_dict_full_opt)
     h_tail.actuate(angle=tail_actuation_var)
 
     qst.finalize_meshes()
@@ -798,7 +829,7 @@ def define_quasi_steady_transition(qst, mass_properties, dV_dt_constraint, pitch
         qst_rpm = csdl.Variable(name="qst_pusher_rpm", shape=(num_nodes, ), value=1800)
     else:
         qst_rpm = csdl.Variable(name=f"qst_{qst_ind}_pusher_rpm", shape=(num_nodes, ), value=1800)
-    qst_rpm.set_as_design_variable(upper=3000, lower=400, scaler=1e-3)
+    cd.load_var(qst_rpm, upper=3000, lower=400, scaler=1e-3, var_dict=dv_dict_full_opt)
     bem_inputs = RotorAnalysisInputs()
     bem_inputs.ac_states = qst.quantities.ac_states
     bem_inputs.atmos_states =  qst.quantities.atmos_states
@@ -827,10 +858,10 @@ def define_quasi_steady_transition(qst, mass_properties, dV_dt_constraint, pitch
         front_outer_rpm = csdl.Variable(name=f"qst_{qst_ind}_front_outer_rpm" ,shape=(num_nodes, ), value=1000)
         rear_outer_rpm = csdl.Variable(name=f"qst_{qst_ind}_rear_outer_rpm", shape=(num_nodes, ), value=1000)
     
-    front_inner_rpm.set_as_design_variable(lower=100, upper=2000, scaler=1e-3)
-    rear_inner_rpm.set_as_design_variable(lower=100, upper=2000, scaler=1e-3)
-    front_outer_rpm.set_as_design_variable(lower=100, upper=2000, scaler=1e-3)
-    rear_outer_rpm.set_as_design_variable(lower=100, upper=2000, scaler=1e-3)
+    cd.load_var(front_inner_rpm, lower=100, upper=2000, scaler=1e-3, var_dict=dv_dict_full_opt)
+    cd.load_var(rear_inner_rpm, lower=100, upper=2000, scaler=1e-3, var_dict=dv_dict_full_opt)
+    cd.load_var(front_outer_rpm, lower=100, upper=2000, scaler=1e-3, var_dict=dv_dict_full_opt)
+    cd.load_var(rear_outer_rpm, lower=100, upper=2000, scaler=1e-3, var_dict=dv_dict_full_opt)
     
     rpm_list = [front_outer_rpm, rear_outer_rpm, front_inner_rpm, rear_inner_rpm, front_inner_rpm, rear_inner_rpm, front_outer_rpm, rear_outer_rpm]
     
@@ -1058,9 +1089,9 @@ def define_plus_3g(plus_3g):
 
     # Actuate tail
     tail = airframe.comps["empennage"].comps["h_tail"]
-    elevator_deflection = csdl.Variable(name="plus_3g_elevator", shape=(1, ), value=0)
-    elevator_deflection.set_as_design_variable(lower=np.deg2rad(-20), upper=np.deg2rad(20), scaler=10)
-    tail.actuate(elevator_deflection)
+    # elevator_deflection = csdl.Variable(name="plus_3g_elevator", shape=(1, ), value=0)
+    # elevator_deflection.set_as_design_variable(lower=np.deg2rad(-20), upper=np.deg2rad(20), scaler=5)
+    # tail.actuate(elevator_deflection)
 
     # Re-evaluate meshes and compute nodal velocities
     plus_3g.finalize_meshes()
@@ -1152,7 +1183,7 @@ def define_plus_3g(plus_3g):
         beam_bkl_bot.name = "bottom_buckling_plus_3g"
         beam_bkl_top.name = "top_buckling_plus_3g"
         beam_bkl_bot.set_as_constraint(upper=1.)
-        beam_bkl_top.set_as_constraint(upper=1.)
+        # beam_bkl_top.set_as_constraint(upper=1.)
         # beam_stress = csdl.maximum(struct_solution.get_stress(beam))
         # # max_stress_csdl = csdl.maximum(beam_stress)
         # beam_stress.name = "max_stress"
@@ -1172,7 +1203,7 @@ def define_plus_3g(plus_3g):
     pusher_rotor_mesh = rotor_meshes.discretizations["pusher_prop_mesh"]
     mesh_vel = pusher_rotor_mesh.nodal_velocities
     plus_3g_rpm = csdl.Variable(name="plus_3g_pusher_rpm", shape=(1, ), value=1883.73389999)
-    plus_3g_rpm.set_as_design_variable(upper=3000, lower=1200, scaler=1e-3)
+    cd.load_var(plus_3g_rpm, upper=3500, lower=800, scaler=1e-3, var_dict=dv_dict_full_opt)
     bem_inputs = RotorAnalysisInputs()
     bem_inputs.ac_states = plus_3g.quantities.ac_states
     bem_inputs.atmos_states =  plus_3g.quantities.atmos_states
@@ -1204,7 +1235,12 @@ def define_plus_3g(plus_3g):
     if do_trim_optimization:
         pass
     else:
-        accel_norm_plus_3g.set_as_constraint(upper=0, lower=0, scaler=4)
+        du_dt = accel_plus_3g.du_dt
+        dw_dt = accel_plus_3g.dw_dt
+        force_equilibrium_3g = (du_dt**2 + dw_dt**2)**0.5
+        force_equilibrium_3g.name = "force_equilibrium_3g"
+        force_equilibrium_3g.set_as_constraint(upper=0, lower=0, scaler=5)
+        # accel_norm_plus_3g.set_as_constraint(upper=0, lower=0, scaler=5)
     
     return accel_plus_3g, total_forces_plus_3g, total_moments_plus_3g
 
@@ -1220,9 +1256,9 @@ def define_minus_1g(minus_1g):
 
     # Actuate tail
     tail = airframe.comps["empennage"].comps["h_tail"]
-    elevator_deflection = csdl.Variable(name="minus_1g_elevator", shape=(1, ), value=0.)
-    elevator_deflection.set_as_design_variable(lower=np.deg2rad(-20), upper=np.deg2rad(20), scaler=10)
-    tail.actuate(elevator_deflection)
+    # elevator_deflection = csdl.Variable(name="minus_1g_elevator", shape=(1, ), value=0.)
+    # elevator_deflection.set_as_design_variable(lower=np.deg2rad(-20), upper=np.deg2rad(20), scaler=5)
+    # tail.actuate(elevator_deflection)
 
     # Re-evaluate meshes and compute nodal velocities
     minus_1g.finalize_meshes()
@@ -1314,7 +1350,7 @@ def define_minus_1g(minus_1g):
         beam_bkl_top.name = "top_buckling_minus_1g"
         beam_bkl_bot.name = "bottom_buckling_minus_1g"
         beam_bkl_top.set_as_constraint(upper=1.)
-        beam_bkl_bot.set_as_constraint(upper=1.)
+        # beam_bkl_bot.set_as_constraint(upper=1.)
         
         # beam_stress = csdl.maximum(struct_solution.get_stress(beam))
         # # max_stress_csdl = csdl.maximum(beam_stress)
@@ -1335,7 +1371,7 @@ def define_minus_1g(minus_1g):
     pusher_rotor_mesh = rotor_meshes.discretizations["pusher_prop_mesh"]
     mesh_vel = pusher_rotor_mesh.nodal_velocities
     minus_1g_rpm = csdl.Variable(name="minus_1g_pusher_rpm", shape=(1, ), value=2000)
-    minus_1g_rpm.set_as_design_variable(upper=3000, lower=1200, scaler=1e-3)
+    cd.load_var(minus_1g_rpm, upper=3000, lower=700, scaler=1e-3, var_dict=dv_dict_full_opt)
     bem_inputs = RotorAnalysisInputs()
     bem_inputs.ac_states = minus_1g.quantities.ac_states
     bem_inputs.atmos_states =  minus_1g.quantities.atmos_states
@@ -1367,7 +1403,12 @@ def define_minus_1g(minus_1g):
     if do_trim_optimization:
         pass
     else:
-        accel_norm_minus_1g.set_as_constraint(upper=0, lower=0, scaler=4)
+        du_dt = accel_minus_1g.du_dt
+        dw_dt = accel_minus_1g.dw_dt
+        force_equilibrium_1g = (du_dt**2 + dw_dt**2)**0.5
+        force_equilibrium_1g.name = "force_equilibrium_m1g"
+        force_equilibrium_1g.set_as_constraint(upper=0, lower=0, scaler=5)
+        # accel_norm_minus_1g.set_as_constraint(upper=0, lower=0, scaler=5)
     
     return accel_minus_1g, total_forces_minus_1g, total_moments_minus_1g
 
@@ -1401,10 +1442,23 @@ def define_hover(hover):
         rpm_stack = csdl.Variable(shape=(8,), value=0.)
         available_power_stack = csdl.Variable(shape=(8, ), value=0.)
 
+        front_inner_rpm = csdl.Variable(name="hover_front_inner_rpm",shape=(1, ), value=1250.58939825)
+        cd.load_var(front_inner_rpm, upper=1800, lower=500, scaler=1e-3, var_dict=dv_dict_full_opt)
+        rear_inner_rpm = csdl.Variable(name="hover_rear_inner_rpm", shape=(1, ), value=1243.40864345)
+        cd.load_var(rear_inner_rpm, upper=1800, lower=500, scaler=1e-3, var_dict=dv_dict_full_opt)
+        front_outer_rpm = csdl.Variable(name="hover_front_outer_rpm" ,shape=(1, ), value=1433.88576945)
+        cd.load_var(front_outer_rpm, upper=1800, lower=500, scaler=1e-3, var_dict=dv_dict_full_opt)
+        rear_outer_rpm = csdl.Variable(name="hover_rear_outer_rpm", shape=(1, ), value=1213.98882905)
+        cd.load_var(rear_outer_rpm, upper=1800, lower=500, scaler=1e-3, var_dict=dv_dict_full_opt)
+
+        rpm_list = [front_outer_rpm, rear_outer_rpm, front_inner_rpm, rear_inner_rpm, front_inner_rpm, rear_inner_rpm, front_outer_rpm, rear_outer_rpm]
+
         for i in range(8):
-            rpm = csdl.Variable(name=f"hover_lift_rotor_{i}_rpm", shape=(1, ), value=1200)
-            rpm.set_as_design_variable(upper=1800, lower=500, scaler=1e-3)
-            rpm_stack = rpm_stack.set(csdl.slice[i], rpm)
+            # rpm = csdl.Variable(name=f"hover_lift_rotor_{i}_rpm", shape=(1, ), value=1200)
+            # cd.load_var(rpm, upper=1800, lower=500, scaler=1e-3, var_dict=dv_dict_full_opt)
+            # rpm_stack = rpm_stack.set(csdl.slice[i], rpm)
+            
+            rpm_stack = rpm_stack.set(csdl.slice[i], rpm_list[i])
 
             rotor_mesh = rotor_meshes.discretizations[f"rotor_{i+1}_mesh"]
             mesh_vel = rotor_mesh.nodal_velocities
@@ -1476,20 +1530,26 @@ def define_hover(hover):
 
             power_delta = (available_power_stack[i] - bem_outputs.total_power) / available_power_stack[i]
             power_delta_stack = power_delta_stack.set(csdl.slice[i], power_delta)
-            power_delta.set_as_constraint(lower=0.1, scaler=5)
+            # power_delta.set_as_constraint(lower=0.1, scaler=5)
 
         for i in range(8):
             bem_forces.append(force_stack[i].reshape((-1, 3)))
             bem_moments.append(moment_stack[i].reshape((-1, 3)))
             hover_power[f"lift_rotor_{i+1}"] = power_stack[i]
 
-            power_delta = power_delta_stack[i]
+            if do_trim_optimization:
+                pass
+            else:
+                power_delta = power_delta_stack[i]
+                power_delta.name = f"lift_motor_{i}_power_delta"
+                power_delta.set_as_constraint(lower=0.1, scaler=5)
+
 
 
     else:
         for i in range(8):
             rpm = csdl.Variable(name=f"hover_lift_rotor_{i}_rpm", shape=(1, ), value=1000)
-            rpm.set_as_design_variable(upper=1500, lower=500, scaler=1e-3)
+            cd.load_var(rpm, upper=1800, lower=500, scaler=1e-3, var_dict=dv_dict_full_opt)
             rpm_list.append(rpm)
             rotor_mesh = rotor_meshes.discretizations[f"rotor_{i+1}_mesh"]
             mesh_vel = rotor_mesh.nodal_velocities
@@ -1647,8 +1707,7 @@ def define_oei(oei, skip_index):
             pass
         else:
             rpm = csdl.Variable(name=f"oei_{skip_index}_lift_rotor_{i}_rpm", shape=(1, ), value=1200)
-            
-            rpm.set_as_design_variable(upper=2500, lower=500, scaler=1e-3)
+            cd.load_var(rpm, upper=2500, lower=500, scaler=1e-3, var_dict=dv_dict_full_opt)
             rpm_list.append(rpm)
             rotor_mesh = rotor_meshes.discretizations[f"rotor_{i+1}_mesh"]
             mesh_vel = rotor_mesh.nodal_velocities
@@ -1716,7 +1775,7 @@ def define_cruise(cruise):
     # Actuate tail
     tail = airframe.comps["empennage"].comps["h_tail"]
     elevator_deflection = csdl.Variable(name="cruise_elevator", shape=(1, ), value=0)
-    elevator_deflection.set_as_design_variable(lower=np.deg2rad(-10), upper=np.deg2rad(10), scaler=10)
+    cd.load_var(elevator_deflection, lower=np.deg2rad(-10), upper=np.deg2rad(10), scaler=4, var_dict=dv_dict_full_opt)
     tail.actuate(elevator_deflection)
 
     # Re-evaluate meshes and compute nodal velocities
@@ -1759,7 +1818,6 @@ def define_cruise(cruise):
     drag_build_up = drag_build_up_model(cruise.quantities.ac_states, cruise.quantities.atmos_states,
                                         wing.parameters.S_ref, [wing, fuselage, tail, v_tail, rotors] + booms)
     
-    
     cruise_power = {}
 
     # BEM solver
@@ -1767,7 +1825,7 @@ def define_cruise(cruise):
     pusher_rotor_mesh = rotor_meshes.discretizations["pusher_prop_mesh"]
     mesh_vel = pusher_rotor_mesh.nodal_velocities
     cruise_rpm = csdl.Variable(name="cruise_pusher_rpm", shape=(1, ), value=1200)
-    cruise_rpm.set_as_design_variable(upper=2500, lower=1200, scaler=1e-3)
+    cd.load_var(cruise_rpm, upper=2500, lower=700, scaler=1e-3, var_dict=dv_dict_full_opt)
     bem_inputs = RotorAnalysisInputs()
     bem_inputs.ac_states = cruise.quantities.ac_states
     bem_inputs.atmos_states =  cruise.quantities.atmos_states
@@ -1817,7 +1875,7 @@ def define_climb(climb):
     # Actuate tail
     tail = airframe.comps["empennage"].comps["h_tail"]
     elevator_deflection = csdl.Variable(name="climb_elevator", shape=(1, ), value=0)
-    elevator_deflection.set_as_design_variable(lower=np.deg2rad(-10), upper=np.deg2rad(12), scaler=10)
+    cd.load_var(elevator_deflection, lower=np.deg2rad(-10), upper=np.deg2rad(12), scaler=4, var_dict=dv_dict_full_opt)
     tail.actuate(elevator_deflection)
 
     # Re-evaluate meshes and compute nodal velocities
@@ -1866,8 +1924,8 @@ def define_climb(climb):
     rotor_meshes = mesh_container["rotor_meshes"]
     pusher_rotor_mesh = rotor_meshes.discretizations["pusher_prop_mesh"]
     mesh_vel = pusher_rotor_mesh.nodal_velocities
-    climb_rpm = csdl.Variable(name="climb_pusher_rpm", shape=(1, ), value=1200)
-    climb_rpm.set_as_design_variable(upper=2500, lower=1200, scaler=1e-3)
+    climb_rpm = csdl.Variable(name="climb_pusher_rpm", shape=(1, ), value=1300)
+    cd.load_var(climb_rpm, upper=2500, lower=700, scaler=1e-3, var_dict=dv_dict_full_opt)
     bem_inputs = RotorAnalysisInputs()
     bem_inputs.ac_states = climb.quantities.ac_states
     bem_inputs.atmos_states =  climb.quantities.atmos_states
@@ -1886,7 +1944,19 @@ def define_climb(climb):
     available_power = motor_mass * motor_power_density * motor_efficiency
     power_delta = (available_power - P_climb) / available_power
     power_delta.name = "pusher_motor_power_delta"
-    power_delta.set_as_constraint(lower=0.2, scaler=3)
+    
+    # power_delta_constraint = 0.15
+
+    # min_motor_mass = P_climb / (1 - power_delta_constraint) / 6500
+    # print(climb_rpm.value)
+    # print(min_motor_mass.value)
+    # print(power_delta.value)
+    # exit()
+    
+    if do_trim_optimization:
+        power_delta.set_as_constraint(lower=0.1, scaler=4)
+    else:
+        power_delta.set_as_constraint(lower=0.1, scaler=4)
 
     climb_power["pusher_prop"] = P_climb
     climb.quantities.rotor_power_dict = climb_power
@@ -1928,7 +1998,7 @@ def define_descent(descent):
     # Actuate tail
     tail = airframe.comps["empennage"].comps["h_tail"]
     elevator_deflection = csdl.Variable(name="descent_elevator", shape=(1, ), value=0)
-    elevator_deflection.set_as_design_variable(lower=np.deg2rad(-10), upper=np.deg2rad(12), scaler=10)
+    cd.load_var(elevator_deflection, lower=np.deg2rad(-10), upper=np.deg2rad(12), scaler=4, var_dict=dv_dict_full_opt)
     tail.actuate(elevator_deflection)
 
     # Re-evaluate meshes and compute nodal velocities
@@ -1978,7 +2048,7 @@ def define_descent(descent):
     pusher_rotor_mesh = rotor_meshes.discretizations["pusher_prop_mesh"]
     mesh_vel = pusher_rotor_mesh.nodal_velocities
     descent_rpm = csdl.Variable(name="descent_pusher_rpm", shape=(1, ), value=1000)
-    descent_rpm.set_as_design_variable(upper=2500, lower=1200, scaler=1e-3)
+    cd.load_var(descent_rpm, upper=2000, lower=500, scaler=1e-3, var_dict=dv_dict_full_opt)
     bem_inputs = RotorAnalysisInputs()
     bem_inputs.ac_states = descent.quantities.ac_states
     bem_inputs.atmos_states =  descent.quantities.atmos_states
@@ -2183,25 +2253,38 @@ if do_post_process:
     
 # Set design variable values
 for dv, dv_val in recorder.design_variables.items():
-    if dv.name in dv_dict_trim_opt:
-        dv.value = dv_dict_trim_opt[dv.name] 
-        num_value = dv_dict_trim_opt[dv.name]
-        if isinstance(num_value, (int, float)):
-            scalar = abs(1/num_value)
-        else:
-            scalar = 1 / np.linalg.norm(num_value)
-        recorder.design_variables[dv] = (scalar, dv_val[1], dv_val[2])
+    # if dv.name in dv_dict_trim_opt:
+    #     dv.value = dv_dict_trim_opt[dv.name] 
+    #     num_value = dv.value #dv_dict_trim_opt[dv.name]
+    #     if isinstance(num_value, (int, float)):
+    #         scalar = abs(1/num_value)
+    #     else:
+    #         scalar = 1 / np.linalg.norm(num_value)
+    #     recorder.design_variables[dv] = (scalar, dv_val[1], dv_val[2])
     
-    elif dv.name in dv_dict_full_opt:
+    if dv.name in dv_dict_full_opt:
         dv.value = dv_dict_full_opt[dv.name] 
-        num_value = dv_dict_full_opt[dv.name]
-        if isinstance(num_value, (int, float)):
-            scalar = abs(1/num_value)
-        else:
-            scalar = 1 / np.linalg.norm(num_value)
-        recorder.design_variables[dv] = (scalar, dv_val[1], dv_val[2])
+        # num_value = dv.value #dv_dict_full_opt[dv.name]
+        # if isinstance(num_value, (int, float)):
+        #     scalar = abs(1/num_value)
+        # else:
+        #     scalar = 1 / np.linalg.norm(num_value)
+        # recorder.design_variables[dv] = (scalar, dv_val[1], dv_val[2])
     else:
         print(dv.name, dv.value)
+
+
+print("\n")
+for dv, dv_val in recorder.design_variables.items():
+    print(dv.name, dv.value, dv_val)
+print("\n")
+for c, c_val in recorder.constraints.items():
+    print(c.name, c.value, c_val)
+print("\n")
+for obj, obj_val in recorder.objectives.items():
+    print(obj.name, obj.value, )
+
+# exit()
 
 if run_optimization:
     from modopt import CSDLAlphaProblem
@@ -2241,19 +2324,19 @@ if run_optimization:
         prob = CSDLAlphaProblem(problem_name='LPC_full_optimization_new', simulator=jax_sim)
 
         # optimizer = IPOPT(prob, solver_options={'max_iter': 200, 'tol': 1e-5})
-        optimizer = SNOPT(
-            prob, 
-            solver_options = {
-                'append2file' : True,
-                'continue_on_failure': True,
-                'Major iterations':150, 
-                'Major optimality':1e-5, 
-                'Major feasibility':1e-5,
-                'Major step limit':1.5,
-                'Linesearch tolerance':0.6,
-            }
-        )
-        # optimizer = PySLSQP(prob, solver_options={"acc": 1e-5, "maxiter" : 50, "iprint" : 2})
+        # optimizer = SNOPT(
+        #     prob, 
+        #     solver_options = {
+        #         'append2file' : True,
+        #         'continue_on_failure': True,
+        #         'Major iterations':750, 
+        #         'Major optimality':1e-5, 
+        #         'Major feasibility':1e-5,
+        #         # 'Major step limit':1.5,
+        #         # 'Linesearch tolerance':0.6,
+        #     }
+        # )
+        optimizer = PySLSQP(prob, solver_options={"acc": 1e-5, "maxiter" : 100, "iprint" : 2})
 
         # Solve your optimization problem
         optimizer.solve()
@@ -2267,7 +2350,7 @@ constraints_save_dict = {}
 dv_dict = recorder.design_variables
 constraint_dict = recorder.constraints
 
-csdl.inline_export("trim_opt_all")
+csdl.inline_export("full_opt_all")
 
 for dv in dv_dict.keys():
     dv_save_dict[dv.name] = dv.value
@@ -2277,10 +2360,10 @@ for c in constraint_dict.keys():
     constraints_save_dict[c.name] = c.value
     print(c.value)
 
-with open("lpc_dv_dict_full_opt_new.pickle", "wb") as handle:
+with open("lpc_dv_dict_full_opt_new_3.pickle", "wb") as handle:
     pickle.dump(dv_save_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-with open("lpc_constraints_dict_full_opt_new.pickle", "wb") as handle:
+with open("lpc_constraints_dict_full_opt_new_2.pickle", "wb") as handle:
     pickle.dump(constraints_save_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 # print("total_forces", jax_sim[total_forces])

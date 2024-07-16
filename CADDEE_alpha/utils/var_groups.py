@@ -48,6 +48,7 @@ class DragBuildUpQuantities:
     percent_laminar : Union[csdl.Variable, float, int] = 10
     percent_turbulent : Union[csdl.Variable, float, int] = 90
     drag_area: Union[csdl.Variable, float, None] = None
+    correction_factor = 1
 
 class MaterialProperties:
     def __init__(self, component, direction: str = 'centered'):

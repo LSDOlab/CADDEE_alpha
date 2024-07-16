@@ -988,6 +988,9 @@ def make_1d_box_beam(
     if make_half_beam:
         num_beam_nodes = num_beam_nodes // 2 + 1
 
+    if one_side_geometry is not None:
+        wing_geometry = one_side_geometry
+
     LE_points_parametric = wing_geometry.project(LE_points, plot=plot, grid_search_density_parameter=grid_search_density)
     TE_points_parametric = wing_geometry.project(TE_points, plot=plot, grid_search_density_parameter=grid_search_density)
 
@@ -1011,8 +1014,7 @@ def make_1d_box_beam(
         beam_width_nodal = make_mesh_symmetric(beam_width_raw, num_beam_nodes, spanwise_index=None)
         beam_width = (beam_width_nodal[0:-1] + beam_width_nodal[1:]) / 2
 
-    if one_side_geometry is not None:
-        wing_geometry = one_side_geometry
+    
 
     if project_spars:
         # use the spars to get the beam width
