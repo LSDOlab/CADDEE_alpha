@@ -11,3 +11,4 @@ from CADDEE_alpha.utils.units import Units
 from CADDEE_alpha.utils.loading import load_var
 import caddee_materials as materials
 import CADDEE_alpha.utils.mesh_utils as mesh_utils
+import CADDEE_alpha.utils.struct_utils as struct_utils
