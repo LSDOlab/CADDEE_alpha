@@ -317,9 +317,7 @@ class Component:
             if "do_not_remake_ffd_block" in kwargs.keys():
                 pass
             else:
-                t1 = time.time()
                 self._ffd_block = self._make_ffd_block(self.geometry)
-                t2 = time.time()
 
                 self.ffd_block_face_1 = self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 0.5, 0.]))
                 self.ffd_block_face_2 = self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 0.5, 1.]))
@@ -327,8 +325,7 @@ class Component:
                 self.ffd_block_face_4 = self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 1., 0.5]))
                 self.ffd_block_face_5 = self._ffd_block.evaluate(parametric_coordinates=np.array([0., 0.5, 0.5]))
                 self.ffd_block_face_6 = self._ffd_block.evaluate(parametric_coordinates=np.array([1., 0.5, 0.5]))
-                
-                print("time for making ffd block", t2-t1)
+                self.ffd_block_center = self._ffd_block.evaluate(parametric_coordinates=np.array([0.5, 0.5, 0.5]))
     
     def create_subgeometry(self, search_names:list[str], ignore_names:list[str]=[]) -> FunctionSet:
         """Create a sub-geometry by providing the search names of the e.g., OpenVSP component.

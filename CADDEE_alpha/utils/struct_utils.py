@@ -30,8 +30,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
                                  t_vars=None, skin_t=0.01, spar_t=0.01, rib_t=0.01, 
                                  minimum_thickness=0.0003, add_dvs=True):
     bay_eps = 1e-2
-    if t_vars is None:
-        t_out = {}
+    t_out = {}
     for i in range(num_ribs-1):
         # upper wing bays
         lower = top_array[:, i]
@@ -48,6 +47,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
             if t_vars is not None:
                 thickness = csdl.Variable(value=skin_t, name='upper_wing_thickness_'+str(i))
                 thickness.value = t_vars['upper_wing_thickness_'+str(i)]
+                t_out[thickness.name] = thickness
             else:
                 thickness = csdl.Variable(value=skin_t, name='upper_wing_thickness_'+str(i))
                 t_out[thickness.name] = thickness
@@ -64,6 +64,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
             if t_vars is not None:
                 thickness = csdl.Variable(value=skin_t, name='upper_wing_thickness_'+str(i))
                 thickness.value = t_vars['upper_wing_thickness_'+str(i)]
+                t_out[thickness.name] = thickness
             else:
                 thickness = csdl.Variable(value=skin_t, name='upper_wing_thickness_'+str(i))
                 t_out[thickness.name] = thickness
@@ -91,6 +92,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
             if t_vars is not None:
                 thickness = csdl.Variable(value=skin_t, name='lower_wing_thickness_'+str(i))
                 thickness.value = t_vars['lower_wing_thickness_'+str(i)]
+                t_out[thickness.name] = thickness
             else:
                 thickness = csdl.Variable(value=skin_t, name='lower_wing_thickness_'+str(i))
                 t_out[thickness.name] = thickness
@@ -106,6 +108,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
             if t_vars is not None:
                 thickness = csdl.Variable(value=skin_t, name='lower_wing_thickness_'+str(i))
                 thickness.value = t_vars['lower_wing_thickness_'+str(i)]
+                t_out[thickness.name] = thickness
             else:
                 thickness = csdl.Variable(value=skin_t, name='lower_wing_thickness_'+str(i))
                 t_out[thickness.name] = thickness
@@ -129,6 +132,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
             if t_vars is not None:
                 thickness = csdl.Variable(value=rib_t, name=name+'_thickness')
                 thickness.value = t_vars[name+'_thickness']
+                t_out[thickness.name] = thickness
             else:
                 thickness = csdl.Variable(value=rib_t, name=name+'_thickness')
                 t_out[thickness.name] = thickness
@@ -154,6 +158,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
             if t_vars is not None:
                 thickness = csdl.Variable(value=spar_t, name=f'spar_{spar_num}_thickness_{i}')
                 thickness.value = t_vars[f'spar_{spar_num}_thickness_{i}']
+                t_out[thickness.name] = thickness
             else:
                 thickness = csdl.Variable(value=spar_t, name=f'spar_{spar_num}_thickness_{i}')
                 t_out[thickness.name] = thickness
@@ -164,8 +169,9 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
             thickness_fs = lfs.FunctionSet(functions)
             wing.quantities.material_properties.add_material(material, thickness_fs)
             spar_num += 1
-    if t_vars is None:
-        return t_out
+
+    return t_out
+    
 
 def construct_plate_condition(upper, lower, forward, backward, ind):
     if upper == 1:
@@ -270,7 +276,10 @@ def compute_buckling_loads(wing, material, point_array, t_vars):
         tau_cr.append(shear_k*E/(1-nu**2)*(t/b)**2)
     return sigma_cr, tau_cr
 
-def compute_curved_buckling_loads(wing, material, point_array, t_vars):
+def compute_curved_buckling_loads(wing, material, point_array, t_vars, surface="upper"):
+    if surface not in ["upper", "lower"]:
+        raise ValueError("'surface' must either be 'upper' or 'lower'")
+    
     E, nu, G = material.get_constants()
     if isinstance(E, csdl.Variable):
         E = E.value
@@ -285,7 +294,7 @@ def compute_curved_buckling_loads(wing, material, point_array, t_vars):
         upper_middle = (upper[0][0], (upper[0][1]+upper[1][1])/2)
 
         # get thickness
-        t = t_vars['upper_wing_thickness_'+str(i)]
+        t = t_vars[f'{surface}_wing_thickness_'+str(i)]
 
         # approximate the bay as a rectangle between ribs (lower and upper) and the spars (s1 and s2)
         # compute the side lengths of the rectangle
