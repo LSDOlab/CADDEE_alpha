@@ -64,17 +64,17 @@ initial_thickness = 5 * minimum_thickness
 do_qst = False
 vectorize_qst = False
 
-do_hover = False
-do_acoustics = True
+do_hover = True
+do_acoustics = False
 
-do_cruise = False
-do_climb = False
-do_descent = False
+do_cruise = True
+do_climb = True
+do_descent = True
 
-do_structural_sizing = True
+do_structural_sizing = False
 do_oei = False
 
-do_post_process = False
+do_post_process = True
 
 debug = False
 recorder = csdl.Recorder(inline=True, expand_ops=True, debug=debug)
@@ -85,7 +85,7 @@ caddee = cd.CADDEE()
 make_meshes = True
 run_ffd = False
 run_optimization = True
-do_trim_optimization = False
+do_trim_optimization = True
 
 # Import L+C .stp file and convert control points to meters
 lpc_geom = cd.import_geometry("LPC_final_custom_blades.stp", scale=cd.Units.length.foot_to_m)
@@ -385,7 +385,7 @@ def define_base_config(caddee : cd.CADDEE):
                       front_inner_twist, rear_inner_twist, front_outer_twist, rear_outer_twist]
 
         if run_optimization:
-            if do_structural_sizing is True or do_trim_optimization is True:
+            if do_structural_sizing is True:
                 cd.load_var(chord_cps, dv_flag=False, var_dict=dv_dict_full_opt)
                 cd.load_var(twist_cps, dv_flag=False, var_dict=dv_dict_full_opt)
                 cd.load_var(front_inner_chord, dv_flag=False, var_dict=dv_dict_full_opt)
@@ -600,22 +600,22 @@ def define_mass_properties(caddee: cd.CADDEE):
 
     # battery
     batteries = airframe.comps["batteries"]
-    battery_mass_front_inner = csdl.Variable(name="battery_mass", shape=(1, ), value=200)
-    battery_mass_front_outer = csdl.Variable(name="battery_mass", shape=(1, ), value=200)
-    battery_mass_rear_inner = csdl.Variable(name="battery_mass", shape=(1, ), value=0)
-    battery_mass_rear_outer = csdl.Variable(name="battery_mass", shape=(1, ), value=0)
+    battery_mass_front_inner = csdl.Variable(name="battery_mass_front_inner", shape=(1, ), value=130)
+    battery_mass_front_outer = csdl.Variable(name="battery_mass_front_outer", shape=(1, ), value=130)
+    battery_mass_rear_inner = csdl.Variable(name="battery_mass_rear_inner", shape=(1, ), value=70)
+    battery_mass_rear_outer = csdl.Variable(name="battery_mass_rear_outer", shape=(1, ), value=70)
 
     if run_optimization:
-        if do_structural_sizing is True or do_trim_optimization is True:
+        if do_structural_sizing is True:
             cd.load_var(battery_mass_front_inner, dv_flag=False, var_dict=dv_dict_full_opt)
             cd.load_var(battery_mass_front_outer, dv_flag=False, var_dict=dv_dict_full_opt)
             cd.load_var(battery_mass_rear_inner, dv_flag=False, var_dict=dv_dict_full_opt)
             cd.load_var(battery_mass_rear_outer, dv_flag=False, var_dict=dv_dict_full_opt)
         else:
-            cd.load_var(battery_mass_front_inner, lower=0.8 * 120, upper=1.2 * 120, scaler=1e-3, var_dict=dv_dict_full_opt)
-            cd.load_var(battery_mass_front_outer, lower=0.8 * 80, upper=1.2 * 80, scaler=1e-3, var_dict=dv_dict_full_opt)
-            cd.load_var(battery_mass_rear_inner, lower=0.8 * 120, upper=1.2 * 120, scaler=1e-3, var_dict=dv_dict_full_opt)
-            cd.load_var(battery_mass_rear_outer, lower=0.8 * 80, upper=1.2 * 80, scaler=1e-3, var_dict=dv_dict_full_opt)
+            cd.load_var(battery_mass_front_inner, lower=0.8 * 130, upper=1.2 * 130, scaler=1e-3, var_dict=dv_dict_full_opt)
+            cd.load_var(battery_mass_front_outer, lower=0.8 * 130, upper=1.2 * 130, scaler=1e-3, var_dict=dv_dict_full_opt)
+            cd.load_var(battery_mass_rear_inner, lower=0.8 * 70, upper=1.2 * 70, scaler=1e-3, var_dict=dv_dict_full_opt)
+            cd.load_var(battery_mass_rear_outer, lower=0.8 * 70, upper=1.2 * 70, scaler=1e-3, var_dict=dv_dict_full_opt)
 
     battery_mass_list = [
         battery_mass_front_outer, battery_mass_rear_outer, battery_mass_front_inner, battery_mass_rear_inner, 
@@ -626,14 +626,14 @@ def define_mass_properties(caddee: cd.CADDEE):
     for batt_mass in battery_mass_list:
         total_battery_mass = total_battery_mass + batt_mass
 
-    print(total_battery_mass.value)
-
     for i, boom in enumerate(booms.comps.values()):
         battery = batteries.comps[f"battery_{i+1}"]        
         battery_cg = boom.ffd_block_center
-        print(battery_cg.value)
-        print(battery_mass_list[i].value)
-        print("\n")
+        if i == 3: # NOTE: there is some asymmetry in the geometry of the booms
+            symmetric_cg = battery_cg * np.array([1, -1, 1])
+        if i == 5:
+            battery_cg = symmetric_cg
+        
         battery.quantities.mass_properties.cg_vector = battery_cg
         battery.quantities.mass_properties.mass = battery_mass_list[i]
     
@@ -756,7 +756,7 @@ def define_mass_properties(caddee: cd.CADDEE):
     rear_outer_motor_mass = csdl.Variable(name="rear_outer_motor_mass", shape=(1, ), value=24.57177679)
 
     if run_optimization:
-        if do_structural_sizing is True or do_trim_optimization is True:
+        if do_structural_sizing is True:
             cd.load_var(pusher_motor_mass, dv_flag=False, var_dict=dv_dict_full_opt)
             cd.load_var(front_inner_motor_mass, dv_flag=False, var_dict=dv_dict_full_opt)
             cd.load_var(rear_inner_motor_mass, dv_flag=False, var_dict=dv_dict_full_opt)
@@ -795,20 +795,15 @@ def define_mass_properties(caddee: cd.CADDEE):
     # systems
     systems = airframe.comps["systems"]
     systems_mass = csdl.Variable(shape=(1, ), value=244)
-    systems_cg = csdl.Variable(shape=(3, ), value=np.array([-1., 0., -1.5]))
+    systems_cg = csdl.Variable(shape=(3, ), value=np.array([-0.5, 0., -1.5]))
     systems.quantities.mass_properties.mass = systems_mass
     systems.quantities.mass_properties.cg_vector = systems_cg
 
     # Assemble system mass properties
     base_config.assemble_system_mass_properties(update_copies=True)
-    print("total mass", base_config.system.quantities.mass_properties.mass.value)
-    print("total cg", base_config.system.quantities.mass_properties.cg_vector.value)
-    exit()
     aircraft_mass = base_config.system.quantities.mass_properties.mass
     aircraft_mass.name = "aircraft_mass"
-    if do_trim_optimization:
-        pass
-    elif do_structural_sizing:
+    if do_structural_sizing:
         pass
     else:
         aircraft_mass.set_as_objective(scaler=1e-3)
@@ -1255,10 +1250,7 @@ def define_plus_3g(plus_3g):
     # NOTE: For structural sizing we only care about Z-force equiblibrium
     total_z_force_equilibrium = csdl.norm(total_forces_plus_3g[:, 2])
     total_z_force_equilibrium.name = "total_z_force_equilibrium_plus_3g"
-    if do_trim_optimization:
-        pass
-    else:
-        total_z_force_equilibrium.set_as_constraint(lower=0., upper=0., scaler=1e-3)
+    total_z_force_equilibrium.set_as_constraint(lower=0., upper=0., scaler=1e-3)
     
     return total_z_force_equilibrium, total_forces_plus_3g, total_moments_plus_3g
 
@@ -1379,10 +1371,7 @@ def define_minus_1g(minus_1g):
     # NOTE: for structural sizing we only care about Z-force equilibrium
     total_z_force_equilibrium = csdl.norm(total_forces_minus_1g[:, 2])
     total_z_force_equilibrium.name = "total_z_force_equilibrium_minus_1g"
-    if do_trim_optimization:
-        pass
-    else:
-        total_z_force_equilibrium.set_as_constraint(lower=0., upper=0., scaler=1e-3)
+    total_z_force_equilibrium.set_as_constraint(lower=0., upper=0., scaler=1e-3)
     
     return total_z_force_equilibrium, total_forces_minus_1g, total_moments_minus_1g
 
@@ -1511,12 +1500,9 @@ def define_hover(hover):
             bem_moments.append(moment_stack[i].reshape((-1, 3)))
             hover_power[f"lift_rotor_{i+1}"] = power_stack[i]
 
-            if do_trim_optimization:
-                pass
-            else:
-                power_delta = power_delta_stack[i]
-                power_delta.name = f"lift_motor_{i}_power_delta"
-                power_delta.set_as_constraint(lower=0.1, scaler=5)
+            power_delta = power_delta_stack[i]
+            power_delta.name = f"lift_motor_{i}_power_delta"
+            power_delta.set_as_constraint(lower=0.1, scaler=5)
 
 
 
@@ -1652,10 +1638,7 @@ def define_hover(hover):
     )
     accel_norm_hover = accel_hover.accel_norm
     accel_norm_hover.name = "hover_trim_residual"
-    if do_trim_optimization:
-        pass
-    else:
-        accel_norm_hover.set_as_constraint(upper=0, lower=0, scaler=4)
+    accel_norm_hover.set_as_constraint(upper=0, lower=0, scaler=4)
 
     return accel_hover, total_forces_hover, total_moments_hover
 
@@ -1826,10 +1809,7 @@ def define_cruise(cruise):
     )
     accel_norm_cruise = accel_cruise.accel_norm
     accel_norm_cruise.name = "cruise_trim"
-    if do_trim_optimization:
-        pass
-    else:
-        accel_norm_cruise.set_as_constraint(upper=0, lower=0, scaler=4)
+    accel_norm_cruise.set_as_constraint(upper=0, lower=0, scaler=4)
     
     return accel_cruise, total_forces_cruise, total_moments_cruise
 
@@ -1927,11 +1907,7 @@ def define_climb(climb):
     # print(power_delta.value)
     # exit()
     
-    if do_trim_optimization:
-        pass
-        # power_delta.set_as_constraint(lower=0.1, scaler=4)
-    else:
-        power_delta.set_as_constraint(lower=0.1, scaler=4)
+    power_delta.set_as_constraint(lower=0.1, scaler=4)
 
     climb_power["pusher_prop"] = P_climb
     climb.quantities.rotor_power_dict = climb_power
@@ -1953,10 +1929,7 @@ def define_climb(climb):
     accel_norm_climb = accel_climb.accel_norm
     accel_norm_climb.name = "climb_trim"
     # accel_norm_climb.set_as_objective(scaler=1e-1)
-    if do_trim_optimization:
-        pass
-    else:
-        accel_norm_climb.set_as_constraint(upper=0, lower=0, scaler=4)
+    accel_norm_climb.set_as_constraint(upper=0, lower=0, scaler=4)
     
     return accel_climb, total_forces_climb, total_moments_climb
 
@@ -2051,10 +2024,7 @@ def define_descent(descent):
     )
     accel_norm_descent = accel_descent.accel_norm
     accel_norm_descent.name = "descent_trim"
-    if do_trim_optimization:
-        pass
-    else:
-        accel_norm_descent.set_as_constraint(upper=0, lower=0, scaler=4)
+    accel_norm_descent.set_as_constraint(upper=0, lower=0, scaler=4)
     
     return accel_descent, total_forces_descent, total_moments_descent
 
@@ -2068,8 +2038,6 @@ def define_analysis(caddee: cd.CADDEE):
     if do_hover:
         hover = conditions["hover"]
         accel_hover, total_forces_hover, total_moments_hover = define_hover(hover)
-        if do_trim_optimization:
-            trim_norm_list.append(accel_hover.accel_norm)
     
     if do_qst:
         if vectorize_qst:
@@ -2090,20 +2058,14 @@ def define_analysis(caddee: cd.CADDEE):
     if do_climb:
         climb = conditions["climb"]
         accel_climb, total_forces_climb, total_moments_climb = define_climb(climb)
-        if do_trim_optimization:
-            trim_norm_list.append(accel_climb.accel_norm)
 
     if do_cruise:
         cruise = conditions["cruise"]
         accel_cruise, total_forces_cruise, total_moments_cruise = define_cruise(cruise)
-        if do_trim_optimization:
-            trim_norm_list.append(accel_cruise.accel_norm)
 
     if do_descent:
         descent = conditions["descent"]
         accel_descent, total_forces_descent, total_moments_descent = define_descent(descent)
-        if do_trim_optimization:
-            trim_norm_list.append(accel_descent.accel_norm)
 
     if do_structural_sizing:
         plus_3g = conditions["plus_3g"]
@@ -2112,26 +2074,11 @@ def define_analysis(caddee: cd.CADDEE):
         minus_1g = conditions["minus_1g"]
         accel_minus_1g, total_forces_minus_1g, total_moments_minus_1g = define_minus_1g(minus_1g)
 
-        if do_trim_optimization:
-            trim_norm_list.append(accel_plus_3g)
-            trim_norm_list.append(accel_minus_1g)
-
     if do_oei:
         for i in range(4):
             oei = conditions[f"oei_{i}"]
             accel_oei, total_forces_oei, total_moments_oei = define_oei(oei, i)
             trim_norm_list.append(accel_oei.accel_norm)
-
-        
-
-    if do_trim_optimization:
-        trim_norm = csdl.Variable(shape=(1, ), value=0)
-        for i in range(len(trim_norm_list)):
-            trim_norm = trim_norm + trim_norm_list[i]
-        
-        trim_norm.set_as_objective(scaler=1e-4)
-
-        return trim_norm_list
 
     # accel_norm = accel_hover.accel_norm + accel_climb.accel_norm + accel_cruise.accel_norm
     # accel_norm = accel_plus_3g.accel_norm 
@@ -2142,11 +2089,12 @@ def define_post_proecss(caddee: cd.CADDEE):
     conditions = caddee.conditions
     base_config = caddee.base_configuration
     airframe = base_config.system.comps["airframe"]
-    rotors = airframe.comps["rotors"]
-    battery = airframe.comps["battery"]
-    battery_mass = battery.quantities.mass_properties.mass
-    energy_density = battery.parameters.energy_density
-    total_energy_available = battery_mass * energy_density * 3600
+    batteries = airframe.comps["batteries"]
+    total_energy_available = 0
+    for battery in batteries.comps.values():
+        battery_mass = battery.quantities.mass_properties.mass
+        energy_density = battery.parameters.energy_density
+        total_energy_available = total_energy_available + battery_mass * energy_density * 3600
 
     # get rotor power for each conditions
     # Hover
@@ -2220,7 +2168,7 @@ define_conditions(caddee)
 
 define_mass_properties(caddee)
 
-trim_norm_list = define_analysis(caddee)
+define_analysis(caddee)
 
 if do_post_process:
     define_post_proecss(caddee)
@@ -2337,10 +2285,10 @@ for c in constraint_dict.keys():
     constraints_save_dict[c.name] = c.value
     print(c.value)
 
-with open("lpc_dv_dict_struct_sizing_opt_new_2.pickle", "wb") as handle:
+with open("lpc_dv_dict_trime_opt_new_2.pickle", "wb") as handle:
     pickle.dump(dv_save_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-with open("lpc_constraints_dict_struct_sizing_opt_new_2.pickle", "wb") as handle:
+with open("lpc_constraints_dict_trime_opt_new_2.pickle", "wb") as handle:
     pickle.dump(constraints_save_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 # print("total_forces", jax_sim[total_forces])

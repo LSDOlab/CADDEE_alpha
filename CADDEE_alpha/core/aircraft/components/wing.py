@@ -181,12 +181,8 @@ class Wing(Component):
                 # Set the wetted area
                 self.parameters.S_wet = self.quantities.surface_area
 
-                t3 = time.time()
                 # Make the FFD block upon instantiation
                 ffd_block = self._make_ffd_block(self.geometry, tight_fit=tight_fit_ffd, degree=(1, 2, 1), num_coefficients=(2, 2, 2))
-                t4 = time.time()
-                print("time for making ffd_block", t4-t3)
-                # ffd_block.plot()
 
                 # Compute the corner points of the wing 
                 if self._orientation == "horizontal":
@@ -268,25 +264,6 @@ class Wing(Component):
 
         # Rotate the component about the axis
         wing_geometry.rotate(axis_origin=axis_origin, axis_vector=axis_vector / csdl.norm(axis_vector), angles=angle)
-
-        # # Re-evaluate all the discretizations associated with the wing
-        # for discretization_name, discretization in self._discretizations.items():
-        #     discretization._geom = wing_geometry
-        #     try:
-        #         discretization = discretization._update()
-        #         self._discretizations[discretization_name] = discretization
-        #     except AttributeError:
-        #         raise Exception(f"The discretization {discretization_name} does not have an '_update' method, which is neded to" + \
-        #                         " re-evaluate the geometry/meshes after the geometry coefficients have been changed")
-            
-
-        #     # Update the meshes in the mesh container
-        #     if mesh_container is not None:
-        #         print("mesh_container", mesh_container.items())
-        #         for mesh_name, mesh in mesh_container.items():
-        #             for discretization_name_mesh, discretization_mesh in mesh.discretizations.items():
-        #                 if discretization_mesh.identifier == discretization.identifier:
-        #                     mesh.discretizations[discretization_name_mesh] = discretization
 
     def _make_ffd_block(self, 
             entities : List[lfs.Function], 
