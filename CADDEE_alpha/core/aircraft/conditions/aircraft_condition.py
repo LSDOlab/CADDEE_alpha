@@ -648,6 +648,120 @@ class AircraftCondition(Condition):
         return total_forces_body_fixed, total_moments_body_fixed
 
 
+    def perform_linear_stability_analysis(
+        self,
+        total_forces,
+        total_moments,
+        ac_states,
+        g0=9.81,
+    ):
+        num_nodes = total_forces.shape[0]
+        for i in range(num_nodes):
+            A_mat = csdl.Variable(shape=(4, 4), value=0)
+
+            # Aircraft states
+            u = ac_states.u[i]
+            w = ac_states.w[i]
+            q = ac_states.q[i]
+            theta = ac_states.theta[i]
+
+            # Aerodynamic forces and moments
+            X = total_forces[i, 0]
+            Y = total_forces[i, 1]
+            Z = total_forces[i, 2]
+
+            L = total_moments[i, 0]
+            M = total_moments[i, 1]
+            N = total_moments[i, 2]
+
+            # stability derivatives
+            X_u = csdl.derivative(ofs=X, wrts=u)
+            X_w = csdl.derivative(ofs=X, wrts=w)
+            Z_u = csdl.derivative(ofs=Z, wrts=u)
+            Z_w = csdl.derivative(ofs=Z, wrts=w)
+            Z_q = csdl.derivative(ofs=Z, wrts=q)
+            M_u = csdl.derivative(ofs=M, wrts=u)
+            M_w = csdl.derivative(ofs=M, wrts=w)
+            M_q = csdl.derivative(ofs=M, wrts=q)
+
+            A_mat = A_mat.set(csdl.slice[0, 0], X_u)
+            A_mat = A_mat.set(csdl.slice[0, 1], X_w)
+            A_mat = A_mat.set(csdl.slice[0, 3], -g0 * csdl.cos(theta))
+
+            A_mat = A_mat.set(csdl.slice[1, 0], Z_u)
+            A_mat = A_mat.set(csdl.slice[1, 1], Z_w)
+            A_mat = A_mat.set(csdl.slice[1, 3], -g0 * csdl.sin(theta))
+
+            A_mat = A_mat.set(csdl.slice[2, 0], M_u)
+            A_mat = A_mat.set(csdl.slice[2, 1], M_w)
+            A_mat = A_mat.set(csdl.slice[2, 2], M_q)
+
+            A_mat = A_mat.set(csdl.slice[3, 2], 1.)
+
+            eig_val_operation = EigenValueOperation()
+            eig_real, eig_imag = eig_val_operation.evaluate(A_mat)
+
+        return eig_real, eig_imag, A_mat
+
+class EigenValueOperation(csdl.CustomExplicitOperation):
+    def __init__(self):
+        super().__init__()
+
+    def evaluate(self, mat):
+        shape = mat.shape
+        size = shape[0]
+
+        self.declare_input("mat", mat)
+        eig_real = self.create_output("eig_vals_real", shape=(size, ))
+        eig_imag = self.create_output("eig_vals_imag", shape=(size, ))
+
+        self.declare_derivative_parameters("eig_vals_real", "mat")
+        self.declare_derivative_parameters("eig_vals_imag", "mat")
+
+        return eig_real, eig_imag
+
+    def compute(self, inputs, outputs):
+        mat = inputs["mat"]
+
+        eig_vals, eig_vecs = np.linalg.eig(mat)
+    
+        idx = np.abs(eig_vals).argsort()[::-1]
+        eig_vals = eig_vals[idx]
+        eig_vecs = eig_vecs[:, idx]
+
+        outputs['eig_vals_real'] = np.real(eig_vals)
+        outputs['eig_vals_imag'] = np.imag(eig_vals)
+
+    def compute_derivatives(self, inputs, outputs, derivatives):
+        mat = inputs["mat"]
+        size = mat.shape[0]
+
+        eig_vals, eig_vecs = np.linalg.eig(mat)
+        idx = np.abs(eig_vals).argsort()[::-1]
+        eig_vals = eig_vals[idx]
+        eig_vecs = eig_vecs[:, idx]
+
+        # v inverse transpose
+        v_inv_T = (np.linalg.inv(eig_vecs)).T
+
+        # preallocate Jacobian: n outputs, n^2 inputs
+        temp_r = np.zeros((size, size*size))
+        temp_i = np.zeros((size, size*size))
+
+        for j in range(len(eig_vals)):
+            # dA/dw(j,:) = v(:,j)*(v^-T)(:j)
+            partial = np.outer(eig_vecs[:, j], v_inv_T[:, j]).flatten(order='F')
+            # Note that the order of flattening matters, hence argument in flatten()
+
+            # Set jacobian rows
+            temp_r[j, :] = np.real(partial)
+            temp_i[j, :] = np.imag(partial)
+
+        # Set Jacobian
+        derivatives['eig_vals_real', 'mat'] = temp_r
+        derivatives['eig_vals_imag', 'mat'] = temp_i
+
+
 def convert_shape_to_action_string(old_shape, new_shape, type_: str):
     csdl.check_parameter(old_shape, "old_shape", types=tuple, allow_none=True)
     csdl.check_parameter(type_, "type_", values=["mesh", "cg_vec", "vel_vec"])
