@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from CADDEE_alpha.utils.caddee_dict import CADDEEDict
 from CADDEE_alpha.utils.mesh_utils import import_mesh
 import lsdo_function_spaces as fs
+import lsdo_geo as lg
 from scipy.interpolate import interp1d
 
 
@@ -737,7 +738,7 @@ class OneDBoxBeam(Discretization):
     top_skin_thickness: csdl.Variable = None
     bottom_skin_thickness: csdl.Variable = None
 
-    _geom = None
+    _geom:lg.Geometry = None
     _spar_geom = None
     _front_spar_geom = None
     _rear_spar_geom = None

@@ -186,6 +186,49 @@ class MaterialProperties:
                                        'orientation':material_info['orientation']})
         return material_stack 
     
+    def plot_thickness(self, geo, opacity:float=1., color_map:str='jet', surface_texture:str="", show:bool=True, grid_n=25):
+        '''
+        Plots the function set.
+
+        Parameters
+        -----------
+        opactity : float = 1.
+            The opacity of the plot. 0 is fully transparent and 1 is fully opaque.
+        color : lfs.FunctionSet = None
+            The FunctionSet to use to color the B-spline as.
+        color_map : str = 'jet'
+            The color map to use if the color is a function.
+        surface_texture : str = ""
+            The surface texture to determine how light bounces off the surface.
+            See 
+
+        '''
+        import vedo
+
+        vertices = []
+        faces = []
+        c_points = None
+        for ind, function in geo.functions.items():
+            fn_vertices, fn_faces, fn_c_points = get_surface_mesh(surface=function, ind=ind, color=self, grid_n=grid_n, offset=len(vertices))
+            if c_points is None:
+                c_points = fn_c_points
+            else:
+                c_points = np.hstack((c_points, fn_c_points))
+            
+            vertices.extend(fn_vertices)
+            faces.extend(fn_faces)
+
+        mesh = vedo.Mesh([vertices, faces]).opacity(opacity).lighting(surface_texture)
+
+        mesh.cmap(color_map, c_points)
+        mesh.add_scalarbar()
+
+
+        if show:
+            plotter = vedo.Plotter()
+            plotter.show(mesh)
+        return mesh
+
     def evaluate_thickness(self, parametric_coordinates):
         """Evaluates the thickness of the material or material stack at the given parametric coordinates.
 
@@ -368,6 +411,44 @@ class MassProperties:
                 raise ValueError(f"'inertia_tensor' must be a matrix of size (3, 3). Received variable of shape {value.shape}")
         
         self._inertia_tensor = value
+
+
+def get_surface_mesh(surface, ind, color=None, grid_n=25, offset=0):
+    import lsdo_function_spaces as fs
+    surface:fs.Function = surface
+
+    # Generate meshgrid of parametric coordinates
+    mesh_grid_input = []
+    for dimension_index in range(2):
+        mesh_grid_input.append(np.linspace(0., 1., grid_n))
+    parametric_coordinates_tuple = np.meshgrid(*mesh_grid_input, indexing='ij')
+    for dimensions_index in range(2):
+        parametric_coordinates_tuple[dimensions_index] = parametric_coordinates_tuple[dimensions_index].reshape((-1,1))
+    grid = np.hstack(parametric_coordinates_tuple)
+
+    # grid = surface.space.generate_parametric_grid(grid_n)
+    points = surface.evaluate(grid, non_csdl=True).reshape((grid_n, grid_n, surface.num_physical_dimensions))
+    vertices = []
+    faces = []
+    for u_index in range(grid_n):
+        for v_index in range(grid_n):
+            vertex = tuple(points[u_index, v_index, :])
+            vertices.append(vertex)
+            if u_index != 0 and v_index != 0:
+                face = tuple((
+                    (u_index-1)*grid_n+(v_index-1)+offset,
+                    (u_index-1)*grid_n+(v_index)+offset,
+                    (u_index)*grid_n+(v_index)+offset,
+                    (u_index)*grid_n+(v_index-1)+offset,
+                ))
+                faces.append(face)
+    if color is not None:
+        c_points = color.evaluate_thickness([(ind, grid[i]) for i in range(grid.shape[0]) ]).value
+        if len(c_points.shape) > 1:
+            if c_points.shape[1] > 1:
+                c_points = np.linalg.norm(c_points, axis=1)
+        return vertices, faces, c_points
+    return vertices, faces
 
 
 
