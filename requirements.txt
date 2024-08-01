@@ -20,4 +20,4 @@ meshio
 git+https://github.com/HgXe/caddee_materials.git
 git+https://github.com/LSDOlab/CSDL_alpha.git
 git+https://github.com/LSDOlab/lsdo_geo.git
-git+https://github.com/LSDOlab/lsdo_function_spaces.git
+# git+https://github.com/LSDOlab/lsdo_function_spaces.git
