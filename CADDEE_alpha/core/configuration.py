@@ -63,6 +63,166 @@ class VectorizedConfig:
         # TODO: allow for parallel axis theorem
         if not np.array_equal(point, np.array([0. ,0., 0.])):
             raise NotImplementedError("Mass properties taken w.r.t. a specific point not yet implemented.")
+        
+        def _sum_component_masses(
+            comps,
+            system_mass=0.,
+        ):
+            """Sum all component mass to compute system mass.
+
+            Parameters
+            ----------
+            comps : _type_
+                dictionary of children components
+            system_mass : _type_, optional
+                Initial system mass, by default 0.
+            """
+            for comp_name, comp in comps.items():
+                mass_props = comp.quantities.mass_properties
+                
+                # Check if mass_properties have been set/computed
+                if mass_props is None:
+                    warnings.warn(f"Component {comp} has no mass properties")
+                    system_mass = system_mass * 1
+
+                # Add component mass to system mass
+                else:
+                    m = mass_props.mass
+                    if isinstance(m, list):
+                        raise NotImplementedError("vectorized mps not implemented yet")
+                    
+                    if m is not None:
+                        system_mass = system_mass + m
+
+                # Check if the component has children
+                if not comp.comps:
+                    pass
+
+                # If comp has children, add their mass recursively 
+                else:
+                    system_mass = \
+                        _sum_component_masses(comp.comps, system_mass)
+
+            return system_mass
+ 
+        def _sum_component_cgs(
+            comps,
+            system_mass,
+            system_cg=np.zeros((3, ))
+        ):
+            # second, compute total cg 
+            for comp_name, comp in comps.items():
+                mass_props = comp.quantities.mass_properties
+                if mass_props is None:
+                    system_cg = system_cg * 1
+
+                # otherwise add component cg contribution
+                else:
+                    cg = mass_props.cg_vector
+                    m = mass_props.mass
+                    if isinstance(cg, list):
+                        raise NotImplementedError("vectorized mps not implemented yet")
+
+                    if cg is not None:
+                        system_cg = system_cg + m * cg / system_mass
+
+                # Check if the component has children
+                if not comp.comps:
+                    pass
+
+                # If comp has children, add their mass recursively 
+                else:
+                    system_cg = \
+                        _sum_component_cgs(comp.comps, system_mass, system_cg)
+
+            return system_cg
+
+        def _sum_component_inertias(
+            comps,
+            system_cg,
+            system_inertia_tensor=np.zeros((3, 3)),
+        ):
+            x = system_cg[0]
+            y = system_cg[1]
+            z = system_cg[2]
+
+            # Third, compute total cg and inertia tensor
+            for comp_name, comp in comps.items():
+                mass_props = comp.quantities.mass_properties
+                if mass_props is None:
+                    system_inertia_tensor = system_inertia_tensor * 1
+
+                else:
+                    it = mass_props.inertia_tensor
+                    m = mass_props.mass
+
+                    if isinstance(it, list):
+                        raise NotImplementedError("vectorized mps not implemented yet")
+
+                    # use given inertia if provided
+                    if it is not None:
+                        if m is None:
+                            raise Exception(f"Component {comp_name}, has an inertia tensor but no mass. Cannot apply parallel axis theorem.")
+                        # Apply parallel axis theorem to get inertias w.r.t to global cg
+                        ixx = it[0, 0] + m * (y**2 + z**2)
+                        ixy = it[0, 1] - m * (x * y)
+                        ixz = it[0, 2] - m * (x * z)
+                        iyx = ixy 
+                        iyy = it[1, 1] + m * (x**2 + z**2)
+                        iyz = it[1, 2] - m * (y * z)
+                        izx = ixz 
+                        izy = iyz 
+                        izz = it[2, 2] + m * (x**2  + y**2)
+
+                        it = csdl.Variable(shape=(3, 3), value=0.)
+                        it = it.set(csdl.slice[0, 0], ixx)
+                        it = it.set(csdl.slice[0, 1], ixy)
+                        it = it.set(csdl.slice[0, 2], ixz)
+                        it = it.set(csdl.slice[1, 0], iyx)
+                        it = it.set(csdl.slice[1, 1], iyy)
+                        it = it.set(csdl.slice[1, 2], iyz)
+                        it = it.set(csdl.slice[2, 0], izx)
+                        it = it.set(csdl.slice[2, 1], izy)
+                        it = it.set(csdl.slice[2, 2], izz)
+
+                        system_inertia_tensor = system_inertia_tensor + it
+                    
+                    # point mass assumption
+                    elif m is not None: 
+                        # Apply parallel axis theorem to get inertias w.r.t to global cg
+                        ixx = m * (y**2 + z**2)
+                        ixy = -m * (x * y)
+                        ixz = -m * (x * z)
+                        iyx = ixy 
+                        iyy = m * (x**2 + z**2)
+                        iyz = -m * (y * z)
+                        izx = ixz 
+                        izy = iyz 
+                        izz = m * (x**2  + y**2)
+                        
+                        it = csdl.Variable(shape=(3, 3), value=0.)
+                        it = it.set(csdl.slice[0, 0], ixx)
+                        it = it.set(csdl.slice[0, 1], ixy)
+                        it = it.set(csdl.slice[0, 2], ixz)
+                        it = it.set(csdl.slice[1, 0], iyx)
+                        it = it.set(csdl.slice[1, 1], iyy)
+                        it = it.set(csdl.slice[1, 2], iyz)
+                        it = it.set(csdl.slice[2, 0], izx)
+                        it = it.set(csdl.slice[2, 1], izy)
+                        it = it.set(csdl.slice[2, 2], izz)
+                        
+                        system_inertia_tensor = system_inertia_tensor + it
+
+                # Check if the component has children
+                if not comp.comps:
+                    pass
+
+                # If comp has children, add their mass recursively 
+                else:
+                    system_inertia_tensor = \
+                        _sum_component_inertias(comp.comps, system_cg, system_inertia_tensor)
+
+            return system_inertia_tensor
 
         def _add_component_mps_to_system_mps(
                 comps, 
@@ -210,8 +370,12 @@ class VectorizedConfig:
         if all(getattr(system_mps, mp) is not None for mp in system_mps.__dict__):
             # Check if the system is a copy
             if system._is_copy:
-                system_mass, system_cg, system_inertia_tensor = \
-                _add_component_mps_to_system_mps(system_comps)
+                system_mass = _sum_component_masses(system_comps)
+                system_cg = _sum_component_cgs(system_comps, system_mass=system_mass)
+                system_inertia_tensor = _sum_component_inertias(system_comps, system_cg=system_cg)
+                
+                # system_mass, system_cg, system_inertia_tensor = \
+                # _add_component_mps_to_system_mps(system_comps)
 
                 system.quantities.mass_properties.mass = system_mass
                 system.quantities.mass_properties.cg_vector = system_cg
@@ -270,9 +434,13 @@ class VectorizedConfig:
             system_mass = 0
             system_cg = np.array([0., 0., 0.])
             system_inertia_tensor = np.zeros((3, 3))
+
+            system_mass = _sum_component_masses(system_comps,system_mass=system_mass)
+            system_cg = _sum_component_cgs(system_comps, system_mass=system_mass, system_cg=system_cg)
+            system_inertia_tensor = _sum_component_inertias(system_comps, system_cg=system_cg, system_inertia_tensor=system_inertia_tensor)
     
-            system_mass, system_cg, system_inertia_tensor = \
-                _add_component_mps_to_system_mps(system_comps, system_mass, system_cg, system_inertia_tensor)
+            # system_mass, system_cg, system_inertia_tensor = \
+            #     _add_component_mps_to_system_mps(system_comps, system_mass, system_cg, system_inertia_tensor)
 
             system.quantities.mass_properties.mass = system_mass
             system.quantities.mass_properties.cg_vector = system_cg

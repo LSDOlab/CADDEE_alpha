@@ -1,5 +1,5 @@
 from CADDEE_alpha.core.condition import Condition
-from CADDEE_alpha.utils.var_groups import AircaftStates
+from CADDEE_alpha.utils.var_groups import AircaftStates, LongitudinalStabilityMetrics
 from CADDEE_alpha.utils.coordinate_transformations import perform_local_to_body_transformation
 from typing import Union, Tuple
 from CADDEE_alpha.core.aircraft.models.atmosphere.simple_atmosphere_model import AtmosphericStates, SimpleAtmosphereModel
@@ -219,7 +219,7 @@ class AircraftCondition(Condition):
         else:
             raise NotImplementedError
     
-    def finalize_meshes(self) -> None:
+    def finalize_meshes(self, ignore_body_rotations=False) -> None:
         """Expand meshes along the "num_nodes" axis, compute mesh velcoties and assemble
         meshes into isntance of MeshContainer.
         
@@ -256,9 +256,12 @@ class AircraftCondition(Condition):
                     raise NotImplementedError()
 
             if cg_vec is None:
-                config.assemble_system_mass_properties()
-                if cg_vec is None:
-                    warnings.warn("No mass properties defined; ignore any body rotations in mesh velocities")
+                if ignore_body_rotations:
+                    print("No mass properties defined; ignore any body rotations in mesh velocities")
+                else:
+                    config.assemble_system_mass_properties()
+                    if cg_vec is None:
+                        warnings.warn("No mass properties defined; ignore any body rotations in mesh velocities")
 
         mesh_container = config.mesh_container
         
@@ -293,122 +296,25 @@ class AircraftCondition(Condition):
                 initial_nodal_coordinates = discretization.nodal_coordinates
 
 
-                if isinstance(initial_nodal_coordinates, list):
+                if isinstance(initial_nodal_coordinates, list): # This will be the case for vect. configs.
                     num_nodes_config = len(initial_nodal_coordinates)
                     if self._num_nodes != num_nodes_config:
                         raise Exception(f"'num_nodes' of the aircraft condition ({self._num_nodes}) and vectorized configuration ({num_nodes_config}) must be equal")
 
                     coordinates_shape = initial_nodal_coordinates[0].shape
                     stacked_nodal_coordiantes = csdl.Variable(shape=(num_nodes_config, ) + coordinates_shape, value=0.)
-                    for i in csdl.frange(num_nodes_config):
+                    
+                    # Can't use frange since 'initial_nodal_coordinates' is a list for vect. configs.
+                    for i in range(num_nodes_config):
                         stacked_nodal_coordiantes = stacked_nodal_coordiantes.set(
                             slices=csdl.slice[i, :], 
-                            value=initial_nodal_coordinates[0]
+                            value=initial_nodal_coordinates[i],
                         )
 
                     initial_nodal_coordinates = stacked_nodal_coordiantes
                     discretization.nodal_coordinates = initial_nodal_coordinates
                     discretization._has_been_expanded = True
 
-
-                # else:
-                #     if isinstance()
-                
-                # else:
-                #     initial_nodal_coordinates = initial_nodal_coordinates.reshape((self._num_nodes, ) + initial_nodal_coordinates.shape)
-
-                # discretization.nodal_coordinates = initial_nodal_coordinates
-
-                # for nodal_coordinates in initial_nodal_coordinates:
-                #     if isinstance(discretization, CamberSurface) and not isinstance(self, HoverCondition):
-                #         # Compute spanwise chord length
-                #         LE_nodes = nodal_coordinates[0, :, :]
-                #         TE_nodes = nodal_coordinates[-1, :, :]
-                #         chord_length = csdl.norm(LE_nodes - TE_nodes, axes=(1, ))
-
-                #         # Compute Reynolds number
-                #         V_inf = (u**2 + v**2 + w**2) ** 0.5
-                #         rho = self.quantities.atmos_states.density
-                #         mu = self.quantities.atmos_states.dynamic_viscosity
-                #         a = self.quantities.atmos_states.speed_of_sound
-                #         Re = rho * chord_length * V_inf / mu
-
-                #         chord_length_mid_panel = (chord_length_exp[:, 0:-1] + chord_length_exp[:, 1:]) / 2
-                #         discretization.mid_panel_chord_length = chord_length_mid_panel
-                #         Re_mid_panel = rho * chord_length_mid_panel * V_inf / mu
-                #         discretization.reynolds_number = Re_mid_panel
-
-
-                # Compute spanwise Reynolds number
-                # if isinstance(discretization, CamberSurface) and not isinstance(self, HoverCondition):
-                #     pass
-                #     # Compute spanwise chord length
-                #     LE_nodes = initial_nodal_coordinates[:, 0, :, :]
-                #     TE_nodes = initial_nodal_coordinates[:, -1, :, :]
-                #     chord_length = csdl.norm(LE_nodes - TE_nodes, axes=(2, ))
-
-                #     chord_length_exp = chord_length
-
-                #     # if discretization._has_been_expanded:
-                #     #     chord_length_exp = chord_length
-
-                #     # else:
-                #     #     chord_length_exp = csdl.expand(chord_length, (self._num_nodes, ) + chord_length.shape, 'j->ij')
-                    
-                #     # Compute Reynolds number
-                #     V_inf = (u**2 + v**2 + w**2) ** 0.5
-                #     rho = self.quantities.atmos_states.density
-                #     mu = self.quantities.atmos_states.dynamic_viscosity
-                #     a = self.quantities.atmos_states.speed_of_sound
-                #     if self._num_nodes > 1:
-                #         V_inf = csdl.expand(V_inf, chord_length_exp.shape, 'i->ij')
-                #         rho = csdl.expand(rho, chord_length_exp.shape, 'i->ij')
-                #         mu = csdl.expand(mu, chord_length_exp.shape, 'i->ij')
-                #         a = csdl.expand(a, chord_length_exp.shape, 'i->ij')
-
-                #     Re = rho * chord_length_exp * V_inf / mu
-                #     Re_mid_panel = (Re[:, 0:-1] + Re[:, 1:]) / 2
-                    
-                #     discretization.reynolds_number = Re_mid_panel
-
-                #     if discretization.embedded_airfoil_model_Cl is not None:
-                #         airfoil_model = discretization.embedded_airfoil_model_Cl
-                #         alpha_implicit = csdl.ImplicitVariable(shape=Re.shape, value=0.)
-                #         # Compute Mach number
-                #         Ma = V_inf / a
-                #         if Ma.shape == (self._num_nodes, ):
-                #             Ma_exp = csdl.expand(Ma, Re.shape, action='i->ij')
-                #         elif Ma.shape == Re.shape:
-                #             Ma_exp = Ma
-                #         else:
-                #             raise NotImplementedError("Shape mis-match between Ma and other airfoil model inputs. Unlikely to be a user-error.")
-
-                #         Cl = airfoil_model.evaluate(alpha_implicit, Re, Ma_exp)
-
-                #         # 
-                #         solver = csdl.nonlinear_solvers.bracketed_search.BracketedSearch(elementwise_states=True)
-                #         solver.add_state(alpha_implicit, Cl, bracket=(-np.deg2rad(8), np.deg2rad(8)))
-                #         solver.run()
-                        
-                #         alpha = alpha_implicit
-                #         discretization.alpha_ML_mid_panel = (alpha[:, 0:-1] + alpha[:, 1:])/2
-
-                #         rotation_tensor = csdl.Variable(shape=alpha.shape + (3, 3), value=0.)
-                #         rotation_tensor = rotation_tensor.set(csdl.slice[:, :, 0, 0], csdl.cos(alpha))
-                #         rotation_tensor = rotation_tensor.set(csdl.slice[:, :, 0, 2], -csdl.sin(alpha))
-                #         rotation_tensor = rotation_tensor.set(csdl.slice[:, :, 1, 1], 1)
-                #         rotation_tensor = rotation_tensor.set(csdl.slice[:, :, 2, 0], csdl.sin(alpha))
-                #         rotation_tensor = rotation_tensor.set(csdl.slice[:, :, 2, 2], csdl.cos(alpha))
-
-                #     else:
-                #         rotation_tensor = None
-                #         discretization.alpha_ML_mid_panel = None
-                # else:
-                #     rotation_tensor = None
-
-                # shape_exp = discretization.nodal_coordinates.shape
-                # nodal_coordinates_exp = discretization.nodal_coordinates
-                
                 if discretization._has_been_expanded:
                     shape_exp = discretization.nodal_coordinates.shape
 
@@ -426,12 +332,15 @@ class AircraftCondition(Condition):
                 omega_vec_exp = csdl.expand(omega_vec, shape_exp, omega_vec_action_string)
 
                 if cg_vec is not None:
-                    # expand cg_vec
-                    cg_vec_action_string = convert_shape_to_action_string(None, shape_exp, "cg_vec")
-                    r_vec_exp = nodal_coordinates_exp - csdl.expand(cg_vec, shape_exp, cg_vec_action_string)
+                    if ignore_body_rotations:
+                        nodal_velocities = V_vec_exp
+                    else:
+                        # expand cg_vec
+                        cg_vec_action_string = convert_shape_to_action_string(None, shape_exp, "cg_vec")
+                        r_vec_exp = nodal_coordinates_exp - csdl.expand(cg_vec, shape_exp, cg_vec_action_string)
 
-                    # Compute mesh velocities
-                    nodal_velocities = V_vec_exp + csdl.cross(omega_vec_exp, r_vec_exp, axis=len(shape_exp) -1)
+                        # Compute mesh velocities
+                        nodal_velocities = V_vec_exp + csdl.cross(omega_vec_exp, r_vec_exp, axis=len(shape_exp) -1)
 
                 else:
                     nodal_velocities = V_vec_exp
@@ -653,17 +562,21 @@ class AircraftCondition(Condition):
         total_forces,
         total_moments,
         ac_states,
+        mass_properties,
         g0=9.81,
-    ):
+    ) -> LongitudinalStabilityMetrics:
+        m = mass_properties.mass
+        iyy = mass_properties.inertia_tensor[1, 1]
+
         num_nodes = total_forces.shape[0]
         for i in range(num_nodes):
             A_mat = csdl.Variable(shape=(4, 4), value=0)
 
             # Aircraft states
-            u = ac_states.u[i]
-            w = ac_states.w[i]
-            q = ac_states.q[i]
-            theta = ac_states.theta[i]
+            u = ac_states.u # [i]
+            w = ac_states.w # [i]
+            q = ac_states.q # [i]
+            theta = ac_states.theta #[i]
 
             # Aerodynamic forces and moments
             X = total_forces[i, 0]
@@ -684,24 +597,54 @@ class AircraftCondition(Condition):
             M_w = csdl.derivative(ofs=M, wrts=w)
             M_q = csdl.derivative(ofs=M, wrts=q)
 
-            A_mat = A_mat.set(csdl.slice[0, 0], X_u)
-            A_mat = A_mat.set(csdl.slice[0, 1], X_w)
+            # Construct A matrix
+            A_mat = A_mat.set(csdl.slice[0, 0], X_u / m)
+            A_mat = A_mat.set(csdl.slice[0, 1], X_w / m)
             A_mat = A_mat.set(csdl.slice[0, 3], -g0 * csdl.cos(theta))
 
-            A_mat = A_mat.set(csdl.slice[1, 0], Z_u)
-            A_mat = A_mat.set(csdl.slice[1, 1], Z_w)
+            A_mat = A_mat.set(csdl.slice[1, 0], Z_u / m)
+            A_mat = A_mat.set(csdl.slice[1, 1], Z_w / m)
+            A_mat = A_mat.set(csdl.slice[1, 2], (Z_q + m * u) / m)
             A_mat = A_mat.set(csdl.slice[1, 3], -g0 * csdl.sin(theta))
 
-            A_mat = A_mat.set(csdl.slice[2, 0], M_u)
-            A_mat = A_mat.set(csdl.slice[2, 1], M_w)
-            A_mat = A_mat.set(csdl.slice[2, 2], M_q)
+            A_mat = A_mat.set(csdl.slice[2, 0], M_u / iyy)
+            A_mat = A_mat.set(csdl.slice[2, 1], M_w / iyy)
+            A_mat = A_mat.set(csdl.slice[2, 2], M_q / iyy)
 
             A_mat = A_mat.set(csdl.slice[3, 2], 1.)
 
             eig_val_operation = EigenValueOperation()
             eig_real, eig_imag = eig_val_operation.evaluate(A_mat)
 
-        return eig_real, eig_imag, A_mat
+            # Short period (more stable; eigenvalues come out sorted)
+            lambda_sp_real = eig_real[0]
+            lambda_sp_imag = eig_imag[0]
+            sp_omega_n = ((lambda_sp_real**2 + lambda_sp_imag**2) + 1e-10)**0.5
+            sp_damping_ratio = -lambda_sp_real / sp_omega_n
+            sp_time_2_double = np.log(2) / (lambda_sp_real**2 + 1e-10)**0.5
+
+            # Phugoid (long period) (less stable)
+            lambda_ph_real = eig_real[2]
+            lambda_ph_imag = eig_imag[2]
+            ph_omega_n = ((lambda_ph_real**2 + lambda_ph_imag**2) + 1e-10)**0.5
+            ph_damping_ratio = -lambda_ph_real / ph_omega_n
+            ph_time_2_double = np.log(2) / (lambda_ph_real**2 + 1e-10)**0.5
+
+            long_stability_results = LongitudinalStabilityMetrics(
+                A_mat_longitudinal=A_mat,
+                real_eig_vals_short_period=lambda_sp_real,
+                imag_eig_vals_short_period=lambda_sp_imag,
+                nat_freq_short_period=sp_omega_n,
+                damping_ratio_short_period=sp_damping_ratio,
+                time_2_double_short_period=sp_time_2_double,
+                real_eig_vals_phugoid=lambda_ph_real,
+                imag_eig_vals_phugoid=lambda_ph_imag,
+                nat_freq_phugoid=ph_omega_n,
+                damping_ratio_phugoid=ph_damping_ratio,
+                time_2_double_phugoid=ph_time_2_double,
+            )
+
+        return long_stability_results
 
 class EigenValueOperation(csdl.CustomExplicitOperation):
     def __init__(self):

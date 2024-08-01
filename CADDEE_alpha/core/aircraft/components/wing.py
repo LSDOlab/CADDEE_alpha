@@ -194,16 +194,6 @@ class Wing(Component):
                     self._TE_mid_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 0.5, 0.5])),  plot=False, extrema=True)
                     self._TE_right_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([0., 1.0, 0.5])), plot=False, extrema=True)
 
-                    self.LE_left_tip = geometry.evaluate(self._LE_left_point)
-                    self.LE_right_tip = geometry.evaluate(self._LE_right_point)
-
-                    self.TE_left_tip = geometry.evaluate(self._TE_left_point)
-                    self.TE_right_tip = geometry.evaluate(self._TE_right_point)
-
-
-                    self.LE_center = geometry.evaluate(self._LE_mid_point)
-                    self.TE_center = geometry.evaluate(self._TE_mid_point)
-
                 else:
                     self._LE_tip_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([1., 0.5, 0.])), direction=np.array([-1., 0., 0.]), plot=False, extrema=False)
                     self._LE_root_point = geometry.project(ffd_block.evaluate(parametric_coordinates=np.array([1., 0.5, 1.])), direction=np.array([-1., 0., 0.]), plot=False, extrema=False)
@@ -222,10 +212,55 @@ class Wing(Component):
 
                 self._ffd_block = self._make_ffd_block(self.geometry, tight_fit=False)
 
+
                 # print("time for computing corner points", t6-t5)
             # internal geometry projection info
             self._dependent_geometry_points = [] # {'parametric_points', 'function_space', 'fitting_coords', 'mirror'}
             self._base_geometry = self.geometry.copy()
+
+        self._LE_left_tip = None
+        self._LE_right_tip = None
+        self._TE_left_tip = None
+        self._TE_right_tip = None
+        self._LE_center = None
+        self._TE_center = None
+        
+    @property
+    def LE_left_tip(self):
+        if self.geometry is not None:
+            self._LE_left_tip = self.geometry.evaluate(self._LE_left_point)
+        return self._LE_left_tip
+    
+    @property
+    def LE_right_tip(self):
+        if self.geometry is not None:
+            self._LE_right_tip = self.geometry.evaluate(self._LE_right_point)
+        
+        return self._LE_right_tip
+
+    @property
+    def TE_left_tip(self):
+        if self.geometry is not None:
+            self._TE_left_tip = self.geometry.evaluate(self._TE_left_point)
+        return self._TE_left_tip
+    
+    @property
+    def TE_right_tip(self):
+        if self.geometry is not None:
+            self._TE_right_tip = self.geometry.evaluate(self._TE_right_point)
+        return self._TE_right_tip
+
+    @property
+    def LE_center(self):
+        if self.geometry is not None:
+            self._LE_center = self.geometry.evaluate(self._LE_mid_point)
+        return self._LE_center
+        
+    @property
+    def TE_center(self):
+        if self.geometry is not None:
+            self._TE_center = self.geometry.evaluate(self._TE_mid_point)
+        return self._TE_center
 
     def actuate(self, angle : Union[float, int, csdl.Variable], axis_location : float=0.25, mesh_container : MeshContainer = None):
         """Actuate (i.e., rotate) the wing about an axis location at or behind the leading edge.

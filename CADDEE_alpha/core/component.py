@@ -393,7 +393,6 @@ class Component:
 
         parameterization_solver.add_parameter(rigid_body_translation, cost=0.1)
 
-
     def _find_system_component(self, parent) -> FunctionSet:
         """Find the top-level system component by traversing the component hiearchy"""
         if parent is None:
@@ -417,6 +416,8 @@ class Component:
         parametric_mesh = geometry.generate_parametric_grid(grid_resolution=(parametric_mesh_grid_num, parametric_mesh_grid_num))
         coords_vec = geometry.evaluate(parametric_mesh).reshape((num_surfaces, parametric_mesh_grid_num, parametric_mesh_grid_num, 3))
         surface_mesh.append(coords_vec)
+
+        # self.geometry.plot_meshes(coords_vec.reshape((-1, 3)).value)
 
         coords_u_end = coords_vec[:, 1:, :, :].reshape((num_surfaces, parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))
         coords_u_start = coords_vec[:, :-1, :, :].reshape((num_surfaces, parametric_mesh_grid_num-1, parametric_mesh_grid_num, 3))

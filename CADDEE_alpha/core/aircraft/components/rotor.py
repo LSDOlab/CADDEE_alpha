@@ -118,6 +118,17 @@ class Rotor(Component):
             except AttributeError:
                 raise Exception(f"Mesh {mesh_name} does not have an '_update' method, which is neded to" + \
                                 " re-evaluate the geometry/meshes after the geometry coefficients have been changed")
+            
+
+    # def actuate(self, angle, axis_origin=None, axis_vector=None):
+    #     if axis_origin is None:
+    #         raise NotImplementedError
+    #     if axis_vector is None:
+    #         raise NotImplementedError
+        
+    #     rotor_geometry = self.geometry
+    #     rotor_geometry.rotate(axis_origin=axis_origin, axis_vector=axis_vector, angles=angle)
+
 
 
     def _setup_ffd_block(self, ffd_block, parameterization_solver, plot: bool=False):

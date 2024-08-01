@@ -804,7 +804,6 @@ class OneDBoxBeam(Discretization):
         rear_thickness = csdl.average(rear_thickness_grid.reshape((self.num_beam_nodes-1, -1)), axes=(1,))
         self.shear_web_thickness = (front_thickness + rear_thickness) / 2
 
-
 class OneDBoxBeamDict(DiscretizationsDict):
     def __getitem__(self, key) -> OneDBoxBeam:
         return super().__getitem__(key)

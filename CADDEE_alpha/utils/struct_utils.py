@@ -44,7 +44,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
 
         if l_surf_ind == u_surf_ind:
             condition = construct_bay_condition(u_coord_u, l_coord_u)
-            if t_vars is not None:
+            if t_vars:
                 thickness = csdl.Variable(value=skin_t, name='upper_wing_thickness_'+str(i))
                 thickness.value = t_vars['upper_wing_thickness_'+str(i)]
                 t_out[thickness.name] = thickness
@@ -61,7 +61,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
         else:
             condition1 = construct_bay_condition(1, l_coord_u)
             condition2 = construct_bay_condition(u_coord_u, 0)
-            if t_vars is not None:
+            if t_vars:
                 thickness = csdl.Variable(value=skin_t, name='upper_wing_thickness_'+str(i))
                 thickness.value = t_vars['upper_wing_thickness_'+str(i)]
                 t_out[thickness.name] = thickness
@@ -89,7 +89,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
         # u_coord_u = upper[0][1][0, 0]
         if l_surf_ind == u_surf_ind:
             condition = construct_bay_condition(u_coord_u, l_coord_u)
-            if t_vars is not None:
+            if t_vars:
                 thickness = csdl.Variable(value=skin_t, name='lower_wing_thickness_'+str(i))
                 thickness.value = t_vars['lower_wing_thickness_'+str(i)]
                 t_out[thickness.name] = thickness
@@ -105,7 +105,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
         else:
             condition1 = construct_bay_condition(1, l_coord_u)
             condition2 = construct_bay_condition(u_coord_u, 0)
-            if t_vars is not None:
+            if t_vars:
                 thickness = csdl.Variable(value=skin_t, name='lower_wing_thickness_'+str(i))
                 thickness.value = t_vars['lower_wing_thickness_'+str(i)]
                 t_out[thickness.name] = thickness
@@ -129,7 +129,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
         if "-" in name:
             pass
         else:
-            if t_vars is not None:
+            if t_vars:
                 thickness = csdl.Variable(value=rib_t, name=name+'_thickness')
                 thickness.value = t_vars[name+'_thickness']
                 t_out[thickness.name] = thickness
@@ -155,7 +155,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
         condition = construct_bay_condition(upper, lower)
         spar_num = 0
         for ind in spar_inds:
-            if t_vars is not None:
+            if t_vars:
                 thickness = csdl.Variable(value=spar_t, name=f'spar_{spar_num}_thickness_{i}')
                 thickness.value = t_vars[f'spar_{spar_num}_thickness_{i}']
                 t_out[thickness.name] = thickness
