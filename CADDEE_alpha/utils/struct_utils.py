@@ -137,7 +137,8 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
                 thickness = csdl.Variable(value=rib_t, name=name+'_thickness')
                 t_out[thickness.name] = thickness
             if add_dvs:
-                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
+                pass
+                # thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
             function = lfs.Function(rib_fsp, thickness)
             functions = {ind: function}
             thickness_fs = lfs.FunctionSet(functions)

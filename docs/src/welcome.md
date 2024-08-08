@@ -48,5 +48,6 @@ src/concepts
 <!-- src/custom_1
 src/custom_2 -->
 src/examples
+src/tutorials
 src/api
 ```
