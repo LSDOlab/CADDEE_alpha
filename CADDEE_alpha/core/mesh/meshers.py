@@ -823,7 +823,8 @@ def make_1d_box_beam(
     project_spars: bool = False,
     make_half_beam: bool = False,
     LE_TE_interp: str = None,
-    one_side_geometry: FunctionSet=None
+    one_side_geometry: FunctionSet=None,
+    spar_search_names = ['0', '1']
 ) -> OneDBoxBeam:
     """Create a 1-D box beam mesh for a wing-like component. It is NOT intended
     to work for creating beam-mesh of fuselage-like or vertical tail like components.
@@ -1085,8 +1086,8 @@ def make_1d_box_beam(
             node_grid[i,:,:] = grid
         node_grid = node_grid.reshape(-1,3)
         # NOTE: only really works well for 2 spars, but then so does the rest of the code
-        f_spar_geometry = spar_geometery.declare_component(function_search_names=["0"])
-        r_spar_geometry = spar_geometery.declare_component(function_search_names=["1"])
+        f_spar_geometry = spar_geometery.declare_component(function_search_names=spar_search_names[0])
+        r_spar_geometry = spar_geometery.declare_component(function_search_names=spar_search_names[1])
         front_grid = f_spar_geometry.project(node_grid + offset, direction=np.array([-1., 0., 0.]), plot=plot)
         rear_grid = r_spar_geometry.project(node_grid - offset, direction=np.array([1., 0., 0.]), plot=plot)
         front_thickness_grid = material_properties.evaluate_thickness(front_grid).reshape((num_beam_nodes-1, -1))
