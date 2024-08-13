@@ -82,6 +82,7 @@ def compute_drag_build_up(
                 raise TypeError(f"At least one component quantitiy ('surface_area', 'form_factor', 'characteristic_length') of component {comp} is None.")
         
             # Compute Re
+            # print(rho, V_inf, length, mu)
             Re = rho * V_inf * length / mu
 
             # Compute Cf

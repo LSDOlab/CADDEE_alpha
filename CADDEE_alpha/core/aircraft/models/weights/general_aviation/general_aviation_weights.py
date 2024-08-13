@@ -2,198 +2,132 @@ import numpy as np
 import csdl_alpha as csdl
 from dataclasses import dataclass
 from typing import Union
+from CADDEE_alpha.utils.units import Units
 
 
-@dataclass
-class GAWingWeightInputs:
-    S_ref : Union[float, int, csdl.Variable]
-    W_fuel : Union[float, int, csdl.Variable]
-    AR : Union[float, int, csdl.Variable]
-    sweep_c4 : Union[float, int, csdl.Variable]
-    taper_ratio : Union[float, int, csdl.Variable]
-    thickness_to_chord : Union[float, int, csdl.Variable]
-    dynamic_pressure : Union[float, int, csdl.Variable]
-    W_gross_design : Union[float, int, csdl.Variable]
-    nz : Union[float, int, csdl.Variable] = 3.75
-    correction_factor : Union[float, int] = 1
 
-class GAWingWeightModel:
-    def evaluate(self, inputs :  GAWingWeightInputs):
-        """Evaluate an estimate for the wing weight."""
-        S_w = inputs.S_ref
-        W_fw = inputs.W_fuel
-        AR = inputs.AR
-        sweep = inputs.sweep_c4
-        taper_ratio = inputs.taper_ratio
-        t_o_c = inputs.thickness_to_chord
-        q = inputs.dynamic_pressure
-        nz = inputs.nz
-        Wdg = inputs.W_gross_design
-        cf = inputs.correction_factor
+class GeneralAviationWeights:
+    def __init__(
+        self,
+        design_gross_weight : Union[csdl.Variable, float, int],
+        dynamic_pressure : Union[csdl.Variable, float, int], # = rho * V^2 = [mass / length^3 * length^2/time^2] = [mass / length / time^2]
+    ) -> None:
+        self.design_gross_weight = design_gross_weight * (1/Units.mass.pound_to_kg)
+        self.dynamic_pressure = dynamic_pressure * (1/Units.mass.pound_to_kg) / (1/Units.length.foot_to_m)
 
-        # print(S_w)
-        # print(W_fw)
-        # print(AR)
-        # print(sweep)
-        # print(taper_ratio)
-        # print(q)
+    def evaluate_wing_weight(
+        self,
+        S_ref : Union[float, int, csdl.Variable],
+        fuel_weight : Union[float, int, csdl.Variable],
+        AR : Union[float, int, csdl.Variable],
+        sweep : Union[float, int, csdl.Variable],
+        taper_ratio : Union[float, int, csdl.Variable],
+        thickness_to_chord : Union[float, int, csdl.Variable]=0.12,
+        nz : Union[float, int, csdl.Variable] = 3.75,
+        correction_factor : Union[float, int] = 1
+    ):
+        S_ref = S_ref * 1 / Units.area.sq_ft_to_sq_m
+        W_fuel = fuel_weight * 1 / Units.mass.pound_to_kg
 
-        W_wing = 0.036 * S_w**0.758 * W_fw**0.035 * (AR/np.cos(sweep)**2)**0.6 * q**0.006 \
-        * taper_ratio**0.04 * (100 * t_o_c / np.cos(sweep))**-0.3 * (nz * Wdg)**0.49
+        W_wing = 0.036 * S_ref**0.758 * W_fuel**0.035 * (AR/np.cos(sweep)**2)**0.6 * self.dynamic_pressure**0.006 \
+        * taper_ratio**0.04 * (100 * thickness_to_chord / np.cos(sweep))**-0.3 * (nz * self.design_gross_weight)**0.49 
 
-        # print(W_wing)
-        # exit()
-
-
-        return W_wing * cf
-
-
-@dataclass
-class GAFuselageWeightInputs:
-    """
-    Parameters (in English units!)
-    ----------
-    - S_wet : wetted area
-
-    - q_cruise : cruise dynamic pressure
-
-    - ulf : structural ultimate load factor (default = 3.75)
-
-    - xl : total fuselage length; used to compute S_wet (default = None)
+        return W_wing * correction_factor * Units.mass.pound_to_kg
     
-    - d_av : average fuselage diameter; used to compute S_wet (default = None)
-
-    - W_gross_design : design gross weight 
-    """
-    S_wet : Union[float, int, csdl.Variable]
-    q_cruise : Union[float, int, csdl.Variable]
-    W_gross_design : Union[float, int, csdl.Variable]
-    ulf : Union[float, int, csdl.Variable] = 3.75
-    xl : Union[float, int, csdl.Variable] = None
-    d_av : Union[float, int, csdl.Variable] = None
-    correction_factor : Union[float, int, csdl.Variable] = 1.
-
-
-class GAFuselageWeigthModel():
-    def evaluate(self, inputs : GAFuselageWeightInputs):
-        """Evaluate an estimate for the fuselage weight."""
-        S_wet = inputs.S_wet
-        q_cruise = inputs.q_cruise
-        ulf = inputs.ulf
-        xl = inputs.xl
-        d_av = inputs.d_av
-        dg = inputs.W_gross_design
-        correction_factor = inputs.correction_factor
-
+    def evaluate_fuselage_weight(
+        self,
+        S_wet : Union[float, int, csdl.Variable],
+        ulf : Union[float, int, csdl.Variable] = 3.75,
+        fuselage_length : Union[float, int, csdl.Variable] = None,
+        avergae_fuselage_diameter : Union[float, int, csdl.Variable] = None,
+        correction_factor : Union[float, int, csdl.Variable] = 1.,
+    ):
+        
         if S_wet is not None:
+            S_wet = S_wet / Units.area.sq_ft_to_sq_m
             pass
 
-        elif xl is not None and d_av is not None:
+        elif fuselage_length is not None and avergae_fuselage_diameter is not None:
+            xl = fuselage_length * (1 / Units.length.foot_to_m)
+            d_av = avergae_fuselage_diameter * (1 / Units.length.foot_to_m)
+
             S_wet = 3.14159 * (xl / d_av - 1.7) * d_av**2
 
-        W_fuse = 0.052 * S_wet**1.086 * (ulf * dg) ** 0.177 * q_cruise**0.241 * correction_factor
+        else:
+            raise Exception("Insufficient inputs defined")
 
-        return W_fuse
+        W_fuse = 0.052 * S_wet**1.086 * (ulf * self.design_gross_weight) ** 0.177 * self.dynamic_pressure**0.241 
 
-
-@dataclass
-class GAHorizontalTailInputs:
-    """Parameters (in English units!)"""
-    S_ref : Union[float, int, csdl.Variable]
-    W_gross_design : Union[float, int, csdl.Variable]
-    q_cruise : Union[float, int, csdl.Variable]
-    ulf : Union[float, int, csdl.Variable] = 4.5
-
-class GAHorizontalTailWeigthModel():
-    def evaluate(self, inputs : GAHorizontalTailInputs):
-        """Evaluate an estimate for the vertical tail weight."""
-        S_ref = inputs.S_ref
-        q_cruise = inputs.q_cruise
-        ulf = inputs.ulf
-        dg = inputs.W_gross_design
-
-        W_h_tail = 0.016 * S_ref**0.873 * (ulf * dg)**0.414 * q_cruise**0.122
-
-        return W_h_tail
-
-@dataclass
-class GAVerticalTailInputs:
-    """Parameters (in English units!)"""
-    S_ref : Union[float, int, csdl.Variable]
-    AR : Union[float, int, csdl.Variable]
-    W_gross_design : Union[float, int, csdl.Variable]
-    q_cruise : Union[float, int, csdl.Variable]
-    t_o_c : Union[float, int, csdl.Variable]
-    sweep_c4 : Union[float, int, csdl.Variable]
-    ulf : Union[float, int, csdl.Variable] = 4.5
-    hht : Union[float, int, csdl.Variable] = 0.
-
-
-class GAVerticalTailWeigthModel():
-    def evaluate(self, inputs : GAVerticalTailInputs):
-        """Evaluate an estimate for the Vertical tail weight."""
-        S_ref = inputs.S_ref
-        q_cruise = inputs.q_cruise
-        ulf = inputs.ulf
-        dg = inputs.W_gross_design
-        hht = inputs.hht
-        AR = inputs.AR
-        sweep = inputs.sweep_c4
-        toc = inputs.t_o_c
-
-        W_v_tail = 0.073 * (1.0 + 0.2 * hht) * (ulf * dg)**0.376 * q_cruise**0.122 * \
-        S_ref**0.873 * (AR / np.cos(sweep)**2)**0.357 / ((100 * toc) / np.cos(sweep))**0.49
-
-        return W_v_tail
+        return W_fuse * correction_factor * Units.mass.pound_to_kg
     
+    def evaluate_horizontal_tail_weight(
+        self,
+        S_ref : Union[float, int, csdl.Variable],
+        ulf : Union[float, int, csdl.Variable] = 4.5,
+        correction_factor : Union[float, int, csdl.Variable] = 1.,
+    ):
+        S_ref = S_ref / Units.area.sq_ft_to_sq_m
 
-@dataclass
-class GAMainLandingGearWeightInputs:
-    """Parameters (in English units!)"""
-    fuselage_length : Union[float, int, csdl.Variable]
-    design_range : Union[float, int, csdl.Variable]
-    W_ramp : Union[float, int, csdl.Variable]
-    correction_factor : Union[float, int] = 1.
+        W_h_tail = 0.016 * S_ref**0.873 * (ulf * self.design_gross_weight)**0.414 * self.dynamic_pressure**0.122
 
-class GAMainLandingGearWeightModel():
-    def evaluate(self, inputs: GAMainLandingGearWeightInputs):
-        fl = inputs.fuselage_length
-        dr = inputs.design_range
-        drw = inputs.W_ramp
-        cf = inputs.correction_factor
+        return W_h_tail * Units.mass.pound_to_kg * correction_factor
+    
+    def evaluate_vertical_tail_weight(
+        self,
+        S_ref : Union[float, int, csdl.Variable],
+        AR : Union[float, int, csdl.Variable],
+        thickness_to_chord : Union[float, int, csdl.Variable],
+        sweep_c4 : Union[float, int, csdl.Variable],
+        ulf : Union[float, int, csdl.Variable] = 4.5,
+        hht : Union[float, int, csdl.Variable] = 0.,
+        correction_factor : Union[float, int, csdl.Variable] = 1.,
+    ):
+        S_ref = S_ref / Units.area.sq_ft_to_sq_m
+        
+        W_v_tail = 0.073 * (1.0 + 0.2 * hht) * (ulf * self.design_gross_weight)**0.376 * self.dynamic_pressure**0.122 * \
+            S_ref**0.873 * (AR / np.cos(sweep_c4)**2)**0.357 / ((100 * thickness_to_chord) / np.cos(sweep_c4))**0.49
+        
+        return W_v_tail * Units.mass.pound_to_kg * correction_factor
+    
+    def evaluate_avionics_weight(
+        self,
+        design_range : Union[float, int, csdl.Variable],
+        num_flight_crew : Union[int, csdl.Variable],
+        fuselage_plan_form_area : Union[float, int, csdl.Variable, None],
+        fuselage_length : Union[float, int, csdl.Variable] = None,
+        fuselage_width : Union[float, int, csdl.Variable] = None,
+        correction_factor : Union[float, csdl.Variable] = 1.,
+    ):
+        design_range = design_range / Units.length.nautical_mile_to_m
 
-        wldg = drw * (1 - 0.00004 * dr)
-        xmlg = 0.75 * fl * 12 * cf
+        if fuselage_plan_form_area is not None:
+            fuselage_plan_form_area = fuselage_plan_form_area / Units.area.sq_ft_to_sq_m
+
+        elif fuselage_length is not None and fuselage_width is not None:
+            fuselage_plan_form_area = fuselage_width / Units.length.foot_to_m * fuselage_length / Units.length.foot_to_m
+
+        W_avionics = 15.8 * design_range**0.1 * num_flight_crew**0.7 * fuselage_plan_form_area**0.43
+
+        return W_avionics * Units.mass.pound_to_kg * correction_factor
+    
+    def evaluate_main_landing_gear_weight(
+        self,
+        fuselage_length : Union[float, int, csdl.Variable],
+        design_range : Union[float, int, csdl.Variable],
+        W_ramp : Union[float, int, csdl.Variable],
+        correction_factor : Union[float, int] = 1.
+    ):
+        design_range = design_range / Units.length.nautical_mile_to_m
+        W_ramp = W_ramp / Units.mass.pound_to_kg
+        fuselage_length = fuselage_length / Units.length.foot_to_m
+
+        wldg = W_ramp * (1 - 0.00004 * design_range)
+        xmlg = 0.75 * fuselage_length * 12 
 
         w_lg = 0.0117 * wldg**0.95 * xmlg**0.43
 
-        return w_lg
-
-@dataclass
-class GAAvionicsWeightInputs:
-    """Parameters (in English units!)"""
-    design_range : Union[float, int, csdl.Variable]
-    num_flight_crew : Union[int, csdl.Variable]
-    S_fuse_planform : Union[float, int, csdl.Variable, None] 
-    xl : Union[float, int, csdl.Variable] = None
-    xlw : Union[float, int, csdl.Variable] = None
-    correction_factor : Union[float, csdl.Variable] = 1.
-
-class GAAvionicsWeightModel:
-    def evaluate(self, inputs: GAAvionicsWeightInputs):
-        dr = inputs.design_range
-        nfc = inputs.num_flight_crew
-        S_fuse_planform = inputs.S_fuse_planform
-        xl = inputs.xl
-        xlw = inputs.xlw
-        cf = inputs.correction_factor
-
-        if xl is not None and xlw is not None:
-            S_fuse_planform = xlw * xl
-
-        W_avionics = 15.8 * dr**0.1 * nfc**0.7 * S_fuse_planform**0.43
-
-        return W_avionics * cf
+        return w_lg * Units.mass.pound_to_kg * correction_factor
+        
 
 
 @dataclass
@@ -224,52 +158,6 @@ class GAInstrumentsWeightModel():
         W_instruments = 0.48 * S_fuse_planform**0.57 * mach_max**0.5* (10 + 2.5 *nfc + nwme  + 1.5 * nfmw) 
 
         return W_instruments
-
-
-def solve_design_gross_weight(W_wing_est, W_htail_est, W_vtail_est, W_fuse_est, W_mlg_est, W_avionics_est, W_instruments_est):
-    """Solves for the design gross weight by iterating over the estimates of wing and fuselage weights."""
-    Wdg = 2200 # W_wing_est + W_fuse_est + W_htail_est + W_vtail_est + W_mlg_est + W_avionics_est + W_instruments_est
-    W_wing = W_wing_est
-    W_fuse = W_fuse_est
-    W_htail = W_htail_est
-    W_vtail = W_vtail_est
-    W_mlg = W_mlg_est
-    W_avionics = W_avionics_est
-    W_instruments = W_instruments_est
-    max_iterations = 100
-    tolerance = 1e-6
-    iteration = 0
-
-    while True:
-        Wdg_prev = Wdg
-        W_wing = GAWingWeightModel().evaluate(GAWingWeightInputs(S_ref=S_ref, W_fuel=W_fuel, AR=AR, sweep_c4=sweep_c4,
-                                                          taper_ratio=taper_ratio, thickness_to_chord=thickness_to_chord,
-                                                          dynamic_pressure=dynamic_pressure, nz=nz, W_gross_design=Wdg))
-        W_fuse = GAFuselageWeigthModel().evaluate(GAFuselageWeightInputs(S_wet=310, q_cruise=q_cruise, ulf=4.5, xl=None, d_av=None,
-                                                           W_gross_design=Wdg, correction_factor=2.3))
-        
-        W_htail = GAHorizontalTailWeigthModel().evaluate(GAHorizontalTailInputs(S_ref=S_ref_tail, W_gross_design=Wdg, q_cruise=q_cruise))
-
-        W_vtail = GAVerticalTailWeigthModel().evaluate(GAVerticalTailInputs(S_ref=S_ref_v_tail, W_gross_design=Wdg, q_cruise=q_cruise, 
-                                                                                         t_o_c=0.12, sweep_c4=np.deg2rad(15), AR=AR_vtail))
-        
-        W_mlg = GAMainLandingGearWeightModel().evaluate(GAMainLandingGearWeightInputs(l_fuse, design_range, Wdg * 1.05))
-
-        W_avionics = GAAvionicsWeightModel().evaluate(GAAvionicsWeightInputs(design_range, 1, 21))
-
-        W_instruments = GAInstrumentsWeightModel().evaluate(GAInstrumentsWeightInputs(0.19, 1, 0, 1, None, xl, d_av))
-        
-        print(W_wing, W_htail, W_vtail, W_fuse, W_mlg, W_avionics, W_instruments)
-        Wdg = W_wing + W_fuse + W_htail + W_vtail + W_mlg + W_avionics + W_instruments
-        iteration += 1
-
-        if abs(Wdg - Wdg_prev) < tolerance or iteration >= max_iterations:
-            break
-
-    if iteration >= max_iterations:
-        raise ValueError("Solution did not converge within the maximum number of iterations.")
-
-    return Wdg, iteration
 
 
 
@@ -306,8 +194,5 @@ if __name__ == "__main__":
     d_av = 4
 
     design_range = 600
-
-    Wdg, iteration = solve_design_gross_weight(W_wing_est, W_htail_est, W_vtail_est, W_fuse_est, W_mlg_est, W_avionics_est, W_instruments_est)
-    print("Design Gross Weight:", Wdg, "iterations", iteration)
 
 

@@ -1,5 +1,5 @@
 '''Example config w/o geometry'''
-from CADDEE_alpha.core.caddee import CADDEE
+import CADDEE_alpha as cd
 from CADDEE_alpha.core.configuration import Configuration
 from CADDEE_alpha.core.component import Component
 from CADDEE_alpha.core.aircraft.components.aircraft import Aircraft
@@ -19,7 +19,7 @@ recorder.start()
 
 units = Units()
 
-def define_base_config(caddee : CADDEE):
+def define_base_config(caddee : cd.CADDEE):
     """ Build the base configuration."""
 
     # Make aircraft component and assign airframe
@@ -116,7 +116,7 @@ def define_base_config(caddee : CADDEE):
     caddee.base_configuration = c172_base_config
 
 
-def define_conditions(caddee : CADDEE):
+def define_conditions(caddee : cd.CADDEE):
     """Define the design conditions."""
     conditions = caddee.conditions
     base_config = caddee.base_configuration
@@ -165,7 +165,7 @@ def define_conditions(caddee : CADDEE):
     descent.configuration = base_config.copy()
     conditions["descent"] = descent
 
-def define_mass_properties(caddee : CADDEE):
+def define_mass_properties(caddee : cd.CADDEE):
     """Define vehicle-level mass properties of the base configuration."""
     base_config = caddee.base_configuration
     conditions = caddee.conditions
@@ -173,7 +173,7 @@ def define_mass_properties(caddee : CADDEE):
     # get some operational variables from the cruise condition
     cruise = conditions["cruise_1"]
     fast_cruise = conditions["cruise_2"]
-    rho_imperial = cruise.atmos_states.density * (1 / units.mass.slug_to_kg) / (1 / units.length.foot_to_m)**3
+    rho_imperial = cruise.quantities.atmos_states.density * (1 / units.mass.slug_to_kg) / (1 / units.length.foot_to_m)**3
     speed_imperial = cruise.parameters.speed * (1 / units.speed.ftps_to_mps)
     q_cruise = 0.5 * rho_imperial * speed_imperial**2
     range_imperial = cruise.parameters.range * (1/ units.length.nautical_mile_to_m)
@@ -332,7 +332,7 @@ def define_mass_properties(caddee : CADDEE):
     print(aircraft.quantities.mass_properties.mass.value)
     print(base_config.system.quantities.mass_properties)
 
-def define_sub_configurations(caddee : CADDEE):
+def define_sub_configurations(caddee : cd.CADDEE):
     base_config = caddee.base_configuration
     conditions = caddee.conditions
     cruise_configuration = conditions["cruise_1"].configuration
@@ -351,7 +351,7 @@ def define_sub_configurations(caddee : CADDEE):
     
     
 if __name__ == "__main__":
-    caddee = CADDEE()
+    caddee = cd.CADDEE()
 
     define_base_config(caddee)
 

@@ -1004,6 +1004,7 @@ class Configuration:
         comp_1: Component,
         comp_2: Component,
         connection_point: Union[csdl.Variable, np.ndarray, None]=None,
+        desired_value: Union[csdl.Variable, None]=None
     ):
         """Connect the geometries of two components.
 
@@ -1022,6 +1023,9 @@ class Configuration:
             could be the quarter chord of the wing. This means that the distance
             between the point and the two component will remain constant, 
             by default None
+        desired_value : Union[csdl.Variable, np.ndarray, None], optional
+            The value to be enforced by the inner optimization, if None,
+            the connection point's initial value will be chosen
 
         Raises
         ------
@@ -1053,7 +1057,7 @@ class Configuration:
             projection_1 = comp_1.geometry.project(connection_point)
             projection_2 = comp_2.geometry.project(connection_point)
 
-            self._geometric_connections.append((projection_1, projection_2, comp_1, comp_2))
+            self._geometric_connections.append((projection_1, projection_2, comp_1, comp_2, desired_value))
         
         # Else choose the center points of the FFD block
         else:
@@ -1063,11 +1067,11 @@ class Configuration:
             projection_1 = comp_1.geometry.project(point_1)
             projection_2 = comp_2.geometry.project(point_2)
 
-            self._geometric_connections.append((projection_1, projection_2, comp_1, comp_2))
+            self._geometric_connections.append((projection_1, projection_2, comp_1, comp_2, desired_value))
         
         return
 
-    def setup_geometry(self, run_ffd : bool=True, plot : bool=False, recorder: csdl.Recorder =None):
+    def setup_geometry(self, additional_constraints: List[tuple]=None, run_ffd : bool=True, plot : bool=False, recorder: csdl.Recorder =None):
         """Run the geometry parameterization solver. 
         
         Note: This is only allowed on the based configuration.
@@ -1114,6 +1118,7 @@ class Configuration:
             projection_2 = connection[1]
             comp_1 : Component = connection[2]
             comp_2 : Component = connection[3]
+            desired_value : csdl.Variable = connection[4]
             if isinstance(projection_1, list):
                 connection = comp_1.geometry.evaluate(parametric_coordinates=projection_1) - comp_2.geometry.evaluate(parametric_coordinates=projection_2)
             elif isinstance(projection_1, np.ndarray):
@@ -1122,7 +1127,22 @@ class Configuration:
                 print(f"wrong type {type(projection_1)} for projection")
                 raise NotImplementedError
             
-            ffd_geometric_variables.add_variable(connection, connection.value)
+            if desired_value is None:
+                ffd_geometric_variables.add_variable(connection, connection.value)
+            else:
+                # if connection.shape != desired_value.shape:
+                #     if desired_value.shape == (1, ):
+                #         ffd_geometric_variables.add_variable(csdl.norm(connection), desired_value)
+                #     else:
+                #         raise ValueError(f"geometric connection has shape {connection.shape}, and desired value has shape {desired_value.shape}. If the shape of the deired value is (1, ), the norm of the connection will be enforced.")
+
+                # else:
+                    ffd_geometric_variables.add_variable(connection, desired_value)
+        
+        if additional_constraints:
+            for constr in additional_constraints:
+                connection = csdl.norm(self.system.geometry.evaluate(parametric_coordinates=constr[0]) - self.system.geometry.evaluate(parametric_coordinates=constr[1]))
+                ffd_geometric_variables.add_variable(connection, constr[2])
 
         # Evalauate the parameterization solver
         t1 = time.time()

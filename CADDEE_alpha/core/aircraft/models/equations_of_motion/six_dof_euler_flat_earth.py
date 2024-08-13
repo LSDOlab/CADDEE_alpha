@@ -192,6 +192,8 @@ class SixDofEulerFlatEarthModel:
 
         accel_mat = csdl.Variable(shape=(self.num_nodes, 6), value=0)
 
+        print(mp_matrix.value)
+
         for i in csdl.frange(self.num_nodes):
             accel = csdl.solve_linear(mp_matrix, rhs[i, :])
             accel_mat = accel_mat.set(csdl.slice[i, :], accel)

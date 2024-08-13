@@ -9,9 +9,8 @@ class WeightsSolverModel:
         for weight in component_weights:
             gross_weight =  gross_weight +  weight
 
-
         weight_residual = gross_weight_guess - gross_weight
 
-        solver = csdl.nonlinear_solvers.GaussSeidel()
+        solver = csdl.nonlinear_solvers.Newton()
         solver.add_state(gross_weight_guess, weight_residual)
         solver.run()

@@ -8,9 +8,10 @@ We only have a limited number of examples at this time as CADDEE is still under 
 :maxdepth: 2
 :caption: List of examples
 :titlesonly:
-:numbered:
+:numbered: 1
 :includehidden:
 
 examples/basic
+examples/intermediate
 examples/advanced
 ```
