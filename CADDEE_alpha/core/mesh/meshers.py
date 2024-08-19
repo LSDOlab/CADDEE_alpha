@@ -1031,7 +1031,7 @@ def make_1d_box_beam(
         beam_width_nodal = wing_geometry.evaluate(fore_points_parametric)[:,0] - wing_geometry.evaluate(aft_points_parametric)[:,0]
         beam_width = (beam_width_nodal[0:-1] + beam_width_nodal[1:]) / 2
 
-    offset = np.array([0., 0., 2])
+    offset = np.array([0., 0., 1])
     node_top_parametric = wing_geometry.project(beam_nodes_raw.value + offset, direction=np.array([0., 0., -1]),  plot=plot)
     node_bottom_parametric = wing_geometry.project(beam_nodes_raw.value - offset, direction=np.array([0., 0., 1]), plot=plot)
 

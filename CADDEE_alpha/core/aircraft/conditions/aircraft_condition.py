@@ -259,7 +259,11 @@ class AircraftCondition(Condition):
                 if ignore_body_rotations:
                     print("No mass properties defined; ignore any body rotations in mesh velocities")
                 else:
-                    config.assemble_system_mass_properties()
+                    try:
+                        config.assemble_system_mass_properties()
+                    except:
+                        warnings.warn("No mass properties defined; ignore any body rotations in mesh velocities")
+
                     if cg_vec is None:
                         warnings.warn("No mass properties defined; ignore any body rotations in mesh velocities")
 
