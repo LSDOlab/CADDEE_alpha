@@ -5,6 +5,7 @@ import numpy as np
 import lsdo_function_spaces as lfs
 import time
 import csdl_alpha as csdl
+import platform
 
 
 _REPO_ROOT_FOLDER = Path(__file__).parents[0]
@@ -54,6 +55,11 @@ def import_geometry(
         Exception
             If unknown path or file path
         """
+
+        # First check OS and set num_workers to 1 if OS is not Linux
+        operating_system = platform.system()
+        if operating_system != "Linux":
+            lfs.num_workers = 1
         
         if not file_name.endswith(".stp"):
             raise Exception(f"Can only import '.stp' files at the moment. Received {file_name}")

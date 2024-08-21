@@ -8,4 +8,6 @@ Examples will also include simple optimization problems.
 :maxdepth: 1
 
 ../_temp/examples/intermediate_examples/ex_induced_drag_minimization
+../_temp/examples/intermediate_examples/ex_handling_qualities_optimization
+../_temp/examples/intermediate_examples/ex_dynamic_inflow_and_acoustics
 ```

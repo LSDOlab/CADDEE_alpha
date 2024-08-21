@@ -620,26 +620,6 @@ class AircraftCondition(Condition):
             eig_val_operation = EigenValueOperation()
             eig_real, eig_imag = eig_val_operation.evaluate(A_mat)
 
-            print(eig_real.value)
-            print(eig_imag.value)
-            import matplotlib.pyplot as plt
-            plt.scatter(eig_real[0:2].value, eig_imag[0:2].value, label="short-period")
-            plt.scatter(eig_real[2:].value, eig_imag[2:].value, label="long-period (Phugoid)")
-            plt.axhline(0, color='black',linewidth=0.5)
-            plt.axvline(0, color='black',linewidth=0.5)
-            plt.xlabel(r'$Re$', fontsize=14)
-            plt.ylabel(r'$Im$', fontsize=14)
-            plt.xlim([-3.5, 0.1])
-            plt.ylim([-10, 10])
-            plt.legend(loc="best",fontsize=14)
-            # plt.gca().set_aspect('equal', adjustable='box')
-
-            # Show grid
-            plt.grid(True)
-            plt.show()
-            # exit()
-
-
             # Short period (more stable; eigenvalues come out sorted)
             lambda_sp_real = eig_real[0]
             lambda_sp_imag = eig_imag[0]

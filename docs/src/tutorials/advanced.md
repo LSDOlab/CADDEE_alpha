@@ -8,8 +8,8 @@ If no classification is required, just remove these pages
 and add the tutorial files directly into the toctree of the main
 tutorials page.
 
-```{toctree}
+<!-- ```{toctree}
 :maxdepth: 1
 
 ../_temp/tutorials/advanced_tutorials/modopt_tutorial
-```
+``` -->

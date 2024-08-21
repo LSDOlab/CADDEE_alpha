@@ -1,17 +1,10 @@
-'''Induced drag minimization example'''
+'''Handling qualities optimization example'''
 import CADDEE_alpha as cd
 import csdl_alpha as csdl
 import numpy as np
-from lsdo_airfoil.core.three_d_airfoil_aero_model import ThreeDAirfoilMLModelMaker
 from VortexAD.core.vlm.vlm_solver import vlm_solver
-from modopt import CSDLAlphaProblem, PySLSQP
-from BladeAD.core.airfoil.ml_airfoil_models.NACA_4412.naca_4412_model import NACA4412MLAirfoilModel
-from BladeAD.core.BEM.bem_model import BEMModel
-from BladeAD.utils.var_groups import RotorAnalysisInputs
-from BladeAD.utils.parameterization import BsplineParameterization
-nthreads = 1
-import os
-os.environ["OPENBLAS_NUM_THREADS"] = str(nthreads)
+from CADDEE_alpha.utils.coordinate_transformations import perform_local_to_body_transformation
+from modopt import CSDLAlphaProblem, SLSQP
 
 
 # Start the CSDL recorder
@@ -35,7 +28,7 @@ def define_base_config(caddee : cd.CADDEE):
     base_config = cd.Configuration(system=aircraft)
 
     fuselage_geometry = aircraft.create_subgeometry(search_names=["Fuselag"])
-    fuselage_length = csdl.Variable(name="fuselage_length", value=9.)# 7.5)
+    fuselage_length = csdl.Variable(name="fuselage_length", value=7.5)
     fuselage_length.set_as_design_variable(lower=0.8*7.5, upper=1.2*7.5)
     fuselage = cd.aircraft.components.Fuselage(
         length=fuselage_length, 
@@ -48,10 +41,10 @@ def define_base_config(caddee : cd.CADDEE):
 
     # Make wing geometry from aircraft component and instantiate wing component
     wing_geometry = aircraft.create_subgeometry(search_names=["MainWing"])
-    aspect_ratio = csdl.Variable(name="wing_aspect_ratio", value=6.176) #7.72)
-    wing_area = csdl.Variable(name="wing_area", value=15.80233922)#16.23)
-    wing_root_twist = csdl.Variable(name="wing_root_twist", value=0.01252235)#np.deg2rad(1))
-    wing_tip_twist = csdl.Variable(name="wing_tip_twist", value=-0.05313931)#np.deg2rad(-1))
+    aspect_ratio = csdl.Variable(name="wing_aspect_ratio", value=7.72)
+    wing_area = csdl.Variable(name="wing_area", value=16.23)
+    wing_root_twist = csdl.Variable(name="wing_root_twist", value=0)
+    wing_tip_twist = csdl.Variable(name="wing_tip_twist", value=0)
     
     # Set design variables for wing
     aspect_ratio.set_as_design_variable(upper=1.2 * 7.72, lower=0.8 * 7.72, scaler=1/8)
@@ -70,8 +63,8 @@ def define_base_config(caddee : cd.CADDEE):
 
     # Make horizontal tail geometry & component
     h_tail_geometry = aircraft.create_subgeometry(search_names=["HTail"])
-    h_tail_AR = csdl.Variable(name="h_tail_AR", value=3.064)#3.83)
-    h_tail_area = csdl.Variable(name="h_tail_area", value=4.848)#4.04)
+    h_tail_AR = csdl.Variable(name="h_tail_AR", value=3.83)
+    h_tail_area = csdl.Variable(name="h_tail_area", value=4.04)
 
     h_tail_AR.set_as_design_variable(lower=0.8 * 3.83, upper=1.5 * 3.83, scaler=1/4)
     h_tail_area.set_as_design_variable(lower=0.8 * 4.04, upper=1.2 * 4.04, scaler=1/4)
@@ -107,7 +100,6 @@ def define_base_config(caddee : cd.CADDEE):
     wing_qc = 0.75 * wing.LE_center + 0.25 * wing.TE_center
     h_tail_qc = 0.75 * h_tail.LE_center + 0.25 * h_tail.TE_center
     tail_moment_arm = csdl.norm(wing_qc - h_tail_qc)
-    print("tail_moment_arm", tail_moment_arm.value)
 
     # components w/o geometry
     avionics = cd.Component()
@@ -143,18 +135,10 @@ def define_base_config(caddee : cd.CADDEE):
     vlm_mesh.discretizations["h_tail_chord_surface"] = tail_chord_surface
 
     num_radial = 25
-    num_cp = 4
-    blade_parameterization = BsplineParameterization(num_cp=num_cp, num_radial=num_radial)
     rotor_meshes = cd.mesh.RotorMeshes()
-    # propeller prop
     propeller_discretization = cd.mesh.make_rotor_mesh(
         propeller, num_radial=num_radial, num_azimuthal=1, num_blades=2
     )
-    propeller_chord_cps = csdl.Variable(name="propeller_chord_cps", shape=(4, ), value=np.linspace(0.3, 0.1, 4))
-    propeller_twist_cps = csdl.Variable(name="propeller_twist_cps", shape=(4, ), value=np.linspace(np.deg2rad(65), np.deg2rad(25), 4))
-    propeller_discretization.chord_profile = blade_parameterization.evaluate_radial_profile(propeller_chord_cps)
-    propeller_discretization.twist_profile = blade_parameterization.evaluate_radial_profile(propeller_twist_cps)
-    propeller_discretization.radius = propeller.parameters.radius
     rotor_meshes.discretizations["propeller_discretization"] = propeller_discretization
 
     # plot meshes
@@ -167,21 +151,21 @@ def define_base_config(caddee : cd.CADDEE):
     # Set up the geometry: this will run the inner optimization
     base_config.setup_geometry(plot=True)
 
-     # tail moment arem
+    # tail moment arem
     wing_qc = 0.75 * wing.LE_center + 0.25 * wing.TE_center
     h_tail_qc = 0.75 * h_tail.LE_center + 0.25 * h_tail.TE_center
     tail_moment_arm = csdl.norm(wing_qc - h_tail_qc)
-    print("tail_moment_arm", tail_moment_arm.value)
-    # exit()
+    print("tail moment arm", tail_moment_arm.value)
 
     # Assign base configuration to CADDEE instance
     caddee.base_configuration = base_config
 
 def define_conditions(caddee: cd.CADDEE):
+    """Define the operating conditions of the aircraft."""
     conditions = caddee.conditions
     base_config = caddee.base_configuration
 
-    pitch_angle = csdl.Variable(name="pitch_angle", value=0.04363323)#0.0199512)
+    pitch_angle = csdl.Variable(name="pitch_angle", value=0.)
     pitch_angle.set_as_design_variable(upper=np.deg2rad(2.5), lower=np.deg2rad(-2), scaler=4)
     cruise = cd.aircraft.conditions.CruiseCondition(
         altitude=2500,
@@ -193,6 +177,8 @@ def define_conditions(caddee: cd.CADDEE):
     conditions["cruise"] = cruise
 
 def define_mass_properties(caddee: cd.CADDEE):
+    """Define the mass properties of the aircraft."""
+
     base_config = caddee.base_configuration
     aircraft = base_config.system
 
@@ -294,6 +280,7 @@ def define_mass_properties(caddee: cd.CADDEE):
     print(base_config.system.quantities.mass_properties.inertia_tensor.value)
 
 def define_analysis(caddee: cd.CADDEE):
+    """Define the analysis of performed on the aircraft."""
     cruise : cd.aircraft.conditions.CruiseCondition = caddee.conditions["cruise"]
     cruise_config = cruise.configuration
     mesh_container = cruise_config.mesh_container
@@ -302,7 +289,7 @@ def define_analysis(caddee: cd.CADDEE):
     v_tail = cruise_config.system.comps["v_tail"]
     wing = cruise_config.system.comps["wing"]
     fuselage = cruise_config.system.comps["fuselage"]
-    elevator_deflection = csdl.Variable(name="elevator", value=-0.00803851)#-0.01327919)
+    elevator_deflection = csdl.Variable(name="elevator", value=0)
     elevator_deflection.set_as_design_variable(lower=np.deg2rad(-10), upper=np.deg2rad(10), scaler=2)
     tail.actuate(elevator_deflection)
 
@@ -329,17 +316,11 @@ def define_analysis(caddee: cd.CADDEE):
     vlm_forces = vlm_outputs.total_force
     vlm_moments = vlm_outputs.total_moment
 
-    # We multiply by (-1) since the lift and drag are w.r.t. the flight-dynamics reference frame
-    total_induced_drag = vlm_outputs.total_drag * -1
-    # set objectives and constraints
-    total_induced_drag.name = "total_induced_drag"
-    # total_induced_drag.set_as_objective(scaler=1e-2)
-
     # rotor analysis
     thrust_coefficient =  0.0204
     rotor_meshes = mesh_container["rotor_meshes"]
     propeller_discretization = rotor_meshes.discretizations["propeller_discretization"]
-    cruise_rpm = csdl.Variable(name="cruise_pusher_rpm", shape=(1, ), value=1545.77600255)#1539.01952219)
+    cruise_rpm = csdl.Variable(name="cruise_pusher_rpm", shape=(1, ), value=1500)
     cruise_rpm.set_as_design_variable(scaler=1e-3, lower=500, upper=2000)
     cruise_omega = cruise_rpm / 60 * 2 * np.pi
     radius = propeller_discretization.radius
@@ -348,8 +329,9 @@ def define_analysis(caddee: cd.CADDEE):
     rho = cruise.quantities.atmos_states.density
     thrust = thrust_coefficient * rho * np.pi * radius**2 * (cruise_omega * radius)**2
     thrust_forces = thrust * thrust_vector
-    from CADDEE_alpha.utils.coordinate_transformations import perform_local_to_body_transformation
 
+    # To capture the effect of perturbations in the aircraft states, we need to rotate thrust vector into body-fixed frame
+    # NOTE: We only do this for thrust in this example because other solvers automatically do this.
     thrust_forces_body = perform_local_to_body_transformation(
         cruise.quantities.ac_states.phi,
         cruise.quantities.ac_states.theta,
@@ -358,35 +340,17 @@ def define_analysis(caddee: cd.CADDEE):
     )
     thrust_moments_body = csdl.cross(thrust_origin, thrust_forces_body, axis=1)
 
-    # mesh_vel = propeller_discretization.nodal_velocities
-    # cruise_rpm.set_as_design_variable(lower=500, upper=2000, scaler=1e-3)
-    # bem_inputs = RotorAnalysisInputs()
-    # bem_inputs.ac_states = cruise.quantities.ac_states
-    # bem_inputs.atmos_states =  cruise.quantities.atmos_states
-    # bem_inputs.mesh_parameters = propeller_discretization
-    # bem_inputs.mesh_velocity = mesh_vel
-    # bem_inputs.rpm = cruise_rpm
-    # bem_model = BEMModel(num_nodes=1, airfoil_model=NACA4412MLAirfoilModel())
-    # bem_outputs = bem_model.evaluate(bem_inputs)
-    # print("bem_forces", bem_outputs.forces.value)
-    # exit()
+    # Parasite drag build up
     drag_build_up_model = cd.aircraft.models.aero.compute_drag_build_up
-
     parasite_drag = drag_build_up_model(cruise.quantities.ac_states, cruise.quantities.atmos_states,
                                         wing.parameters.S_ref, [wing, fuselage, tail, v_tail])
     
-
-    total_drag = parasite_drag[0, 0] + vlm_forces[0, 0]
-    total_lift = parasite_drag[0, 2] + vlm_forces[0, 2]
-
-    L_o_d = total_lift / total_drag
-    L_o_d.name = "lift_to_drag_ratio"
-    # L_o_d.set_as_constraint(lower=9., scaler=1/10)
-
+    # Summing up the total forces and moments
     total_forces, total_moments = cruise.assemble_forces_and_moments(
         [vlm_forces, thrust_forces_body, parasite_drag], [vlm_moments, thrust_moments_body]
     )
 
+    # Setting force equilibrium constraints
     force_norm = csdl.norm(total_forces)
     moment_norm = csdl.norm(total_moments)
 
@@ -394,10 +358,9 @@ def define_analysis(caddee: cd.CADDEE):
     moment_norm.name = "total_moments_norm"
 
     force_norm.set_as_constraint(equals=0, scaler=1e-4)
-    # force_norm.set_as_objective(scaler=1e-4)
     moment_norm.set_as_constraint(equals=0., scaler=1e-4)
-    # moment_norm.set_as_objective(scaler=1e-3)
 
+    # Performing linearized stability analysis
     long_stability_results = cruise.perform_linear_stability_analysis(
         total_forces=total_forces,
         total_moments=total_moments,
@@ -405,15 +368,10 @@ def define_analysis(caddee: cd.CADDEE):
         mass_properties=cruise_config.system.quantities.mass_properties,
     )
 
-    print("real_eig_vals_short_period", long_stability_results.real_eig_vals_short_period.value)
     t2d = long_stability_results.time_2_double_phugoid
     t2d.name = "time2double"
     t2d.set_as_objective(scaler=-4e-2)
-    print(t2d.value)
-    print("damping_ratio", long_stability_results.damping_ratio_phugoid.value)
-    print("total_forces", total_forces.value)
-    print("total_moments", total_moments.value)
-    exit()
+    print("time to double", t2d.value)
 
 # Run the code (forward evaluation)
 define_base_config(caddee=caddee)
@@ -426,7 +384,6 @@ define_analysis(caddee=caddee)
 
 # Run optimization
 jax_sim = csdl.experimental.JaxSimulator(
-# jax_sim = csdl.experimental.PySimulator(
     recorder=recorder, # Turn off gpu if none available
     gpu=False,
     derivatives_kwargs= {
@@ -436,11 +393,11 @@ jax_sim = csdl.experimental.JaxSimulator(
 
 # Check analytical derivatives against finite difference
 jax_sim.check_optimization_derivatives()
-# exit()
 
 # Make CSDLAlphaProblem and initialize optimizer
 problem = CSDLAlphaProblem(problem_name="induced_drag_minimization", simulator=jax_sim)
-optimizer = PySLSQP(problem=problem, solver_options={"acc": 1e-3, "maxiter" : 100, "iprint" : 2})
+optimizer = SLSQP(problem=problem)
+
 
 # Solve optimization problem
 optimizer.solve()

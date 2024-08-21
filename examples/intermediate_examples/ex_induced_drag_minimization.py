@@ -4,7 +4,7 @@ import csdl_alpha as csdl
 import numpy as np
 from lsdo_airfoil.core.three_d_airfoil_aero_model import ThreeDAirfoilMLModelMaker
 from VortexAD.core.vlm.vlm_solver import vlm_solver
-from modopt import CSDLAlphaProblem, PySLSQP
+from modopt import CSDLAlphaProblem, SLSQP
 
 
 # Start the CSDL recorder
@@ -21,21 +21,6 @@ caddee = cd.CADDEE()
 def define_base_config(caddee : cd.CADDEE):
     """Build the system configuration and define meshes."""
 
-    aircraft = cd.aircraft.components.Aircraft()
-
-    fuselage = cd.aircraft.components.Fuselage(length=9)
-    aircraft.comps["fuselage"] = fuselage
-
-    wing = cd.aircraft.components.Wing(AR=10, S_ref=20)
-    aircraft.comps["wing"] =  wing
-
-    nacelle = cd.Component(radius=1.5)
-    wing.comps["nacelle"] = nacelle
-
-    base_config = cd.Configuration(system=aircraft)
-    base_config.visualize_component_hierarchy()
-    exit()
-
     # Make aircraft component and pass in the geometry
     aircraft = cd.aircraft.components.Aircraft(geometry=c172_geom, compute_surface_area=False)
 
@@ -48,11 +33,10 @@ def define_base_config(caddee : cd.CADDEE):
     # Make wing geometry from aircraft component and instantiate wing component
     wing_geometry = aircraft.create_subgeometry(
         search_names=["MainWing"],
-        # ignore_names=['0, 8', '0, 9', '0, 12', '0, 13', '1, 14', '1, 15', '1, 18', '1, 19'],
     )
     aspect_ratio = csdl.Variable(name="wing_aspect_ratio", value=7.72)
-    wing_root_twist = csdl.Variable(name="wing_root_twist", value=np.deg2rad(1))
-    wing_tip_twist = csdl.Variable(name="wing_tip_twist", value=np.deg2rad(-1))
+    wing_root_twist = csdl.Variable(name="wing_root_twist", value=np.deg2rad(0))
+    wing_tip_twist = csdl.Variable(name="wing_tip_twist", value=np.deg2rad(0))
     
     # Set design variables for wing
     aspect_ratio.set_as_design_variable(upper=1.5 * 7.72, lower=0.5 * 7.72, scaler=1/8)
@@ -60,41 +44,21 @@ def define_base_config(caddee : cd.CADDEE):
     wing_tip_twist.set_as_design_variable(upper=np.deg2rad(10), lower=np.deg2rad(-10), scaler=2)
     
     wing = cd.aircraft.components.Wing(
-        AR=12, S_ref=15, 
-        taper_ratio=0.3, root_twist_delta=np.deg2rad(0),
-        tip_twist_delta=np.deg2rad(-15), 
-        sweep=np.deg2rad(-30), dihedral=np.deg2rad(-15),
+        AR=aspect_ratio, S_ref=16.17, 
+        taper_ratio=0.73, root_twist_delta=wing_root_twist,
+        tip_twist_delta=wing_tip_twist, 
         geometry=wing_geometry
     )
 
     # Assign wing component to aircraft
     aircraft.comps["wing"] = wing
 
-    top_array, bottom_array = wing.construct_ribs_and_spars(
-        c172_geom,
-        num_ribs=10,
-        LE_TE_interpolation="ellipse",
-        plot_projections=False, 
-        export_wing_box=False,
-        export_half_wing=True,
-        full_length_ribs=True,
-        spanwise_multiplicity=10,
-        num_rib_pts=10,
-        offset=np.array([0.,0.,.15]),
-        finite_te=False,
-        exclute_te=False,
-        return_rib_points=True
-    )
-
-    # c172_geom.plot(opacity=0.5)
-    # exit()
-
     # Make horizontal tail geometry & component
     h_tail_geometry = aircraft.create_subgeometry(search_names=["HTail"])
     h_tail = cd.aircraft.components.Wing(
-        AR=5, S_ref=3, taper_ratio=0.5, 
-        sweep=np.deg2rad(30), dihedral=np.deg2rad(-10),
-        geometry=h_tail_geometry)
+        AR=3.83, S_ref=4.04, taper_ratio=0.6, 
+        geometry=h_tail_geometry
+    )
 
     # Assign tail component to aircraft
     aircraft.comps["h_tail"] = h_tail
@@ -132,32 +96,14 @@ def define_base_config(caddee : cd.CADDEE):
     vlm_mesh_0 = cd.mesh.VLMMesh()
     vlm_mesh_0.discretizations["wing_chord_surface"] = wing_chord_surface
     vlm_mesh_0.discretizations["h_tail_chord_surface"] = tail_chord_surface
-    
-    beam_discretization = cd.mesh.make_1d_box_beam(
-        wing_comp=wing,
-        norm_node_center=0.5,
-        num_beam_nodes=19,
-        project_spars=True,
-        plot=False,
-        spar_search_names=["1", "2"]
-    )
-    beam_mesh = cd.mesh.BeamMesh()
-    beam_mesh.discretizations["beam_nodes"] = beam_discretization
 
     # plot meshes
-    # c172_geom.plot_meshes(meshes=[wing_chord_surface.nodal_coordinates.value, tail_chord_surface.nodal_coordinates.value])
+    c172_geom.plot_meshes(meshes=[wing_chord_surface.nodal_coordinates.value, tail_chord_surface.nodal_coordinates.value])
     # Assign mesh to mesh container
     mesh_container["vlm_mesh_0"] = vlm_mesh_0
-    mesh_container["beam_mesh"] = beam_mesh
-    # c172_geom.plot_meshes(meshes=[wing_chord_surface.nodal_coordinates.value, tail_chord_surface.nodal_coordinates.value],
-    #                       mesh_color="#f5784d", mesh_opacity=0.8)
-    c172_geom.plot_meshes(meshes=[beam_discretization.nodal_coordinates.value], mesh_color="#f5784d", mesh_opacity=0.8)
+
     # Set up the geometry: this will run the inner optimization
     base_config.setup_geometry()
-    c172_geom.plot_meshes(meshes=[beam_discretization.nodal_coordinates.value], mesh_color="#f5784d", mesh_opacity=0.8)
-    # c172_geom.plot_meshes(meshes=[wing_chord_surface.nodal_coordinates.value, tail_chord_surface.nodal_coordinates.value],
-    #                       mesh_color="#f5784d", mesh_opacity=0.8)
-    exit()
 
     # Assign base configuration to CADDEE instance
     caddee.base_configuration = base_config
@@ -176,9 +122,6 @@ def define_conditions(caddee: cd.CADDEE):
     )
     cruise.configuration = base_config.copy()
     conditions["cruise"] = cruise
-
-def define_mass_properties(caddee: cd.CADDEE):
-    base_config = caddee.base_configuration
 
 def define_analysis(caddee: cd.CADDEE):
     cruise = caddee.conditions["cruise"]
@@ -235,17 +178,16 @@ define_conditions(caddee=caddee)
 define_analysis(caddee=caddee)
 
 # Run optimization
-# jax_sim = csdl.experimental.JaxSimulator(
-jax_sim = csdl.experimental.PySimulator(
+jax_sim = csdl.experimental.JaxSimulator(
     recorder=recorder, # Turn off gpu if none available
 )
 
 # Check analytical derivatives against finite difference
-jax_sim.check_optimization_derivatives()
+# jax_sim.check_optimization_derivatives()
 
 # Make CSDLAlphaProblem and initialize optimizer
 problem = CSDLAlphaProblem(problem_name="induced_drag_minimization", simulator=jax_sim)
-optimizer = PySLSQP(problem=problem)
+optimizer = SLSQP(problem=problem)
 
 # Solve optimization problem
 optimizer.solve()
