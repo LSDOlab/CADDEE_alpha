@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.8", "3.9", "3.10"]
+        python-version: ["3.9", "3.10"]
 
     steps:
       # The steps here are essentially command-line arguments that will be ran on the cloud with the above configurations  
@@ -34,8 +34,7 @@ jobs:
     - name: Install dependencies
       run: | 
         python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-        pip install -e .
+        pip install -e .[test]
 
       # Finally, we run the package unit-tests on the specified OS and python versions.
     - name: Test with pytest

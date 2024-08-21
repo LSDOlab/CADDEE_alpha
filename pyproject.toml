@@ -1,0 +1,52 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "CADDEE_alpha"
+description = "Comprensive Auto Differentiation and Design Environment for Engineering" # according to copilot lol
+readme = "README.md"
+requires-python = ">=3.9"
+license = {file = "LICENSE.txt"}
+keywords = ["CADDEE", "auto-differentation", "MDO", "optimization", "design", "aircraft", "spacecraft", "engineering"]
+authors = [{name = "Marius Ruh", email = "author@gmail.com"}]
+dependencies = [
+    "numpy",
+    "scipy",
+    "vedo",
+    "meshio",
+    "caddee_materials @ git+https://github.com/LSDOlab/caddee_materials.git",
+    "csdl_alpha @ git+https://github.com/LSDOlab/CSDL_alpha.git",
+    "lsdo_function_spaces @ git+https://github.com/LSDOlab/lsdo_function_spaces.git",
+    "lsdo_geo @ git+https://github.com/LSDOlab/lsdo_geo.git#egg=csdl2_implementation",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+docs = [
+    "myst-nb",
+    "sphinx==5.3.0",
+    "sphinx_rtd_theme",
+    "sphinx-copybutton",
+    "sphinx-autoapi==2.1.0",
+    "astroid==2.15.5",
+    "numpydoc",
+    "gitpython",
+    "sphinxcontrib-collections @ git+https://github.com/anugrahjo/sphinx-collections.git",
+    "sphinxcontrib-bibtex",
+]
+toolsuite = [
+    "modopt @ git+https://github.com/LSDOlab/modopt.git",
+    "aframe @ git+https://github.com/LSDOlab/aframe.git#egg=2",
+    "VortexAD @ git+https://github.com/lscotzni/VortexAD_temp.git#egg=dev_ml",
+    "BladeAD @ git+https://github.com/LSDOlab/BladeAD.git",
+    "lsdo_acoustics @ git+https://github.com/LSDOlab/lsdo_acoustics.git#egg=dev_csdl_alpha",
+    "lsdo_airfoil @ git+https://github.com/LSDOlab/lsdo_airfoil.git"
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "CADDEE_alpha.__version__"}
+
+[tool.setuptools.packages.find]
+exclude = ["tutorials"]
