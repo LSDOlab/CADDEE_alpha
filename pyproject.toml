@@ -18,7 +18,7 @@ dependencies = [
     "caddee_materials @ git+https://github.com/LSDOlab/caddee_materials.git",
     "csdl_alpha @ git+https://github.com/LSDOlab/CSDL_alpha.git",
     "lsdo_function_spaces @ git+https://github.com/LSDOlab/lsdo_function_spaces.git",
-    "lsdo_geo @ git+https://github.com/LSDOlab/lsdo_geo.git#egg=csdl2_implementation",
+    "lsdo_geo @ git+https://github.com/LSDOlab/lsdo_geo.git",
 ]
 dynamic = ["version"]
 
