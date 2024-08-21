@@ -683,9 +683,10 @@ class Configuration:
             system_cg,
             system_inertia_tensor=np.zeros((3, 3)),
         ):
-            x = system_cg[0]
-            y = system_cg[1]
-            z = system_cg[2]
+            # system-level cg
+            x_cg_sys = system_cg[0]
+            y_cg_sys = system_cg[1]
+            z_cg_sys = system_cg[2]
 
             # Third, compute total cg and inertia tensor
             for comp_name, comp in comps.items():
@@ -696,11 +697,25 @@ class Configuration:
                 else:
                     it = mass_props.inertia_tensor
                     m = mass_props.mass
+                    cg = mass_props.cg_vector
+
+                    if cg is not None:
+                        # component-level cg
+                        x_cg_comp = cg[0]
+                        y_cg_comp = cg[1]
+                        z_cg_comp = cg[2]
+
+                        x = x_cg_comp - x_cg_sys
+                        y = y_cg_comp - y_cg_sys
+                        z = z_cg_comp - z_cg_sys
 
                     # use given inertia if provided
                     if it is not None:
                         if m is None:
                             raise Exception(f"Component {comp_name}, has an inertia tensor but no mass. Cannot apply parallel axis theorem.")
+                        if cg is None:
+                            raise Exception(f"Component {comp_name}, has an inertia tensor but no cg_vector. Cannot apply parallel axis theorem.")
+                        
                         # Apply parallel axis theorem to get inertias w.r.t to global cg
                         ixx = it[0, 0] + m * (y**2 + z**2)
                         ixy = it[0, 1] - m * (x * y)
@@ -727,6 +742,9 @@ class Configuration:
                     
                     # point mass assumption
                     elif m is not None: 
+                        if cg is None:
+                            raise Exception(f"Component {comp_name}, has a specified mass no cg_vector. Cannot apply parallel axis theorem to sum up system-level mass properties.")
+
                         # Apply parallel axis theorem to get inertias w.r.t to global cg
                         ixx = m * (y**2 + z**2)
                         ixy = -m * (x * y)

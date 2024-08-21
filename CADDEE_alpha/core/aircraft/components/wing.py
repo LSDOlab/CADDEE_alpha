@@ -346,8 +346,9 @@ class Wing(Component):
             parameterized_points=ffd_block.coefficients,
             principal_parametric_dimension=principal_parametric_dimension,
         )
-        if plot:
-            ffd_block_sectional_parameterization.plot()
+       
+        # if plot:
+        #     ffd_block_sectional_parameterization.plot()
         
         # Make B-spline functions for changing geometric quantities
         chord_stretch_b_spline = lfs.Function(

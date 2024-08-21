@@ -18,11 +18,9 @@ class LinAngAccel(csdl.VariableGroup):
 
 
 class SixDofEulerFlatEarthModel:
-    def __init__(self, num_nodes: int = 1, stability_flag: bool = False):
+    def __init__(self, num_nodes: int = 1):
         self.num_nodes = num_nodes
-        self.stability_flag = stability_flag
         csdl.check_parameter(num_nodes, "num_nodes", types=int)
-        csdl.check_parameter(stability_flag, "stability_flag", types=bool)
 
     def evaluate(self, 
         total_forces: csdl.Variable, 
@@ -191,8 +189,6 @@ class SixDofEulerFlatEarthModel:
         residual = mp_matrix @ state - rhs.T()
 
         accel_mat = csdl.Variable(shape=(self.num_nodes, 6), value=0)
-
-        print(mp_matrix.value)
 
         for i in csdl.frange(self.num_nodes):
             accel = csdl.solve_linear(mp_matrix, rhs[i, :])
