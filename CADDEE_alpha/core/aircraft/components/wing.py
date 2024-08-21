@@ -1071,6 +1071,8 @@ class Wing(Component):
         if mirror:
             coeff_flip = np.eye(3)
             coeff_flip[1,1] = -1
+            if len(coefficients.shape) != 2:
+                coefficients = coefficients.reshape((-1, 3))
             coefficients = coefficients @ coeff_flip
             mirror_function = lfs.Function(function_space, coefficients)
             return function, mirror_function

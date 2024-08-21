@@ -47,7 +47,7 @@ class TestMeshes:
 
     def test_camber_surface(self):
         """Test vlm camber surface mesh."""
-        mesh_nodes_norm_desired = 47.29397405
+        mesh_nodes_norm_desired = 47.29387292 # 47.29397405 old value
         
         chord_surface = cd.mesh.make_vlm_surface(
             self.wing,
@@ -66,7 +66,7 @@ class TestMeshes:
     def test_spar_rib_helper(self):
         """Test the helper function for making ribs and spars"""
         desired_coeff_norm_sum_before = 1357.73155717
-        desired_coeff_norm_sum_after = 1964.7352484
+        desired_coeff_norm_sum_after = 1960.4516078 # 1964.7352484 old value
         
         actual_coeff_norm_sum_before = 0
         for fun in self.wing.geometry.functions.values():
@@ -78,7 +78,7 @@ class TestMeshes:
             spar_locations=np.array([0.25, 0.75]),
             rib_locations=np.array([0., 0.2, 0.5, 0.75, 0.9, 1.])
         )
-        
+
         actual_coeff_norm_sum_after = 0
         for fun in self.wing.geometry.functions.values():
             actual_coeff_norm_sum_after += csdl.norm(fun.coefficients).value
@@ -94,4 +94,3 @@ class TestMeshes:
             desired_coeff_norm_sum_after,
             decimal=7
         )
-
