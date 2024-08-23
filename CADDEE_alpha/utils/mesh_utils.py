@@ -5,7 +5,7 @@ import lsdo_geo as lg
 
 
 def import_mesh(file, component:lg.Geometry, rescale:list=[1,1,1], remove_dupes=True, plot=False, grid_search_n:int=5, force_reprojection=False,
-                priority_inds=None, priority_eps=1e-4):
+                priority_inds=None, priority_eps=1e-4, dupe_tol=1e-5):
     '''
     Read mesh file (from any format meshio supports) and convert into mapped array + connectivity
     ------------
@@ -25,22 +25,46 @@ def import_mesh(file, component:lg.Geometry, rescale:list=[1,1,1], remove_dupes=
     if remove_dupes:
         nnodes = nodes.shape[0]
         # remove duplicate nodes
-        nodes, index = np.unique(nodes, return_inverse=True, axis=0)
+        tol_decimals = int(-np.log10(dupe_tol))
+        rounded_nodes = np.round(nodes,decimals=tol_decimals)
+        _, o_index, index = np.unique(rounded_nodes, return_index=True, return_inverse=True, axis=0)
+        nodes = nodes[o_index]
         #print('dupes removed in ' + str(end-start) + ' seconds')
         # map indices in cells to new indices
         cells = []
-        connectivity = np.ndarray((0,4))
+        connectivity = None
         nquads = 0
         for cell in mesh.cells:
-            if cell.type == 'quad':     #TODO: add aditional 2D element types
+            if cell.type == 'vertex':
+                continue
+            elif cell.type == 'line':
+                continue
+            elif cell.type == 'quad':     #TODO: add aditional 2D element types
                 for n in range(cell.data.shape[0]):
                     row = cell.data[n,:]
                     # row = np.array([cind2[i] for i in row])
                     row = np.array([index[i] for i in row])
-                    connectivity = np.vstack((connectivity,row.reshape((1,4))))
+                    if connectivity is None:
+                        connectivity = row.reshape((1,4))
+                    else:
+                        connectivity = np.vstack((connectivity,row.reshape((1,4))))
                     cell.data[n,:] = row
                 cells.append(cell)
                 nquads += cell.data.shape[0]
+            elif cell.type == 'triangle':
+                for n in range(cell.data.shape[0]):
+                    row = cell.data[n,:]
+                    # row = np.array([cind2[i] for i in row])
+                    row = np.array([index[i] for i in row])
+                    if connectivity is None:
+                        connectivity = row.reshape((1,3))
+                    else:
+                        connectivity = np.vstack((connectivity,row.reshape((1,3))))
+                    cell.data[n,:] = row
+                cells.append(cell)
+                nquads += cell.data.shape[0]
+            else:
+                print('cell type ' + cell.type + ' not supported')
         print('number of duplicates removed is ' + str(nnodes-nodes.shape[0]))
         nnodes = nodes.shape[0]
     else:

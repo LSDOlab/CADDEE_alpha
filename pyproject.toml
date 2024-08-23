@@ -19,6 +19,7 @@ dependencies = [
     "csdl_alpha @ git+https://github.com/LSDOlab/CSDL_alpha.git",
     "lsdo_function_spaces @ git+https://github.com/LSDOlab/lsdo_function_spaces.git",
     "lsdo_geo @ git+https://github.com/LSDOlab/lsdo_geo.git",
+    "aeroelastic_coupling_utils @ git+https://github.com/LSDOlab/aeroelastic_coupling_utils.git@csdl_alpha",
 ]
 dynamic = ["version"]
 
@@ -37,12 +38,12 @@ docs = [
     "sphinxcontrib-bibtex",
 ]
 toolsuite = [
-    "modopt @ git+https://github.com/LSDOlab/modopt.git",
-    "aframe @ git+https://github.com/LSDOlab/aframe.git#egg=2",
-    "VortexAD @ git+https://github.com/lscotzni/VortexAD_temp.git#egg=dev_ml",
+    "modopt[pyslsqp] @ git+https://github.com/LSDOlab/modopt.git",
+    "aframe @ git+https://github.com/LSDOlab/aframe.git@2",
+    "VortexAD @ git+https://github.com/lscotzni/VortexAD_temp.git@dev_ml",
     "BladeAD @ git+https://github.com/LSDOlab/BladeAD.git",
-    "lsdo_acoustics @ git+https://github.com/LSDOlab/lsdo_acoustics.git#egg=dev_csdl_alpha",
-    "lsdo_airfoil @ git+https://github.com/LSDOlab/lsdo_airfoil.git"
+    "lsdo_acoustics @ git+https://github.com/LSDOlab/lsdo_acoustics.git@dev_csdl_alpha",
+    # "lsdo_airfoil @ git+https://github.com/LSDOlab/lsdo_airfoil.git" removed because it requires a local install
 ]
 
 [tool.setuptools.dynamic]
