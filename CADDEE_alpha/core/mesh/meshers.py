@@ -1298,7 +1298,8 @@ def import_shell_mesh(file_name:str,
                       grid_search_n = 1,
                       priority_inds=None,
                       priority_eps=1e-4,
-                      force_reprojection=False):
+                      force_reprojection=False,
+                      dupe_tol=1e-5):
     """
     Create a shell mesh for a component using a mesh file
     """
@@ -1312,7 +1313,8 @@ def import_shell_mesh(file_name:str,
                                                         grid_search_n=grid_search_n,
                                                         priority_inds=priority_inds,
                                                         priority_eps=priority_eps,
-                                                        force_reprojection=force_reprojection)
+                                                        force_reprojection=force_reprojection,
+                                                        dupe_tol=dupe_tol)
     shell_mesh = ShellDiscretization(nodal_coordinates=nodes, 
                                      connectivity=connectivity,
                                      nodes_parametric=nodes_parametric,
