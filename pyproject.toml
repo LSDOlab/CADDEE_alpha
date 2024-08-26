@@ -49,5 +49,8 @@ toolsuite = [
 [tool.setuptools.dynamic]
 version = {attr = "CADDEE_alpha.__version__"}
 
+[tool.setuptools]
+package-dir = {"" = "."}
+
 [tool.setuptools.packages.find]
 exclude = ["tutorials"]
