@@ -52,7 +52,7 @@ def define_base_config(caddee : cd.CADDEE):
     wing_geometry = aircraft.create_subgeometry(
         search_names=['MainWing'],
         # The wing coming out of openVSP has some extra surfaces that we don't need
-        ignore_names=['0, 8', '0, 9', '0, 12', '0, 13', '1, 14', '1, 15', '1, 18', '1, 19']
+        ignore_names=['0, 8', '0, 9', '0, 14', '0, 15', '1, 16', '1, 17', '1, 22', '1, 23']
     )
     wing = cd.aircraft.components.Wing(AR=1, S_ref=1, geometry=wing_geometry)
     airframe.comps["wing"] = wing
@@ -65,7 +65,7 @@ def define_base_config(caddee : cd.CADDEE):
         full_length_ribs=True,
         spanwise_multiplicity=10,
         offset=np.array([0.,0.,.15]),
-        finite_te=False,
+        finite_te=True,
     )
 
     # extract relevant geometries
@@ -147,7 +147,7 @@ def define_base_config(caddee : cd.CADDEE):
 
     # beam mesh
     beam_mesh = cd.mesh.BeamMesh()
-    beam_disc= cd.mesh.make_1d_box_beam(wing, num_ribs*2-1, 0.5, project_spars=True, spar_search_names=['1', '2'], make_half_beam=True)
+    beam_disc = cd.mesh.make_1d_box_beam(wing, num_ribs*2-1, 0.5, project_spars=True, spar_search_names=['1', '2'], make_half_beam=True)
     beam_mesh.discretizations["wing"] = beam_disc
     mesh_container["beam_mesh"] = beam_mesh
 
