@@ -131,7 +131,8 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
         else:
             if t_vars:
                 thickness = csdl.Variable(value=rib_t, name=name+'_thickness')
-                thickness.value = t_vars[name+'_thickness']
+                if name+"_thickness" in t_vars:
+                    thickness.value = t_vars[name+'_thickness']
                 t_out[thickness.name] = thickness
             else:
                 thickness = csdl.Variable(value=rib_t, name=name+'_thickness')
