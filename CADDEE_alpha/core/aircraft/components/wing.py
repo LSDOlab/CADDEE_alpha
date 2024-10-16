@@ -453,6 +453,8 @@ class Wing(Component):
             coefficients = item['function_space'].fit(fitting_points, item['fitting_coords'])
             geometry_coefficients.append(coefficients)
             if item['mirror']:
+                if not len(coefficients.shape) == 2:
+                    coefficients = coefficients.reshape((-1, coefficients.shape[-1]))
                 geometry_coefficients.append(coefficients @ coeff_flip)
 
         # set full geometry coefficients
@@ -461,6 +463,8 @@ class Wing(Component):
         # Add rigid body translation (without FFD)
         rigid_body_translation = csdl.ImplicitVariable(shape=(3, ), value=0.)
         for function in self.geometry.functions.values():
+            if len(function.coefficients.shape) != 2:
+                function.coefficients = function.coefficients.reshape((-1, function.coefficients.shape[-1]))
             shape = function.coefficients.shape
             function.coefficients = function.coefficients + csdl.expand(rigid_body_translation, shape, action='j->ij')
 
