@@ -10,6 +10,9 @@ from CADDEE_alpha.utils.mesh_utils import import_mesh
 import lsdo_function_spaces as fs
 import lsdo_geo as lg
 from scipy.interpolate import interp1d
+from lsdo_function_spaces import FunctionSet, Function
+import warnings
+from CADDEE_alpha.utils.mesh_utils import trace_intersection
 
 
 def cosine_spacing(num_pts, spanwise_points=None, chord_surface=None, num_chordwise=None, flip=False):
@@ -1326,3 +1329,1036 @@ class ShellMesh(SolverMesh):
         self.discretizations = DiscretizationsDict()
         
         
+
+# def compute_component_intersection(comp_1, comp_2):
+#     u_v_array = (np.array([0.5, 0.5]))
+
+#     geom_1 : FunctionSet = comp_1.geometry
+#     geom_2 : FunctionSet = comp_2.geometry
+
+#     for fun_1 in geom_1.functions.values():
+#         for fun_2 in geom_2.functions.values():
+#             cps_1_max = np.max(fun_1.coefficients.value, axis=(0, 1))
+#             cps_1_min = np.min(fun_1.coefficients.value, axis=(0, 1))
+
+#             x_max_1 = cps_1_max[0]
+#             y_max_1 = cps_1_max[1]
+#             z_max_1 = cps_1_max[2]
+#             x_min_1 = cps_1_min[0]
+#             y_min_1 = cps_1_min[1]
+#             z_min_1 = cps_1_min[2]
+
+#             cps_2_max = np.max(fun_2.coefficients.value, axis=(0, 1))
+#             cps_2_min = np.min(fun_2.coefficients.value, axis=(0, 1))
+
+#             x_max_2 = cps_2_max[0]
+#             y_max_2 = cps_2_max[1]
+#             z_max_2 = cps_2_max[2]
+#             x_min_2 = cps_2_min[0]
+#             y_min_2 = cps_2_min[1]
+#             z_min_2 = cps_2_min[2]
+
+#             overlap_x = False
+#             if compare_floats(x_max_1, x_min_2) and compare_floats(x_max_2, x_min_1):
+#             # if x_max_1 > x_min_2 and x_min_1 < x_max_2:
+#                 overlap_x = True
+
+#             overlap_y = False
+#             if compare_floats(y_max_1, y_min_2) and compare_floats(y_max_2, y_min_1):
+#             # if y_max_1 > y_min_2 and y_min_1 < y_max_2:
+#                 overlap_y = True
+
+#             overlap_z = False
+#             if compare_floats(z_max_1, z_min_2) and compare_floats(z_max_2, z_min_1):
+#             # if z_max_1 > z_min_2 and z_min_1 < z_max_2:
+#                 overlap_z = True
+
+#             if overlap_z and overlap_y and overlap_x:
+#                 additional_plotting_elements = fun_1.plot(show=False)
+#                 fun_2.plot(additional_plotting_elements=additional_plotting_elements)
+#                 fun_1_eval_pts = []
+#                 fun_2_eval_pts = []
+
+#                 uv_1, uv_2, uv_1_updated_minus, uv_2_updated_minus, uv_1_updated_plus, uv_2_updated_plus = find_intersection(fun_1=fun_1, fun_2=fun_2)
+#                 fun_1_eval_pts.append(uv_1)
+#                 fun_2_eval_pts.append(uv_2)
+#                 new_starting_point_minus = np.vstack((uv_1_updated_minus, uv_2_updated_minus)).flatten()
+#                 new_starting_point_plus = np.vstack((uv_1_updated_plus, uv_2_updated_plus)).flatten()
+
+#                 print("uv_1", uv_1)
+#                 print("uv_2", uv_2)
+#                 for i in range(100):
+#                     uv_1, uv_2, uv_1_updated_minus, uv_2_updated_minus, _, _ = find_intersection(fun_1=fun_1, fun_2=fun_2, grid_search=False, starting_point=new_starting_point_minus)
+                    
+#                     print("uv_1", uv_1)
+#                     print("uv_2", uv_2)
+#                     fun_1_eval_pts.append(uv_1)
+#                     fun_2_eval_pts.append(uv_2)
+#                     new_starting_point_minus = np.vstack((uv_1_updated_minus, uv_2_updated_minus)).flatten()
+
+#                 for i in range(100):
+#                     uv_1, uv_2,_, _, uv_1_updated_plus, uv_2_updated_plus = find_intersection(fun_1=fun_1, fun_2=fun_2, grid_search=False, starting_point=new_starting_point_plus)
+                    
+#                     print("uv_1", uv_1)
+#                     print("uv_2", uv_2)
+#                     fun_1_eval_pts.append(uv_1)
+#                     fun_2_eval_pts.append(uv_2)
+#                     new_starting_point_plus = np.vstack((uv_1_updated_plus, uv_2_updated_plus)).flatten()
+
+#                 # print("uv_1, uv_2", uv_1, uv_2)
+
+
+#                 # new_starting_point = np.vstack((uv_1_updated, uv_2_updated)).flatten()
+#                 # uv_1, uv_2, uv_1_updated, uv_2_updated = find_intersection(fun_1=fun_1, fun_2=fun_2, grid_search=False, starting_point=new_starting_point)
+#                 # fun_1_eval_pts.append(uv_1)
+#                 # fun_2_eval_pts.append(uv_2)
+
+#                 # print("uv_1, uv_2", uv_1, uv_2)
+
+            
+#                 fun_1.evaluate(parametric_coordinates=np.vstack(fun_1_eval_pts), plot=True)
+#                 fun_2.evaluate(parametric_coordinates=np.vstack(fun_2_eval_pts), plot=True)
+
+#                 # exit()
+
+#                 # proj_1_list = []
+#                 # proj_2_list = []
+#                 # for i in range(5):
+#                 #     print("i", i)
+#                 #     proj_1, proj_2, new_starting_point = fixed_point_projection(fun_1=fun_1, fun_2=fun_2, starting_point=starting_point)#, starting_point=para_array)
+#                 #     print("new_starting_point", new_starting_point)
+#                 #     proj_1_list.append(proj_1)
+#                 #     proj_2_list.append(proj_2)
+#                 #     # if np.any((proj_1 == 0) | (proj_1 == 1)) or np.any((proj_2 == 0) | (proj_2 == 1)):
+#                 #     if np.any((new_starting_point < 0) | (new_starting_point > 1)):
+#                 #         break
+#                 #     else:
+#                 #         print(starting_point)
+#                 #         starting_point = new_starting_point
+
+#                 #     # exit()
+#                 #     # print(eval_pt_1, eval_pt_2, new_starting_point)
+                
+
+#                 # fun_2.evaluate(parametric_coordinates=np.vstack(proj_1_list), plot=True)
+#                 # fun_1.evaluate(parametric_coordinates=np.vstack(proj_2_list), plot=True)
+#                 # print(proj_1_list)
+#                 # print(proj_2_list)
+
+#                 # exit()                        
+
+
+                
+#             # print(cps_1_max)
+#             # print(cps_1_min)
+#             # print(fun_2.coefficients.value)
+#         print("\n")
+#             # point_1 = fun_1.evaluate(parametric_coordinates=u_v_array, plot=True)
+#             # proj_1 = geom_2.project(point_1, plot=True)
+#             # point_2 = geom_2.evaluate(proj_1, plot=True)
+#             # proj_2 = geom_1.project(point_2, plot=True)
+
+#             # exit()
+
+
+# def find_intersection(fun_1 : Function, fun_2 : Function, tol=1e-10, grid_search=True, starting_point=None):
+#     if grid_search:
+#         # perform grid search
+#         num_grid_points = 20
+#         u, v = np.meshgrid(np.linspace(0, 1, num_grid_points), np.linspace(0, 1, num_grid_points), indexing="ij") 
+#         para_array = np.vstack((u.flatten(), v.flatten())).T
+#         para_tensor = para_array.reshape((num_grid_points, num_grid_points, 2))
+
+#         fun_1_eval = fun_1.evaluate(parametric_coordinates=para_array).value.reshape((num_grid_points, num_grid_points, 3))
+#         fun_2_eval = fun_2.evaluate(parametric_coordinates=para_array).value.reshape((num_grid_points, num_grid_points, 3))
+
+#         min_dist = np.inf
+#         candidates_list = []
+#         for ind_1 in range(num_grid_points):
+#             for ind_2 in range(num_grid_points):
+#                 for ind_3 in range(num_grid_points):
+#                     for ind_4 in range(num_grid_points):
+#                         distance = np.linalg.norm(fun_1_eval[ind_1, ind_2, :] -  fun_2_eval[ind_3, ind_4, :])
+#                         if distance < min_dist:
+#                             min_dist = distance
+#                             # candidates_list.append(np.array([
+#                             #     para_tensor[ind_1, ind_2, 0],
+#                             #     para_tensor[ind_1, ind_2, 1],
+#                             #     para_tensor[ind_3, ind_4, 0],
+#                             #     para_tensor[ind_3, ind_4, 1],
+#                             # ])
+#                             # )
+#                             starting_point = np.array([
+#                                 para_tensor[ind_1, ind_2, 0],
+#                                 para_tensor[ind_1, ind_2, 1],
+#                                 para_tensor[ind_3, ind_4, 0],
+#                                 para_tensor[ind_3, ind_4, 1],
+#                             ])
+
+#     # print(candidates_list)
+#     # print(len(candidates_list))
+#     # exit()
+#     uv_1_list = []
+#     uv_2_list = []
+#     # for starting_point in candidates_list:
+#     # start newton optimization iteration
+#     print("starting_point", starting_point)
+#     for iteration in range(200):
+#         uv_1 = starting_point[0:2]
+#         uv_2 = starting_point[2:]
+        
+#         # Compute residual B1(u1, v1)P1 - B2(u2, v2)P2
+#         residual = fun_1.evaluate(parametric_coordinates=uv_1).value - \
+#             fun_2.evaluate(parametric_coordinates=uv_2).value
+        
+#         # Compute the square of the euclidean distance (OBJECTIVE)
+#         distance_squared = residual.T @ residual
+
+#         # Compute gradient/hessian of squared distance w.r.t. u1, v1, u2, v2 --> (4, ) & (4, 4)
+        
+#         # 1) gradient of distance w.r.t. entries of residual --> (1, 3)
+#         grad_d_x = 2 * np.array([[residual[0], residual[1], residual[2]]])
+        
+#         # 2) gradient of cartesian coords. w.r.t. parametric coords. (Jacobian) --> (3, 4)
+#         grad_x_u = np.zeros((3, 4))
+#         hessian_x_u = np.zeros((3, 4, 4))
+#         for i in range(2):
+#             parametric_der_order = np.zeros((2, ), dtype=int)
+#             parametric_der_order[i] = 1
+
+#             grad_x_u[:, i] = fun_1.space.compute_basis_matrix(
+#                 uv_1, parametric_derivative_orders=parametric_der_order
+#             ).dot(fun_1.coefficients.value.reshape((-1, 3)))
+
+#             grad_x_u[:, i+2] = -fun_2.space.compute_basis_matrix(
+#                 uv_2, parametric_derivative_orders=parametric_der_order
+#             ).dot(fun_2.coefficients.value.reshape((-1, 3)))
+            
+#             # Extra dimension for Hessian (tensor)
+#             for j in range(2):
+#                 parametric_der_order_hessian = np.zeros((2, ), dtype=int)
+#                 if i==j:
+#                     parametric_der_order_hessian[i] = 2
+#                 else:
+#                     parametric_der_order_hessian[i] = 1
+#                     parametric_der_order_hessian[j] = 1
+
+#                 # Note that fun_1 does not depend on u2, v2 (parameters of fun_2)
+#                 hessian_x_u[:, j, i] = fun_1.space.compute_basis_matrix(
+#                     uv_1, parametric_derivative_orders=parametric_der_order_hessian
+#                 ).dot(fun_1.coefficients.value.reshape((-1, 3)))
+
+#                 # Note that fun_2 does not depend on u1, v1 (parameters of fun_1)
+#                 hessian_x_u[:, j+2, i+2] = -fun_2.space.compute_basis_matrix(
+#                     uv_2, parametric_derivative_orders=parametric_der_order_hessian
+#                 ).dot(fun_2.coefficients.value.reshape((-1, 3)))
+                
+
+
+#         # 3) apply chain (and product) rule to compute grad_d_u and hess_d_u
+#         grad_d_u = grad_d_x @ grad_x_u
+#         hessian_d_u = 2 * (grad_x_u.T @ grad_x_u) + np.einsum('i,ijk->jk', grad_d_x.flatten(), hessian_x_u)
+
+#         # 4) Identify the active set
+#         # NOTE: this is a very ineqality constraint (design variable bounds)
+#         # instead of adding Lagrange multipliers we remove the design variable 
+#         # (i.e., parametric coordinate) when it's zero or one and the gradient 
+#         # tries to "push" it outside of the bounds
+#         remove_dvs_lower_bound = np.logical_and(starting_point == 0, grad_d_u > 0)
+#         remove_dvs_upper_bound = np.logical_and(starting_point == 1, grad_d_u < 0)
+#         remove_dvs = np.logical_or(remove_dvs_lower_bound, remove_dvs_upper_bound)
+
+#         # NOTE: remove zero columns in the Hessian in edge cases
+#         # (e.g., if there are infinitely many optimal solution)
+#         # NOTE: This could potentially mask bugs
+#         remove_cols_hessian = np.where(~hessian_d_u.any(axis=1))[0]
+#         remove_dvs[remove_cols_hessian] = True
+#         keep_dvs = np.logical_not(remove_dvs).flatten()
+
+#         reduced_gradient = grad_d_u.flatten()[keep_dvs]
+#         reduced_hessian = hessian_d_u[keep_dvs][:, keep_dvs]
+
+#         if np.linalg.norm(reduced_gradient) < 1e-7:
+#             break
+        
+#         # compute step direction
+#         step = np.linalg.solve(reduced_hessian, -reduced_gradient.flatten())
+
+#         # Update starting point with step
+#         starting_point[keep_dvs] = starting_point[keep_dvs] + step.flatten()
+        
+#         # clamp parameters between 0, 1
+#         starting_point = np.clip(starting_point, 0, 1)
+
+#         # uv_1_list.append(uv_1)
+#         # uv_2_list.append(uv_2)
+#         # print(np.linalg.norm(grad_d_u))
+#         # print("\n")
+
+#     # uv_1_array = np.unique(np.round(np.array(uv_1_list), decimals=6), axis=0)
+#     # uv_2_array = np.unique(np.round(np.array(uv_2_list), decimals=6), axis=0)
+    
+
+#     # Start tracing intersection
+#     # 1) Finding tangent and curvature vectors at u, v coordinates of both patches
+#     tangent_vectors_fun_1 = np.zeros((2, 3))
+#     tangent_vectors_fun_2 = np.zeros((2, 3))
+
+#     curvature_hessian_fun_1 = np.zeros((3, 2, 2))
+#     curvature_hessian_fun_2 = np.zeros((3, 2, 2))
+#     for p in range(2):
+#         parametric_derivative_orders = np.zeros((fun_1.space.num_parametric_dimensions, ), dtype=int)
+#         parametric_derivative_orders_curvature = np.zeros((fun_1.space.num_parametric_dimensions, ), dtype=int)
+#         parametric_derivative_orders[p] = 1
+#         parametric_derivative_orders_curvature[p] = 2
+
+#         tangent_vectors_fun_1[p, :] = fun_1.space.compute_basis_matrix(
+#             uv_1, parametric_derivative_orders=parametric_derivative_orders
+#         ).dot(fun_1.coefficients.value.reshape((-1, 3)))
+
+#         tangent_vectors_fun_2[p, :] = fun_2.space.compute_basis_matrix(
+#             uv_2, parametric_derivative_orders=parametric_derivative_orders
+#         ).dot(fun_2.coefficients.value.reshape((-1, 3)))
+
+#         for q in range(2):
+#             parametric_der_order_hessian = np.zeros((2, ), dtype=int)
+#             if p==q:
+#                 parametric_der_order_hessian[p] = 2
+#             else:
+#                 parametric_der_order_hessian[p] = 1
+#                 parametric_der_order_hessian[q] = 1
+
+#             curvature_hessian_fun_1[:, p, q] = fun_1.space.compute_basis_matrix(
+#                 uv_1, parametric_derivative_orders=parametric_der_order_hessian,
+#             ).dot(fun_1.coefficients.value.reshape((-1, 3)))
+
+#             curvature_hessian_fun_2[:, p, q] = fun_2.space.compute_basis_matrix(
+#                 uv_2, parametric_derivative_orders=parametric_der_order_hessian,
+#             ).dot(fun_2.coefficients.value.reshape((-1, 3)))
+
+#     # 2) Compute surface normal for each patch
+#     N1 = np.cross(tangent_vectors_fun_1[0, :], tangent_vectors_fun_1[1, :])
+#     N2 = np.cross(tangent_vectors_fun_2[0, :], tangent_vectors_fun_2[1, :])
+
+#     # 3) Compute direction of intersection (normal of the two normals)
+#     T = np.cross(N1, N2)
+    
+#     # First order Taylor series approximation (use as starting point for Newton iteration)
+#     delta_para_1 = np.linalg.solve(tangent_vectors_fun_1 @ tangent_vectors_fun_1.T, tangent_vectors_fun_1 @ T).reshape((-1, 2))
+#     delta_para_2 = np.linalg.solve(tangent_vectors_fun_2 @ tangent_vectors_fun_2.T, tangent_vectors_fun_2 @ T).reshape((-1, 2))
+
+#     delta_uv = np.zeros((4, ))
+#     delta_uv[0:2] = delta_para_1.flatten()
+#     delta_uv[2:] = delta_para_2.flatten()
+
+#     converged = False
+#     for i in range(50):
+#         first_order_term_1 = np.einsum('i,ij->j', delta_uv[0:2], tangent_vectors_fun_1 )
+#         second_order_term_intermediate_1 = np.einsum('j,ijk->ik', delta_uv[0:2], curvature_hessian_fun_1)
+#         second_order_term_1 = np.einsum('ik,k->i', second_order_term_intermediate_1, delta_uv[0:2])
+
+#         first_order_term_2 = np.einsum('i,ij->j', delta_uv[2:], tangent_vectors_fun_2 )
+#         second_order_term_intermediate_2 = np.einsum('j,ijk->ik', delta_uv[2:], curvature_hessian_fun_2)
+#         second_order_term_2 = np.einsum('ik,k->i', second_order_term_intermediate_2, delta_uv[2:])
+
+#         residual_1 = first_order_term_1 + 0.5 * second_order_term_1 - T
+#         residual_2 = first_order_term_2 + 0.5 * second_order_term_2 - T
+
+#         residual = np.vstack((residual_1, residual_2)).flatten()
+
+#         jacobian = np.zeros((6, 4)) 
+#         jacobian[0:3, 0:2] = tangent_vectors_fun_1.T + second_order_term_intermediate_1
+#         jacobian[3:, 2:] = tangent_vectors_fun_2.T + second_order_term_intermediate_2
+
+#         delta_uv_updated = np.linalg.solve(jacobian.T @ jacobian, - jacobian.T @ residual)
+#         if np.linalg.norm(delta_uv_updated) < 1e-10:
+#             converged = True
+#             break
+
+#         delta_uv += delta_uv_updated
+
+#     if converged:
+#         delta_uv_norm = delta_uv / np.linalg.norm(delta_uv)
+#     else:
+#         print("NOT CONVERGED")
+#         delta_uv = np.zeros((4, ))
+#         delta_uv[0:2] = delta_para_1.flatten()
+#         delta_uv[2:] = delta_para_2.flatten()
+#         delta_uv_norm = delta_uv / np.linalg.norm(delta_uv)
+
+#     step = 0.1/np.linalg.norm(T)
+    
+#     uv_1_updated_minus = uv_1 - 0.01 * delta_uv_norm[0:2] #, delta_uv[0:2] #  0.01 * delta_uv_norm[0:2] # 0.01 * delta_para_1_norm
+#     uv_2_updated_minus = uv_2 - 0.01 * delta_uv_norm[2:] #delta_uv[2:] # 0.01 * delta_uv_norm[2:] # 0.01 * delta_para_2_norm
+
+#     uv_1_updated_plus = uv_1 + 0.01 * delta_uv_norm[0:2] # delta_uv[0:2] #0.01 * delta_uv_norm[0:2] # 0.01 * delta_para_1_norm
+#     uv_2_updated_plus = uv_2 + 0.01 * delta_uv_norm[2:] #delta_uv[2:] # 0.01 * delta_uv_norm[2:] # 0.01 * delta_para_2_norm
+
+#     return uv_1, uv_2, np.clip(uv_1_updated_minus, 0, 1), np.clip(uv_2_updated_minus, 0, 1), np.clip(uv_1_updated_plus, 0, 1), np.clip(uv_2_updated_plus, 0, 1)
+
+
+def compute_component_intersection(comp_1, comp_2):
+    geom_1 : FunctionSet = comp_1.geometry
+    geom_2 : FunctionSet = comp_2.geometry
+
+    intersection_parametric_1 = []
+    intersection_parametric_2 = []
+
+    for fun_ind_1, fun_1 in geom_1.functions.items():
+        for fun_ind_2, fun_2 in geom_2.functions.items():
+            cps_1_max = np.max(fun_1.coefficients.value, axis=(0, 1))
+            cps_1_min = np.min(fun_1.coefficients.value, axis=(0, 1))
+
+            x_max_1 = cps_1_max[0]
+            y_max_1 = cps_1_max[1]
+            z_max_1 = cps_1_max[2]
+            x_min_1 = cps_1_min[0]
+            y_min_1 = cps_1_min[1]
+            z_min_1 = cps_1_min[2]
+
+            cps_2_max = np.max(fun_2.coefficients.value, axis=(0, 1))
+            cps_2_min = np.min(fun_2.coefficients.value, axis=(0, 1))
+
+            x_max_2 = cps_2_max[0]
+            y_max_2 = cps_2_max[1]
+            z_max_2 = cps_2_max[2]
+            x_min_2 = cps_2_min[0]
+            y_min_2 = cps_2_min[1]
+            z_min_2 = cps_2_min[2]
+
+            overlap_x = False
+            if compare_floats(x_max_1, x_min_2) and compare_floats(x_max_2, x_min_1):
+            # if x_max_1 > x_min_2 and x_min_1 < x_max_2:
+                overlap_x = True
+
+            overlap_y = False
+            if compare_floats(y_max_1, y_min_2) and compare_floats(y_max_2, y_min_1):
+            # if y_max_1 > y_min_2 and y_min_1 < y_max_2:
+                overlap_y = True
+
+            overlap_z = False
+            if compare_floats(z_max_1, z_min_2) and compare_floats(z_max_2, z_min_1):
+            # if z_max_1 > z_min_2 and z_min_1 < z_max_2:
+                overlap_z = True
+
+            if overlap_z and overlap_y and overlap_x:
+                # new_space = fs.BSplineSpace(num_parametric_dimensions=2, degree=3, coefficients_shape=(10, 10))
+                # fun_1 = fun_1.refit(new_function_space=new_space)
+                # geom_1.functions[fun_ind_1] = fun_1
+
+                # new_space = fs.BSplineSpace(num_parametric_dimensions=2, degree=3, coefficients_shape=(10, 10))
+                # fun_2 = fun_2.refit(new_function_space=new_space)
+                # geom_2.functions[fun_ind_2] = fun_2
+
+                additional_plotting_elements = fun_1.plot(show=False)
+                fun_2.plot(additional_plotting_elements=additional_plotting_elements)
+                
+                components_intersect, uv_1_coords, uv_2_coords = trace_intersection(surface_fun_1=fun_1, surface_fun_2=fun_2)
+
+                if components_intersect:
+                    intersection_parametric_1.append((fun_ind_1, uv_1_coords))
+                    intersection_parametric_2.append((fun_ind_2, uv_2_coords))
+                else:
+                    pass
+                
+                
+                # exit()
+                # fun_1_eval_pts = []
+                # fun_2_eval_pts = []
+
+                # uv_1, uv_2, uv_1_updated_minus, uv_2_updated_minus, uv_1_updated_plus, uv_2_updated_plus, _, _ = find_intersection(fun_1=fun_1, fun_2=fun_2)
+                # if uv_1 is None:
+                #     pass 
+                # else:
+                #     point_on_intersection = fun_1.evaluate(parametric_coordinates=uv_1).value
+                #     fun_1_eval_pts.append(uv_1)
+                #     fun_2_eval_pts.append(uv_2)
+                #     new_starting_point_minus = np.vstack((uv_1_updated_minus, uv_2_updated_minus)).flatten()
+                #     new_starting_point_plus = np.vstack((uv_1_updated_plus, uv_2_updated_plus)).flatten()
+
+                #     step_multiplier = 1
+
+                #     for i in range(8000):
+                #         # print("fun_1_eval_pts", fun_1_eval_pts)
+                #         # print("fun_2_eval_pts", fun_2_eval_pts)
+                #         # print("\n")
+                        
+                #         uv_1, uv_2, uv_1_updated_minus, uv_2_updated_minus, _, _, old_starting_point, newton_converged = find_intersection(fun_1=fun_1, fun_2=fun_2, grid_search=False, starting_point=new_starting_point_minus, step_multiplier=step_multiplier, point_on_intersection=point_on_intersection)
+                #         if newton_converged:
+                #             point_on_intersection = fun_1.evaluate(parametric_coordinates=uv_1).value
+                #             fun_1_eval_pts.append(uv_1)
+                #             fun_2_eval_pts.append(uv_2)
+                            
+                #             new_starting_point_minus = np.vstack((uv_1_updated_minus, uv_2_updated_minus)).flatten()
+                            
+                #             if np.linalg.norm(new_starting_point_minus - old_starting_point)==0:
+                #                 print("increase_step_multipler")
+                #                 step_multiplier *= 1.1
+                #             else:
+                #                 step_multiplier = 1
+
+                #             if (uv_1 == 1).any() or (uv_1 == 0).any(): 
+                #                 print("uv_1", uv_1)
+                #                 break
+                #             if (uv_2 == 1).any() or (uv_2 == 0).any(): 
+                #                 print("uv_2", uv_2)
+                #                 break
+                #         #     print(fun_1_eval_pts)
+                #         #     print(fun_2_eval_pts)
+                #         #     eval_points_fun_1_numpy = np.vstack(fun_1_eval_pts)
+                #         #     fun_1.evaluate(parametric_coordinates=eval_points_fun_1_numpy, plot=True)
+                #         #     point_on_intersection = None
+                #         #     new_starting_point_minus = old_starting_point
+                #         else:
+                #             break
+
+
+                #     eval_points_fun_1_numpy = np.vstack(fun_1_eval_pts)
+                #     eval_points_fun_2_numpy = np.vstack(fun_2_eval_pts)
+                #     eval_points_fun_2_numpy_sorted = eval_points_fun_2_numpy[eval_points_fun_2_numpy[:, 1].argsort()]
+                #     eval_points_fun_1_numpy_sorted = eval_points_fun_1_numpy[eval_points_fun_1_numpy[:, 0].argsort()]
+
+                    
+                #     cartesian_coords_2 = fun_2.evaluate(parametric_coordinates=eval_points_fun_2_numpy_sorted, plot=True).value
+                #     ordered_cartesian_2 = order_points_by_proximity(cartesian_coords_2)
+                #     resampled_points_2 = resample_curve(points=ordered_cartesian_2, num_points=100)
+                #     fun_2_reprojected_points = fun_2.project(points=resampled_points_2, plot=True, grid_search_density_parameter=50)
+            
+                #     cartesian_coords_1 = fun_1.evaluate(parametric_coordinates=eval_points_fun_1_numpy_sorted, plot=True).value
+                #     ordered_cartesian_1 = order_points_by_proximity(cartesian_coords_1)
+                #     resampled_points_1 = resample_curve(points=ordered_cartesian_1, num_points=100)
+                #     fun_1_reprojected_points = fun_1.project(points=resampled_points_1, plot=True, grid_search_density_parameter=50)
+                    
+                #     intersection_parametric_1.append((fun_ind_1, fun_1_reprojected_points))
+                #     intersection_parametric_2.append((fun_ind_2, fun_2_reprojected_points))
+                    
+    para_dict_patches_1 = {}
+    for counter, para in enumerate(intersection_parametric_1):
+        index = para[0]
+        coords = para[1]
+        if index in para_dict_patches_1:
+            existing_coords = para_dict_patches_1[index][1]
+            para_dict_patches_1[index] = (index, np.vstack((existing_coords, coords)))
+        else:
+            para_dict_patches_1[index] = para
+    
+    intersection_list_1 = list(para_dict_patches_1.values())
+
+    para_dict_patches_2 = {}
+    for counter, para in enumerate(intersection_parametric_2):
+        index = para[0]
+        coords = para[1]
+        if index in para_dict_patches_2:
+            existing_coords = para_dict_patches_2[index][1]
+            para_dict_patches_2[index] = (index, np.vstack((existing_coords, coords)))
+        else:
+            para_dict_patches_2[index] = para
+    
+    intersection_list_2 = list(para_dict_patches_2.values())
+
+
+    for counter, entry in enumerate(intersection_list_1):
+        index = entry[0]
+        coords = entry[1]
+        fun = geom_1.functions[index]
+
+        fun.evaluate(parametric_coordinates=coords, plot=True)
+
+    for counter, entry in enumerate(intersection_list_2):
+        index = entry[0]
+        coords = entry[1]
+        fun = geom_2.functions[index]
+
+        fun.evaluate(parametric_coordinates=coords, plot=True)
+
+
+    return intersection_parametric_1, intersection_parametric_2, intersection_list_1, intersection_list_2
+
+def find_intersection(fun_1 : Function, fun_2 : Function, tol=1e-10, grid_search=True, starting_point=None, step_multiplier=1, point_on_intersection=None, distance_between_points=0.05):
+    if grid_search:
+        # # perform grid search
+        # num_grid_points = 100
+        # u, v = np.meshgrid(np.linspace(0, 1, num_grid_points), np.linspace(0, 1, num_grid_points), indexing="ij") 
+        # para_array = np.vstack((u.flatten(), v.flatten())).T
+        # para_tensor = para_array.reshape((num_grid_points, num_grid_points, 2))
+
+        # fun_1_eval = fun_1.evaluate(parametric_coordinates=para_array).value.reshape((num_grid_points, num_grid_points, 3))
+        # fun_2_eval = fun_2.evaluate(parametric_coordinates=para_array).value.reshape((num_grid_points, num_grid_points, 3))
+
+        # # Calculate pairwise distances using broadcasting
+        # distances = np.linalg.norm(fun_1_eval[:, :, None, None, :] - fun_2_eval[None, None, :, :, :], axis=-1)
+
+        # # Find minimum distance and corresponding indices
+        # min_dist = np.min(distances)
+        # if min_dist > 0.1:
+        #     return None, None, None, None, None, None, None, None
+
+        # ind_1, ind_2, ind_3, ind_4 = np.unravel_index(np.argmin(distances), distances.shape)
+
+        # # Retrieve starting points using indices
+        # starting_point = np.array([
+        #     para_tensor[ind_1, ind_2, 0],
+        #     para_tensor[ind_1, ind_2, 1],
+        #     para_tensor[ind_3, ind_4, 0],
+        #     para_tensor[ind_3, ind_4, 1],
+        # ])
+       
+        num_grid_points = 100
+        u, v = np.meshgrid(np.linspace(0, 1, num_grid_points), np.linspace(0, 1, num_grid_points), indexing="ij")
+        para_tensor = np.stack((u, v), axis=-1)
+        para_array = para_tensor.reshape(-1, 2)
+
+        # Identify boundary points for both surfaces
+        boundary_mask = (u == 0) | (u == 1) | (v == 0) | (v == 1)
+        boundary_points = para_tensor[boundary_mask]  # Boundary points (parametric space)
+
+        # Evaluate both functions
+        fun_1_eval = fun_1.evaluate(parametric_coordinates=para_array).value  # Shape: (num_grid_points^2, 3)
+        fun_2_eval = fun_2.evaluate(parametric_coordinates=para_array).value  # Shape: (num_grid_points^2, 3)
+
+        # Evaluate boundary points of fun_1 with all points of fun_2
+        fun_1_boundary_eval = fun_1.evaluate(parametric_coordinates=boundary_points).value
+        distances_1 = np.linalg.norm(fun_1_boundary_eval[:, None, :] - fun_2_eval[None, :, :], axis=-1)
+
+        # Evaluate boundary points of fun_2 with all points of fun_1
+        fun_2_boundary_eval = fun_2.evaluate(parametric_coordinates=boundary_points).value
+        distances_2 = np.linalg.norm(fun_1_eval[:, None, :] - fun_2_boundary_eval[None, :, :], axis=-1)
+
+        # Combine the distances
+        combined_distances = np.vstack((distances_1.reshape(-1), distances_2.T.reshape(-1)))
+
+        # Find the minimum distance and corresponding indices
+        min_index = np.argmin(combined_distances)
+        min_dist = np.min(combined_distances)
+
+        print("min_dist", min_dist)
+        exit()
+
+        if min_dist > 0.1:
+            return None, None, None, None, None, None, None, None
+        else:
+            if min_index < distances_1.size:
+                ind_1, ind_2 = np.unravel_index(min_index, distances_1.shape)
+                starting_point = np.array([
+                    boundary_points[ind_1, 0],
+                    boundary_points[ind_1, 1],
+                    para_array[ind_2, 0],
+                    para_array[ind_2, 1],
+                ])
+            else:
+                ind_1, ind_2 = np.unravel_index(min_index - distances_1.size, distances_2.shape)
+                starting_point = np.array([
+                    para_array[ind_1, 0],
+                    para_array[ind_1, 1],
+                    boundary_points[ind_2, 0],
+                    boundary_points[ind_2, 1],
+                ])
+        # print("min_dist", min_dist)
+        # print("starting_point", starting_point)
+        # exit()
+
+    uv_1_list = []
+    uv_2_list = []
+
+
+    # start newton optimization iteration
+    starting_point_copy = starting_point.copy()
+    newton_opt_converged = False
+    constraint = None
+    if point_on_intersection is not None:
+        lambda_0 = 0.001
+    for iteration in range(200):
+        uv_1 = starting_point[0:2]
+        uv_2 = starting_point[2:]
+        
+        # Compute residual B1(u1, v1)P1 - B2(u2, v2)P2
+        residual = fun_1.evaluate(parametric_coordinates=uv_1).value - \
+            fun_2.evaluate(parametric_coordinates=uv_2).value
+        
+        if point_on_intersection is not None:
+            constraint = fun_1.evaluate(parametric_coordinates=uv_1).value - point_on_intersection
+            constraint_distance = np.linalg.norm(fun_1.evaluate(parametric_coordinates=uv_1).value - point_on_intersection)**2 - distance_between_points**2
+        
+        # Compute the square of the euclidean distance (OBJECTIVE)
+        distance_squared = residual.T @ residual
+
+        # Compute gradient/hessian of squared distance w.r.t. u1, v1, u2, v2 --> (4, ) & (4, 4)
+        
+        # 1) gradient of distance w.r.t. entries of residual --> (1, 3)
+        grad_d_x = 2 * np.array([[residual[0], residual[1], residual[2]]])
+        if point_on_intersection is not None:
+            grad_c_x = 2 * np.array([[constraint[0], constraint[1], constraint[2]]])
+
+        # 2) gradient of cartesian coords. w.r.t. parametric coords. (Jacobian) --> (3, 4)
+        grad_x_u = np.zeros((3, 4))
+        hessian_x_u = np.zeros((3, 4, 4))
+        for i in range(2):
+            parametric_der_order = np.zeros((2, ), dtype=int)
+            parametric_der_order[i] = 1
+
+            grad_x_u[:, i] = fun_1.space.compute_basis_matrix(
+                uv_1, parametric_derivative_orders=parametric_der_order
+            ).dot(fun_1.coefficients.value.reshape((-1, 3)))
+
+            grad_x_u[:, i+2] = -fun_2.space.compute_basis_matrix(
+                uv_2, parametric_derivative_orders=parametric_der_order
+            ).dot(fun_2.coefficients.value.reshape((-1, 3)))
+            
+            # Extra dimension for Hessian (tensor)
+            for j in range(2):
+                parametric_der_order_hessian = np.zeros((2, ), dtype=int)
+                if i==j:
+                    parametric_der_order_hessian[i] = 2
+                else:
+                    parametric_der_order_hessian[i] = 1
+                    parametric_der_order_hessian[j] = 1
+
+                # Note that fun_1 does not depend on u2, v2 (parameters of fun_2)
+                hessian_x_u[:, j, i] = fun_1.space.compute_basis_matrix(
+                    uv_1, parametric_derivative_orders=parametric_der_order_hessian
+                ).dot(fun_1.coefficients.value.reshape((-1, 3)))
+
+                # Note that fun_2 does not depend on u1, v1 (parameters of fun_1)
+                hessian_x_u[:, j+2, i+2] = -fun_2.space.compute_basis_matrix(
+                    uv_2, parametric_derivative_orders=parametric_der_order_hessian
+                ).dot(fun_2.coefficients.value.reshape((-1, 3)))
+                
+
+
+        # 3) apply chain (and product) rule to compute grad_d_u and hess_d_u
+        grad_d_u = grad_d_x @ grad_x_u
+        hessian_d_u = 2 * (grad_x_u.T @ grad_x_u) + np.einsum('i,ijk->jk', grad_d_x.flatten(), hessian_x_u)
+        if point_on_intersection is not None:
+            grad_c_u = np.zeros((1, 4))
+            grad_c_u[0, 0:2] = grad_c_x @ grad_x_u[:, 0:2]
+
+            hessian_x_u_for_c = np.zeros((3, 4, 4))
+            hessian_x_u_for_c[:, 0:2, 0:2] = hessian_x_u[:, 0:2, 0:2]
+            grad_x_u_for_c = np.zeros((3, 4))
+            grad_x_u_for_c[:, 0:2] = grad_x_u[:, 0:2]
+
+            hessian_c_u = 2 * (grad_x_u_for_c.T @ grad_x_u_for_c) + np.einsum('i,ijk->jk', grad_c_x.flatten(), hessian_x_u_for_c)
+
+            grad_L_u = grad_d_u + lambda_0 * grad_c_u
+            hessian_L_u = hessian_d_u + lambda_0 * hessian_c_u
+
+            gradient = grad_L_u
+            hessian = hessian_L_u
+
+        else:
+            gradient = grad_d_u
+            hessian = hessian_d_u
+
+        # 4) Identify the active set
+        # NOTE: this is a very ineqality constraint (design variable bounds)
+        # instead of adding Lagrange multipliers we remove the design variable 
+        # (i.e., parametric coordinate) when it's zero or one and the gradient 
+        # tries to "push" it outside of the bounds
+        remove_dvs_lower_bound = np.logical_and(starting_point == 0, gradient > 0)
+        remove_dvs_upper_bound = np.logical_and(starting_point == 1, gradient < 0)
+        remove_dvs = np.logical_or(remove_dvs_lower_bound, remove_dvs_upper_bound)
+
+        # # NOTE: remove zero columns in the Hessian in edge cases
+        # # (e.g., if there are infinitely many optimal solution)
+        # # NOTE: This could potentially mask bugs
+        remove_cols_hessian = np.where(~hessian.any(axis=1))[0]
+        try:
+            remove_dvs[remove_cols_hessian] = True
+        except:
+            break
+
+        keep_dvs = np.logical_not(remove_dvs).flatten()
+
+        reduced_gradient = gradient.flatten()[keep_dvs]
+        reduced_hessian = hessian[keep_dvs][:, keep_dvs]
+
+        if point_on_intersection is not None:
+            grad_c_u = grad_c_u.flatten()[keep_dvs]
+
+        if np.linalg.norm(residual) < 1e-12:
+            newton_opt_converged = True
+            break
+        
+        # compute step direction
+
+        if point_on_intersection is not None:
+            dim = len(reduced_hessian)
+            newton_system_lhs = np.zeros((dim+1, dim+1))
+            newton_system_lhs[0:dim, 0:dim] = reduced_hessian
+            newton_system_lhs[dim, 0:dim] = grad_c_u
+            newton_system_lhs[0:dim, dim] = grad_c_u
+
+            newton_system_rhs = np.zeros((dim+1, ))
+            newton_system_rhs[0:dim] = reduced_gradient
+            newton_system_rhs[dim] = constraint_distance
+        else:
+            newton_system_lhs = reduced_hessian
+            newton_system_rhs = reduced_gradient
+
+        # step = np.linalg.solve(reduced_hessian, -reduced_gradient.flatten())
+        step = np.linalg.solve(newton_system_lhs, -newton_system_rhs.flatten())
+
+        if point_on_intersection is not None:
+            new_uv_coords = step[0:dim]
+            lambda_0 = step[dim]
+        else:
+            new_uv_coords = step
+
+        # Update starting point with step
+        starting_point[keep_dvs] = starting_point[keep_dvs] + new_uv_coords.flatten()
+        # starting_point = starting_point + new_uv_coords.flatten()
+        
+        # clamp parameters between 0, 1
+        starting_point = np.clip(starting_point, 0, 1)
+
+    if newton_opt_converged is False:
+        print("residual", np.linalg.norm(residual))
+        print("starting_point", starting_point)
+        print("------------------NEWTON OPT DID NOT CONVERGE------------------")
+        return  None, None, None, None, None, None, starting_point, newton_opt_converged
+        starting_point = starting_point_copy
+
+    uv_1 = starting_point[0:2]
+    uv_2 = starting_point[2:]
+
+    stalled_trace = False
+    if np.linalg.norm(starting_point - starting_point_copy) == 0:
+        stalled_trace = True
+    else:
+        pass
+        # print(starting_point, starting_point_copy)
+
+    # Start tracing intersection
+    # 1) Finding tangent and curvature vectors at u, v coordinates of both patches
+    tangent_vectors_fun_1 = np.zeros((2, 3))
+    tangent_vectors_fun_2 = np.zeros((2, 3))
+
+    curvature_hessian_fun_1 = np.zeros((3, 2, 2))
+    curvature_hessian_fun_2 = np.zeros((3, 2, 2))
+    for p in range(2):
+        parametric_derivative_orders = np.zeros((fun_1.space.num_parametric_dimensions, ), dtype=int)
+        parametric_derivative_orders_curvature = np.zeros((fun_1.space.num_parametric_dimensions, ), dtype=int)
+        parametric_derivative_orders[p] = 1
+        parametric_derivative_orders_curvature[p] = 2
+
+        tangent_vectors_fun_1[p, :] = fun_1.space.compute_basis_matrix(
+            uv_1, parametric_derivative_orders=parametric_derivative_orders
+        ).dot(fun_1.coefficients.value.reshape((-1, 3)))
+
+        tangent_vectors_fun_2[p, :] = fun_2.space.compute_basis_matrix(
+            uv_2, parametric_derivative_orders=parametric_derivative_orders
+        ).dot(fun_2.coefficients.value.reshape((-1, 3)))
+
+        for q in range(2):
+            parametric_der_order_hessian = np.zeros((2, ), dtype=int)
+            if p==q:
+                parametric_der_order_hessian[p] = 2
+            else:
+                parametric_der_order_hessian[p] = 1
+                parametric_der_order_hessian[q] = 1
+
+            curvature_hessian_fun_1[:, p, q] = fun_1.space.compute_basis_matrix(
+                uv_1, parametric_derivative_orders=parametric_der_order_hessian,
+            ).dot(fun_1.coefficients.value.reshape((-1, 3)))
+
+            curvature_hessian_fun_2[:, p, q] = fun_2.space.compute_basis_matrix(
+                uv_2, parametric_derivative_orders=parametric_der_order_hessian,
+            ).dot(fun_2.coefficients.value.reshape((-1, 3)))
+
+    # 2) Compute surface normal for each patch
+    N1 = np.cross(tangent_vectors_fun_1[0, :], tangent_vectors_fun_1[1, :])
+    N2 = np.cross(tangent_vectors_fun_2[0, :], tangent_vectors_fun_2[1, :])
+
+    # 3) Compute direction of intersection (normal of the two normals)
+    T = np.cross(N1, N2)
+    
+    # First order Taylor series approximation (use as starting point for Newton iteration)
+    reg_param = 1e-5
+    delta_para_1 = np.linalg.solve(tangent_vectors_fun_1 @ tangent_vectors_fun_1.T + reg_param * np.eye(2), tangent_vectors_fun_1 @ T).reshape((-1, 2))
+    delta_para_2 = np.linalg.solve(tangent_vectors_fun_2 @ tangent_vectors_fun_2.T + reg_param * np.eye(2), tangent_vectors_fun_2 @ T).reshape((-1, 2))
+
+    # delta_uv = np.zeros((4, ))
+    # delta_uv[0:2] = delta_para_1.flatten()
+    # delta_uv[2:] = delta_para_2.flatten()
+
+    # def compute_residual(x):
+    #     first_order_term_1 = np.einsum('i,ij->j', x[0:2], tangent_vectors_fun_1)
+    #     second_order_term_intermediate_1 = np.einsum('j,ijk->ik', x[0:2], curvature_hessian_fun_1)
+    #     second_order_term_1 = np.einsum('ik,k->i', second_order_term_intermediate_1, x[0:2])
+
+    #     first_order_term_2 = np.einsum('i,ij->j', x[2:], tangent_vectors_fun_2)
+    #     second_order_term_intermediate_2 = np.einsum('j,ijk->ik', x[2:], curvature_hessian_fun_2)
+    #     second_order_term_2 = np.einsum('ik,k->i', second_order_term_intermediate_2, x[2:])
+
+    #     residual_1 = first_order_term_1 + 0.5 * second_order_term_1 - T
+    #     residual_2 = first_order_term_2 + 0.5 * second_order_term_2 - T
+
+    #     residual = np.vstack((residual_1, residual_2)).flatten()
+
+    #     return residual, second_order_term_intermediate_1, second_order_term_intermediate_2
+
+    # def compute_jacobian(second_order_term_intermediate_1, second_order_term_intermediate_2):
+    #     jacobian = np.zeros((6, 4)) 
+    #     jacobian[0:3, 0:2] = tangent_vectors_fun_1.T + second_order_term_intermediate_1
+    #     jacobian[3:, 2:] = tangent_vectors_fun_2.T + second_order_term_intermediate_2
+
+    #     return jacobian
+
+    delta_uv = np.zeros((4, ))
+    delta_uv[0:2] = delta_para_1.flatten()
+    delta_uv[2:] = delta_para_2.flatten()
+ 
+    converged = False
+    for i in range(20):
+        first_order_term_1 = np.einsum('i,ij->j', delta_uv[0:2], tangent_vectors_fun_1 )
+        second_order_term_intermediate_1 = np.einsum('j,ijk->ik', delta_uv[0:2], curvature_hessian_fun_1)
+        second_order_term_1 = np.einsum('ik,k->i', second_order_term_intermediate_1, delta_uv[0:2])
+ 
+        first_order_term_2 = np.einsum('i,ij->j', delta_uv[2:], tangent_vectors_fun_2 )
+        second_order_term_intermediate_2 = np.einsum('j,ijk->ik', delta_uv[2:], curvature_hessian_fun_2)
+        second_order_term_2 = np.einsum('ik,k->i', second_order_term_intermediate_2, delta_uv[2:])
+ 
+        residual_1 = first_order_term_1 + 0.5 * second_order_term_1 - T
+        residual_2 = first_order_term_2 + 0.5 * second_order_term_2 - T
+ 
+        residual = np.vstack((residual_1, residual_2)).flatten()
+ 
+        jacobian = np.zeros((6, 4))
+        jacobian[0:3, 0:2] = tangent_vectors_fun_1.T + second_order_term_intermediate_1
+        jacobian[3:, 2:] = tangent_vectors_fun_2.T + second_order_term_intermediate_2
+ 
+        reg_param = 1e-8
+        delta_uv_updated = np.linalg.solve(jacobian.T @ jacobian + reg_param * np.eye(4), - jacobian.T @ residual)
+        if np.linalg.norm(delta_uv_updated) < 1e-10:
+            converged = True
+            break
+ 
+        delta_uv += delta_uv_updated
+
+
+    # converged = False
+    # x = delta_uv
+    # lambd = 0 #1e-3
+    # for i in range(500):
+    #     residual, second_order_term_intermediate_1, second_order_term_intermediate_2 = compute_residual(x)
+    #     jacobian = compute_jacobian(second_order_term_intermediate_1, second_order_term_intermediate_2)
+        
+    #     residual_norm = np.linalg.norm(residual)
+    #     delta_uv_updated = np.linalg.solve(jacobian.T @ jacobian + lambd * np.eye(4), - jacobian.T @ residual)
+
+
+    #     if np.linalg.norm(delta_uv_updated) < 1e-10:
+    #         converged = True
+    #         break
+
+    #     delta_uv += delta_uv_updated
+
+        # new_residual, _, _  = compute_residual(delta_uv)
+
+        # if np.linalg.norm(new_residual) < residual_norm:
+        #     # Update successful, accept the step and reduce lambda
+        #     x = delta_uv
+        #     lambd *= 0.8
+        # else:
+        #     # Update unsuccessful, reject the step and increase lambda
+        #     lambd *= 2
+
+    if converged:
+        delta_uv_norm = delta_uv / np.linalg.norm(delta_uv + 1e-6)
+    else:
+        delta_uv = np.zeros((4, ))
+        delta_uv[0:2] = delta_para_1.flatten()
+        delta_uv[2:] = delta_para_2.flatten()
+        delta_uv_norm = delta_uv / np.linalg.norm(delta_uv + 1e-8)
+
+
+    # Computing step length
+    if stalled_trace:
+        print("stalled trace")
+        # step = 1.01 * step_multiplier * 2 * 0.0005 # /np.linalg.norm(T)
+        step = 1.0 * step_multiplier * 1 * 0.02 # /np.linalg.norm(T)
+    else:
+        step = step_multiplier *  1 *  0.02 # / np.linalg.norm(T)
+    
+    
+    uv_1_updated_minus = uv_1 + step * delta_uv_norm[0:2] #, delta_uv[0:2] #  0.01 * delta_uv_norm[0:2] # 0.01 * delta_para_1_norm
+    uv_2_updated_minus = uv_2 + step * delta_uv_norm[2:] #delta_uv[2:] # 0.01 * delta_uv_norm[2:] # 0.01 * delta_para_2_norm
+
+    uv_1_updated_plus = uv_1 - step * delta_uv_norm[0:2] # delta_uv[0:2] #0.01 * delta_uv_norm[0:2] # 0.01 * delta_para_1_norm
+    uv_2_updated_plus = uv_2 - step * delta_uv_norm[2:] #delta_uv[2:] # 0.01 * delta_uv_norm[2:] # 0.01 * delta_para_2_norm
+
+
+    return uv_1, uv_2, np.clip(uv_1_updated_minus, 0, 1), np.clip(uv_2_updated_minus, 0, 1), np.clip(uv_1_updated_plus, 0, 1), np.clip(uv_2_updated_plus, 0, 1), starting_point, newton_opt_converged
+
+
+def fixed_point_projection(fun_1 : Function, fun_2 : Function, starting_point=np.array([0.5, 0.5]), tol=1e-6):
+    n = 0
+    residual = fun_1.evaluate(parametric_coordinates=starting_point) - \
+        fun_2.evaluate(parametric_coordinates=starting_point)
+    
+    
+    while True:
+        eval_pt_1 = fun_1.evaluate(parametric_coordinates=starting_point).value
+        proj_1 = fun_2.project(eval_pt_1, plot=False, grid_search_density_parameter=1)
+        eval_pt_2 = fun_2.evaluate(parametric_coordinates=proj_1).value
+        proj_2 = fun_1.project(eval_pt_2, plot=False, grid_search_density_parameter=1)
+        starting_point = proj_2
+        n += 1
+        eval_pt_norm = np.linalg.norm(eval_pt_1-eval_pt_2)
+        # print(eval_pt_norm)
+        if eval_pt_norm < tol:
+            break
+
+        if n > 100:
+            warnings.warn(f"fixed_point_projection iteration did not converge to {tol}. Norm is {eval_pt_norm}")
+            break
+
+
+    d_fun_1_d_para = np.zeros((2, 3))
+    d_fun_2_d_para = np.zeros((2, 3))
+    for k in range(fun_1.space.num_parametric_dimensions):
+        parametric_derivative_orders = np.zeros((fun_1.space.num_parametric_dimensions, ), dtype=int)
+        parametric_derivative_orders[k] = 1
+        d_fun_1_d_para[k, :] = fun_1.space.compute_basis_matrix(
+            proj_2, parametric_derivative_orders=parametric_derivative_orders
+        ).dot(fun_1.coefficients.value.reshape((-1, 3)))
+
+        d_fun_2_d_para[k, :] = fun_2.space.compute_basis_matrix(
+            proj_1, parametric_derivative_orders=parametric_derivative_orders
+        ).dot(fun_2.coefficients.value.reshape((-1, 3)))
+    
+    N1 = np.cross(d_fun_1_d_para[0, :], d_fun_1_d_para[1, :])
+    N2 = np.cross(d_fun_2_d_para[0, :], d_fun_2_d_para[1, :])
+
+    T = np.cross(N1, N2)
+
+    delta_para_1 = np.linalg.solve(d_fun_1_d_para @ d_fun_1_d_para.T, d_fun_1_d_para @ T).reshape((-1, 2))
+    delta_para_2 = np.linalg.solve(d_fun_2_d_para @ d_fun_2_d_para.T, d_fun_2_d_para @ T).reshape((-1, 2))
+
+    
+    delta_para_1_norm = delta_para_1 / np.linalg.norm(delta_para_1)
+    delta_para_2_norm = delta_para_2 / np.linalg.norm(delta_para_2)
+
+    print("delta_para_1_norm", delta_para_1_norm)
+    print("proj_1", proj_1)
+    print("proj_2", proj_2)
+    # exit()
+
+    # print(delta_para_1_norm)
+    # print(delta_para_2_norm)
+    step = 1e-2
+    # print(proj_1, proj_1 + step * delta_para_1_norm)
+    # print(proj_2, proj_2 + step * delta_para_2_norm)
+    # print("\n")
+    # exit()
+
+    return proj_1, proj_2, proj_1 + step * delta_para_1_norm
+
+
+def compare_floats(x, y, decimals=5):
+    # Round both numbers to the specified number of decimal places
+    x_rounded = round(x, decimals)
+    y_rounded = round(y, decimals)
+    
+    # Perform the comparison
+    return x_rounded > y_rounded

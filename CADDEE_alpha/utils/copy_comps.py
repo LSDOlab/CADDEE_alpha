@@ -34,6 +34,10 @@ def copy_comps(comp : Component, system_geometry=None):
     # 4b) Copy material properties
     mat_copy = copy.copy(quantities_copy.material_properties)
     quantities_copy.material_properties = mat_copy
+    # 4c) copy the utils dictionary
+    utils_copy = quantities_copy.utils.copy()
+    quantities_copy.utils = utils_copy
+    
     comp_copy.quantities = quantities_copy
 
     # 5) Create shallow copy of the comp's parameters

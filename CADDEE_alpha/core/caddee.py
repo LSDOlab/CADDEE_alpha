@@ -21,11 +21,13 @@ class CADDEE:
     """
     def __init__(self, 
                  base_configuration: Configuration = None,
-                 conditions: ConditionsDict = ConditionsDict(types=Condition)
+                 conditions: ConditionsDict = None,
                  ) -> None:
         csdl.check_parameter(base_configuration, "base_configuration", types=Configuration, allow_none=True)
         self._base_configuration = base_configuration
-        self._conditions = conditions
+        
+        # Initialize a new ConditionsDict if conditions is None
+        self._conditions = conditions if conditions is not None else ConditionsDict(types=Condition)
 
     @property
     def base_configuration(self):

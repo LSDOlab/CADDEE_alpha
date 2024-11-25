@@ -52,7 +52,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
                 thickness = csdl.Variable(value=skin_t, name='upper_wing_thickness_'+str(i))
                 t_out[thickness.name] = thickness
             if add_dvs:
-                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
+                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1/thickness.value)
             
             function = lfs.Function(lfs.ConditionalSpace(2, condition), thickness)
             functions = {l_surf_ind: function}
@@ -69,7 +69,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
                 thickness = csdl.Variable(value=skin_t, name='upper_wing_thickness_'+str(i))
                 t_out[thickness.name] = thickness
             if add_dvs:
-                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
+                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1/thickness.value)
             function1 = lfs.Function(lfs.ConditionalSpace(2, condition1), thickness)
             function2 = lfs.Function(lfs.ConditionalSpace(2, condition2), thickness)
             functions = {l_surf_ind: function1, u_surf_ind: function2}
@@ -97,7 +97,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
                 thickness = csdl.Variable(value=skin_t, name='lower_wing_thickness_'+str(i))
                 t_out[thickness.name] = thickness
             if add_dvs:
-                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
+                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1/thickness.value)
             function = lfs.Function(lfs.ConditionalSpace(2, condition), thickness)
             functions = {l_surf_ind: function}
             thickness_fs = lfs.FunctionSet(functions)
@@ -113,7 +113,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
                 thickness = csdl.Variable(value=skin_t, name='lower_wing_thickness_'+str(i))
                 t_out[thickness.name] = thickness
             if add_dvs:
-                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
+                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1/thickness.value)
             function1 = lfs.Function(lfs.ConditionalSpace(2, condition1), thickness)
             function2 = lfs.Function(lfs.ConditionalSpace(2, condition2), thickness)
             functions = {l_surf_ind: function1, u_surf_ind: function2}
@@ -165,7 +165,7 @@ def construct_thickness_function(wing, num_ribs, top_array, bottom_array, materi
                 thickness = csdl.Variable(value=spar_t, name=f'spar_{spar_num}_thickness_{i}')
                 t_out[thickness.name] = thickness
             if add_dvs:
-                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1e3)
+                thickness.set_as_design_variable(upper=0.05, lower=minimum_thickness, scaler=1/thickness.value)
             function = lfs.Function(lfs.ConditionalSpace(2, condition), thickness)
             functions = {ind: function}
             thickness_fs = lfs.FunctionSet(functions)
@@ -322,7 +322,8 @@ def compute_curved_buckling_loads(wing, material, point_array, t_vars, surface="
 def roc(wing:cd.Component, point):
     u_prime = wing.geometry.evaluate(point, parametric_derivative_orders=(0,1), non_csdl=True)[:,0]
     u_double_prime = wing.geometry.evaluate(point, parametric_derivative_orders=(0,2), non_csdl=True)[:,0]
-    return np.abs(1+np.abs(u_prime)**(1/2)/u_double_prime)
+    # return np.abs(1+np.abs(u_prime)**(1/2)/u_double_prime)
+    return np.abs((1+np.abs(u_prime)**2)**(3/2)/u_double_prime)
 
 
 def load_dv_values(fname, group):

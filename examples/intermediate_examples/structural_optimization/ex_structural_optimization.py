@@ -1,3 +1,4 @@
+"""Structural optimization"""
 import csdl_alpha as csdl
 import CADDEE_alpha as cd
 from CADDEE_alpha import functions as fs

@@ -193,12 +193,14 @@ class ComponentQuantities:
         self, 
         mass_properties: MassProperties = None,
         material_properties: MaterialProperties = None,
-        drag_parameters: DragBuildUpQuantities = None
+        drag_parameters: DragBuildUpQuantities = None,
+        utils : dict = {},
     ) -> None:
         
         self._mass_properties = mass_properties
         self._material_properties = material_properties
         self._drag_parameters = drag_parameters
+        self.utils = utils
     
         self.surface_mesh = []
         self.surface_area = None
@@ -404,7 +406,7 @@ class Component:
     def _compute_surface_area(self, geometry:Geometry):
         import time 
         """Compute the surface area of a component."""
-        parametric_mesh_grid_num = 10
+        parametric_mesh_grid_num = 15
 
         surfaces = geometry.functions
         surface_area = csdl.Variable(shape=(1, ), value=1)
@@ -416,6 +418,94 @@ class Component:
         parametric_mesh = geometry.generate_parametric_grid(grid_resolution=(parametric_mesh_grid_num, parametric_mesh_grid_num))
         coords_vec = geometry.evaluate(parametric_mesh).reshape((num_surfaces, parametric_mesh_grid_num, parametric_mesh_grid_num, 3))
         surface_mesh.append(coords_vec)
+
+        from CADDEE_alpha.core.aircraft.components.wing import Wing
+        if False: # isinstance(self, Wing):
+            remove_indices = []
+            mesh_point_list = []
+
+            top_1_index = 11
+            top_2_index = 19
+            bottom_1_index = 12
+            bottom_1_index = 20
+
+            top_bottom_left_para_array = np.zeros((parametric_mesh_grid_num, 2))
+            top_bottom_left_para_array[:, 1] = np.linspace(0, 1, parametric_mesh_grid_num)
+            top_bottom_left_para_array[:, 0] = 0
+            surface_points_to_project = surfaces[top_1_index].evaluate(top_bottom_left_para_array, plot=False)
+            
+            top_bottom_right_para_array = surfaces[top_2_index].project(surface_points_to_project, plot=False)[:, 1]
+
+            u, v = np.meshgrid(np.linspace(0, 1, parametric_mesh_grid_num), np.linspace(0, 1, parametric_mesh_grid_num), indexing="ij") 
+            para_array_left = np.vstack((u.flatten(), v.flatten())).T
+
+            u, v = np.meshgrid(np.linspace(0, 1, parametric_mesh_grid_num), top_bottom_right_para_array,  indexing="ij") #np.linspace(0, 1, parametric_mesh_grid_num), indexing="ij")
+            para_array_right = np.vstack((u.flatten(), v.flatten())).T
+
+            for surface_index, surface in surfaces.items():
+                # oml_para_mesh = []
+                # for u in np.linspace(0, 1, parametric_mesh_grid_num):
+                #     for v in np.linspace(0, 1, parametric_mesh_grid_num):
+                #         oml_para_mesh.append((np.array([u,v]).reshape((1,2))))
+                # print(surface_index, surface)
+                # surface.plot()
+                if surface_index == 11 or surface_index == 12:
+                    surface_points = surface.evaluate(para_array_left, plot=False).reshape((parametric_mesh_grid_num, parametric_mesh_grid_num, 3)).value
+                else: # surface_index == 19 or surface_index == 20:
+                    surface_points = surface.evaluate(para_array_right, plot=False).reshape((parametric_mesh_grid_num, parametric_mesh_grid_num, 3)).value
+                
+                # Evaluate corner points
+                u0_v0 = surface.evaluate(np.array([0., 0.])).value
+                u1_v0 = surface.evaluate(np.array([1., 0.])).value
+                u0_v1 = surface.evaluate(np.array([0., 1.])).value
+
+                vec_u = np.absolute(u1_v0 - u0_v0), 
+                mag_u = np.linalg.norm(vec_u)
+                dir_u = np.argmax(vec_u)
+                
+                vec_v = np.absolute(u0_v1 - u0_v0)
+                mag_v = np.linalg.norm(vec_v)
+                dir_v = np.argmax(vec_v)
+
+                if mag_u > mag_v:
+                    major_dir = dir_u
+                    minor_dir = dir_v
+                else:
+                    major_dir = dir_v
+                    minor_dir = dir_u
+
+
+                if minor_dir == 2 and major_dir == 1: # finite length trailing edge
+                    u_TE, v_TE = np.meshgrid(np.linspace(0, 1, parametric_mesh_grid_num), np.linspace(0, 1, 2), indexing="ij") 
+                    para_array_TE = np.vstack((u_TE.flatten(), v_TE.flatten())).T
+                    surface_points = surface.evaluate(para_array_TE, plot=False).reshape((parametric_mesh_grid_num, 2, 3)).value
+
+                if major_dir == 1:
+                    mesh_point_list.append(surface_points)
+                    # geometry.plot_meshes(meshes=surface_points)
+                    # print("index", surface_index)
+                    # surface.plot()
+                    pass
+                else:
+                    remove_indices.append(surface_index)
+
+            for remove_index in remove_indices:
+                surfaces.pop(remove_index)
+
+            # geometry.plot(opacity=0.7)
+            geometry.plot_meshes(mesh_point_list)
+            # exit()
+
+        # for i in surfaces.keys():
+        #     oml_para_mesh = []
+        #     for u in np.linspace(0, 1, parametric_mesh_grid_num):
+        #         for v in np.linspace(0, 1, parametric_mesh_grid_num):
+        #             oml_para_mesh.append((i, np.array([u,v]).reshape((1,2))))
+            
+        #     coords_vec = geometry.evaluate(oml_para_mesh).reshape((parametric_mesh_grid_num, parametric_mesh_grid_num, 3))
+        #     self.geometry.plot_meshes(coords_vec.value)
+        # exit()
+
 
         # self.geometry.plot_meshes(coords_vec.reshape((-1, 3)).value)
 
