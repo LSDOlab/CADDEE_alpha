@@ -67,7 +67,7 @@ def import_geometry(
         if not os.path.isfile(file_path / file_name):
             raise Exception(f"Unknown file path or file. File path: {file_path}/{file_name}")
 
-        geometry = lg.import_geometry(TEST_GEOMETRY_FOLDER / file_name, parallelize=False, scale=scale)
+        geometry = lg.import_geometry(file_path / file_name, parallelize=False, scale=scale)
 
         if refit:
             refit_space = lfs.BSplineSpace(2, refit_b_spline_order, refit_num_coefficients)
