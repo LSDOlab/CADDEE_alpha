@@ -211,7 +211,10 @@ class Rotor(Component):
         rigid_body_translation = csdl.ImplicitVariable(shape=(3, ), value=0.)
         for function in self.geometry.functions.values():
             shape = function.coefficients.shape
-            function.coefficients = function.coefficients + csdl.expand(rigid_body_translation, shape, action='j->ij')
+            num_dims = len(shape)
+            letters = "ijklmnopqrstuvwxyz"
+            action = f"{letters[num_dims - 1]}->{letters[:num_dims]}"
+            function.coefficients = function.coefficients + csdl.expand(rigid_body_translation, shape, action=action)
 
 
         # Add (B-spline) coefficients to parameterization solver
